@@ -7,15 +7,17 @@ detectors over it, fuses their votes, and issues a mute command to the display
 through whatever control path that display supports — infrared, HDMI-CEC,
 RS-232, network API, or the host's own audio mixer.
 
-**Status: Phases 1–2 implemented.** Working today: `file_replay` and
+**Status: Phases 1–3 implemented.** Working today: `file_replay` and
 `hdmi_uvc` capture; the `black_frame`, `silence`, `loudness`, `logo_absence`
 (calibrated via `adhush calibrate`), `scene_cut`, and `fingerprint` detectors;
 vote fusion with hysteresis; the ad state machine with fingerprint promotion;
-the `rs232_sharp` and `ir_lirc` controllers; and the full CLI (`run`,
-`replay`, `calibrate`, `learn`, `doctor`, `ir-test`). Repeat ads are
-recognized from their first seconds and muted for their learned duration.
-The remaining control backends and platform shells land in later phases —
-see `docs/roadmap.md`.
+six control backends (`rs232_sharp`, `ir_lirc`, `ir_pigpio`, `cec`,
+`ir_blaster_net`, `network_ip`) with `adhush probe` to discover which can
+drive your set; a device-profile library (Sharp reference, Samsung, LG, Sony
+BRAVIA, Vizio, Roku TV); and the full CLI (`run`, `replay`, `calibrate`,
+`learn`, `probe`, `doctor`, `ir-test`). Repeat ads are recognized from their
+first seconds and muted for their learned duration. Host-audio control and
+platform shells land in later phases — see `docs/roadmap.md`.
 
 ## Quick start
 
@@ -23,6 +25,7 @@ see `docs/roadmap.md`.
 pip install -e .                      # numpy only; add [pi] for pyserial
 cp config/adhush.example.toml config/adhush.toml   # then edit
 adhush doctor                         # verify environment and config
+adhush probe                          # discover which control paths work
 adhush calibrate                      # learn the logo template (logo on screen)
 adhush run                            # live detection + mute control
 adhush replay clip.mp4 --labels labels.json        # offline scoring
@@ -64,8 +67,12 @@ A confirmed match mutes for the learned duration, snapped to the nearest
 
 ## Control backends
 
-`ir_lirc`, `ir_pigpio`, `ir_blaster_net`, `cec`, `rs232_sharp`, `network_ip`,
-`local_audio`, `relay_hdmi`.
+`rs232_sharp`, `network_ip` (TCP APIs like Sony Simple IP, HTTP APIs like
+Roku ECP), `cec`, `ir_lirc`, `ir_pigpio` (raw NEC / extended NEC / Samsung /
+Sharp / SIRC / RC-5 / raw-timing waveforms on a GPIO pin), `ir_blaster_net`
+(Global Caché iTach, Broadlink); `local_audio` and `relay_hdmi` come with the
+platform phases. `adhush probe` reports which backends can drive your set, in
+the profile's preference order.
 
 Discrete mute-on / mute-off is strongly preferred over toggle. Toggle-only
 devices desynchronize; profiles must declare which they support so fusion can

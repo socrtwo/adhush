@@ -5,6 +5,30 @@ Format follows Keep a Changelog; versioning follows SemVer.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-28
+### Added
+- Phase 3 (breadth of control) implementation:
+  - `cec`: mute toggle through cec-client (User Control Pressed/Released);
+    toggle-only by CEC's nature, so pair with audio verification.
+  - `ir_pigpio`: LIRC-free raw IR waveforms on a GPIO pin, encoding NEC,
+    extended NEC, Samsung, Sharp (double inverted frame), Sony SIRC
+    (12/15/20-bit), RC-5 bi-phase, and raw pulse/space arrays.
+  - `ir_blaster_net`: Global Caché iTach `sendir` over TCP and Broadlink
+    RM devices via the optional `broadlink` package.
+  - `network_ip`: profile-driven TCP (e.g. Sony Simple IP with discrete
+    mute and state readback) and HTTP (e.g. Roku ECP) control.
+  - `control/probe.py` + `adhush probe` (ADR 0005): safe, side-effect-free
+    discovery of which backends can drive the set, reported in the
+    profile's preference order; `--active` sends a real mute/unmute pair.
+  - `resolve_options`: profile-supplied backend settings (including the
+    shared `[ir]` section) merged under `[control.<backend>]` overrides,
+    keeping device specifics in profiles.
+  - Profile library: `samsung-generic`, `lg-generic`, `sony-bravia-generic`
+    (Simple IP discrete mute + readback), `vizio-generic`, `roku-tv-generic`
+    (ECP), documented in docs/device-support.md.
+- Config: `ControlConfig.sections` keeps every `[control.<backend>]` section
+  so probing can resolve options for non-selected backends.
+
 ## [0.2.0] - 2026-08-28
 ### Added
 - Phase 2 (vision and memory) implementation:

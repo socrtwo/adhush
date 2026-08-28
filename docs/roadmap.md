@@ -11,7 +11,7 @@ Structure, interfaces, docs, config schema, CI.
 `logo_absence` with `calibrate`, `scene_cut`, `video_phash`, `audio_chroma`,
 `store`, `matcher`, `learner`.
 
-## Phase 3 — breadth of control
+## Phase 3 — breadth of control (done)
 `cec`, `ir_pigpio`, `ir_blaster_net`, `network_ip`, `probe`, profile library.
 
 ## Phase 4 — platforms

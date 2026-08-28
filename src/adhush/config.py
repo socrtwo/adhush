@@ -147,7 +147,11 @@ class FingerprintConfig:
 class ControlConfig:
     backend: str = "rs232_sharp"
     verify_with_audio: bool = True
+    # The selected backend's [control.<backend>] section.
     options: dict[str, Any] = field(default_factory=dict)
+    # Every backend's [control.<backend>] section, so probing can resolve
+    # options for paths other than the selected one.
+    sections: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -364,6 +368,7 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
         backend=backend,
         verify_with_audio=bool(ctl.get("verify_with_audio", True)),
         options=dict(ctl.get(backend, {})),
+        sections={b: dict(ctl[b]) for b in KNOWN_CONTROL_BACKENDS if b in ctl},
     )
 
     fp = data.get("fingerprint", {})

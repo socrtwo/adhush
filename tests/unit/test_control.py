@@ -118,7 +118,7 @@ class TestIrLirc:
 
 def test_registry_rejects_unimplemented_backend() -> None:
     with pytest.raises(ControlError, match="not implemented"):
-        build_controller(ControlConfig(backend="cec"))
+        build_controller(ControlConfig(backend="local_audio"))
 
 
 def test_null_controller_records() -> None:

@@ -1,0 +1,44 @@
+# Sony BRAVIA TVs. Two good paths:
+# - Simple IP control (enable in the set: Network > Home Network > IP Control):
+#   discrete mute with state readback over TCP 20060. Preferred.
+# - SIRC infrared (12-bit, 40 kHz): toggle only.
+# Codes are community-documented; confirm with `adhush probe` / `adhush ir-test`.
+
+inherits = "generic"
+
+[identity]
+make = "Sony"
+model = "BRAVIA generic"
+year = 0
+
+[control]
+backends = ["network_ip", "ir_pigpio", "ir_lirc", "ir_blaster_net", "cec"]
+discrete_mute = true       # via Simple IP; IR path is toggle-only
+state_readback = true      # Simple IP enquiry form
+
+[ir]
+protocol = "sirc"
+carrier_hz = 40000
+
+[ir.codes.mute_toggle]
+address = 0x01             # TV device
+command = 0x14             # mute (decimal 20)
+bits = 12
+
+[network_ip]
+transport = "tcp"
+# host = "192.168.1.xx"    # set your TV's address in config/adhush.toml
+port = 20060
+
+[network_ip.commands.mute_on]
+send = "*SCAMUT0000000000000001\n"
+expect = "*SAAMUT0000000000000000"
+
+[network_ip.commands.mute_off]
+send = "*SCAMUT0000000000000000\n"
+expect = "*SAAMUT0000000000000000"
+
+[network_ip.commands.state]
+send = "*SEAMUT################\n"
+expect_on = "0000000000000001"
+expect_off = "0000000000000000"

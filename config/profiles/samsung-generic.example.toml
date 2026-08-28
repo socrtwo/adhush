@@ -1,0 +1,22 @@
+# Samsung TVs (most 2008+ models share one IR command set).
+# Codes are community-documented; confirm with `adhush probe` / `adhush ir-test`.
+
+inherits = "generic"
+
+[identity]
+make = "Samsung"
+model = "generic"
+year = 0
+
+[control]
+backends = ["ir_pigpio", "ir_lirc", "ir_blaster_net", "cec"]
+discrete_mute = false      # standard remote exposes only KEY_MUTE toggle
+state_readback = false
+
+[ir]
+protocol = "samsung"       # NEC timing, 4.5/4.5 ms header, address sent twice
+carrier_hz = 38000
+
+[ir.codes.mute_toggle]
+address = 0x07             # frame 0xE0E0F00F
+command = 0x0F

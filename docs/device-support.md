@@ -29,6 +29,25 @@ Infrared remains the fallback if the port is absent or occupied.
 Ethernet on this generation is for the set's own network features and is not a
 general control API; do not assume network control without verifying.
 
+## Shipped profiles
+
+| Profile | Best path | Mute | Notes |
+|---|---|---|---|
+| `sharp-lc46le830u` | RS-232C | discrete + readback | reference set |
+| `sony-bravia-generic` | Simple IP (TCP 20060) | discrete + readback | enable IP Control on the set |
+| `roku-tv-generic` | ECP (HTTP 8060) | toggle | enable "Control by mobile apps" |
+| `samsung-generic` | IR (samsung protocol) | toggle | |
+| `lg-generic` | IR (NEC) | toggle | webOS API needs pairing; not yet a backend |
+| `vizio-generic` | IR (extended NEC) | toggle | SmartCast API needs pairing |
+
+IR codes in these profiles come from community-documented tables; always
+confirm with `adhush probe` and `adhush ir-test` before trusting them. Toggle
+paths must run with `control.verify_with_audio` enabled.
+
 ## Adding a profile
 See `config/profiles/generic.example.toml`. Profiles inherit from `generic` and
-override only what differs.
+override only what differs. Backend endpoints and codes belong in the profile
+(`[ir]`, `[network_ip]`, `[<backend>]` sections); the main config's
+`[control.<backend>]` section overrides per installation (e.g. your TV's IP
+address). `adhush probe` reports which listed backends are usable on the
+current machine, in preference order.

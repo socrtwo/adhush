@@ -1,4 +1,4 @@
-"""Argument parsing, subcommands: run, calibrate, learn, replay, doctor, ir-test."""
+"""Argument parsing, subcommands: run, calibrate, learn, replay, probe, doctor, ir-test."""
 
 from __future__ import annotations
 
@@ -18,9 +18,10 @@ from adhush import __version__
 from adhush.capture import build_capture
 from adhush.capture.file_replay import FileReplaySource
 from adhush.config import Config, ConfigError, DetectConfig, FusionConfig, load_config
-from adhush.control import NullController, build_controller
+from adhush.control import NullController, build_controller, resolve_options
 from adhush.control.base import ControlError
 from adhush.control.ir_lirc import IrLircController
+from adhush.control.probe import probe_backends
 from adhush.detect import build_detectors
 from adhush.detect.fingerprint import FingerprintDetector
 from adhush.detect.fusion import Fusion
@@ -59,7 +60,9 @@ def _build_pipeline(
         raise SystemExit("adhush: no enabled detector matches the available modalities")
     fusion = Fusion(config.fusion, config.profile.fusion_weights, [d.name for d in detectors])
     machine = AdStateMachine(config.fusion)
-    ctl = controller if controller is not None else build_controller(config.control)
+    ctl = controller if controller is not None else build_controller(
+        config.control, config.profile
+    )
     return Pipeline(
         detectors,
         fusion,
@@ -192,7 +195,7 @@ def _cmd_ir_test(args: argparse.Namespace) -> int:
     config = _load(args.config)
     if config.control.backend != "ir_lirc":
         raise SystemExit("adhush: ir-test requires control.backend = 'ir_lirc' in config")
-    options = dict(config.control.options)
+    options = resolve_options(config.control, config.profile, "ir_lirc")
     try:
         controller = IrLircController(options)
         print(f"sending mute via remote '{options.get('remote')}'...")
@@ -203,6 +206,40 @@ def _cmd_ir_test(args: argparse.Namespace) -> int:
     except ControlError as exc:
         raise SystemExit(f"adhush: {exc}") from exc
     print("done — confirm the set muted and unmuted")
+    return 0
+
+
+def _cmd_probe(args: argparse.Namespace) -> int:
+    """Report which control backends can plausibly drive the configured set."""
+    config = _load(args.config)
+    profile = config.profile
+    print(
+        f"probing control paths for {profile.make} {profile.model}"
+        f" (profile '{profile.name}', preference order)"
+    )
+    results = probe_backends(config)
+    for result in results:
+        mark = "ok" if result.available else "--"
+        discrete = {True: "discrete", False: "toggle", None: "?"}[result.discrete]
+        print(f"  [{mark}] {result.backend:<15} {discrete:<9} {result.detail}")
+    available = [r for r in results if r.available]
+    if not available:
+        print("no usable control path found; check wiring and profile codes")
+        return 1
+    best = available[0].backend
+    print(f"suggested control.backend = \"{best}\"")
+
+    if args.active:
+        print(f"active test: muting via {config.control.backend} for {args.gap:.0f}s...")
+        try:
+            controller = build_controller(config.control, profile)
+            controller.mute()
+            time.sleep(args.gap)
+            controller.unmute()
+            controller.close()
+        except ControlError as exc:
+            raise SystemExit(f"adhush: active test failed: {exc}") from exc
+        print("done — confirm the set muted and unmuted")
     return 0
 
 
@@ -301,6 +338,14 @@ def main(argv: list[str] | None = None) -> int:
     p_replay.add_argument("--mute-tolerance", type=float, default=4.0)
     p_replay.add_argument("--unmute-tolerance", type=float, default=2.0)
     p_replay.set_defaults(func=_cmd_replay)
+
+    p_probe = sub.add_parser("probe", help="discover which control backends can drive the set")
+    p_probe.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)
+    p_probe.add_argument(
+        "--active", action="store_true", help="also send a real mute/unmute pair"
+    )
+    p_probe.add_argument("--gap", type=float, default=2.0, help="seconds muted in --active")
+    p_probe.set_defaults(func=_cmd_probe)
 
     p_doctor = sub.add_parser("doctor", help="check environment and configuration")
     p_doctor.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)

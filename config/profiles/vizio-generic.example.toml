@@ -1,0 +1,24 @@
+# Vizio TVs (XRT-series remotes, extended-NEC).
+# Codes are community-documented; confirm with `adhush probe` / `adhush ir-test`.
+# SmartCast models also expose an HTTPS API, but it requires per-device
+# pairing/auth; IR is the dependable path.
+
+inherits = "generic"
+
+[identity]
+make = "Vizio"
+model = "generic"
+year = 0
+
+[control]
+backends = ["ir_pigpio", "ir_lirc", "ir_blaster_net", "cec"]
+discrete_mute = false
+state_readback = false
+
+[ir]
+protocol = "nec_ext"
+carrier_hz = 38000
+
+[ir.codes.mute_toggle]
+address = 0xFB04           # device 4, subdevice 251
+command = 0x08
