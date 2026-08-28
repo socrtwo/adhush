@@ -8,13 +8,9 @@ from pathlib import Path
 from typing import Any
 
 PHASE1_DETECTORS = ("black_frame", "silence", "loudness")
-KNOWN_DETECTORS = PHASE1_DETECTORS + (
-    "logo_absence",
-    "scene_cut",
-    "aspect_change",
-    "caption_gap",
-    "fingerprint",
-)
+PHASE2_DETECTORS = ("logo_absence", "scene_cut", "fingerprint")
+IMPLEMENTED_DETECTORS = PHASE1_DETECTORS + PHASE2_DETECTORS
+KNOWN_DETECTORS = IMPLEMENTED_DETECTORS + ("aspect_change", "caption_gap")
 KNOWN_CAPTURE_BACKENDS = (
     "hdmi_uvc",
     "camera",
@@ -73,11 +69,40 @@ class LoudnessConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class RoiConfig:
+    x: float = 0.84
+    y: float = 0.80
+    w: float = 0.14
+    h: float = 0.14
+
+
+@dataclass(frozen=True, slots=True)
+class LogoAbsenceConfig:
+    roi: RoiConfig = field(default_factory=RoiConfig)
+    absence_frames: int = 45
+    template: str = "data/logos/logo.npz"
+    # Edge-correlation score below which the logo counts as absent.
+    present_threshold: float = 0.4
+
+
+@dataclass(frozen=True, slots=True)
+class SceneCutConfig:
+    # Mean-abs luma delta (downscaled) that counts as a shot change.
+    diff_threshold: float = 12.0
+    window_s: float = 10.0
+    # Cut rate mapping to confidence: 0 at low_cpm, 1 at high_cpm.
+    low_cpm: float = 15.0
+    high_cpm: float = 40.0
+
+
+@dataclass(frozen=True, slots=True)
 class DetectConfig:
-    enabled: tuple[str, ...] = PHASE1_DETECTORS
+    enabled: tuple[str, ...] = IMPLEMENTED_DETECTORS
     black_frame: BlackFrameConfig = field(default_factory=BlackFrameConfig)
     silence: SilenceConfig = field(default_factory=SilenceConfig)
     loudness: LoudnessConfig = field(default_factory=LoudnessConfig)
+    logo_absence: LogoAbsenceConfig = field(default_factory=LogoAbsenceConfig)
+    scene_cut: SceneCutConfig = field(default_factory=SceneCutConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +112,35 @@ class FusionConfig:
     mute_dwell_ms: int = 900
     unmute_dwell_ms: int = 400
     max_mute_s: float = 240.0
+    # Early-unmute dwell while inside a fingerprint-matched ad window: the
+    # combined confidence must stay on the program side this long before the
+    # learned-duration mute is abandoned.
+    fp_unmute_dwell_ms: int = 3000
+
+
+@dataclass(frozen=True, slots=True)
+class FingerprintConfig:
+    enabled: bool = True
+    store: str = "data/fingerprints/ads.sqlite"
+    hamming_threshold: int = 10
+    audio_corroboration: bool = True
+    learn: bool = True
+    slot_snap_s: tuple[float, ...] = (15.0, 30.0, 45.0, 60.0)
+    # Sampling and matching cadence.
+    sample_interval_s: float = 0.5
+    window_s: float = 6.0  # how much of an ad's start is fingerprinted
+    confirm_hits: int = 3  # consecutive matching samples to promote
+    # Frames flatter than this luma stddev are never hashed (black frames and
+    # plain cards hash identically and would cross-match everything).
+    min_frame_std: float = 6.0
+    # Learned-segment sanity bounds.
+    min_learn_s: float = 8.0
+    max_learn_s: float = 120.0
+    # Below this many observations the slot snap overrides the learned
+    # duration; at or above it, the learned duration wins.
+    snap_min_samples: int = 3
+    # Minimum fraction of agreeing chroma bits for audio corroboration.
+    audio_min_agreement: float = 0.7
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +172,7 @@ class Config:
     fusion: FusionConfig
     control: ControlConfig
     profile: Profile
+    fingerprint: FingerprintConfig = field(default_factory=FingerprintConfig)
     log_level: str = "info"
 
 
@@ -186,8 +241,29 @@ _CAPTURE_DEFAULTS = CaptureConfig()
 _BLACK_DEFAULTS = BlackFrameConfig()
 _SILENCE_DEFAULTS = SilenceConfig()
 _LOUDNESS_DEFAULTS = LoudnessConfig()
+_LOGO_DEFAULTS = LogoAbsenceConfig()
+_SCENE_DEFAULTS = SceneCutConfig()
 _FUSION_DEFAULTS = FusionConfig()
 _CONTROL_DEFAULTS = ControlConfig()
+_FP_DEFAULTS = FingerprintConfig()
+_ROI_DEFAULTS = RoiConfig()
+
+
+def _parse_roi(raw: dict[str, Any] | None, fallback: RoiConfig) -> RoiConfig:
+    if not raw:
+        return fallback
+    roi = RoiConfig(
+        x=float(raw.get("x", fallback.x)),
+        y=float(raw.get("y", fallback.y)),
+        w=float(raw.get("w", fallback.w)),
+        h=float(raw.get("h", fallback.h)),
+    )
+    for name, v in (("x", roi.x), ("y", roi.y), ("w", roi.w), ("h", roi.h)):
+        if not 0.0 <= v <= 1.0:
+            raise ConfigError(f"logo roi {name}={v} outside [0, 1]")
+    if roi.x + roi.w > 1.0 or roi.y + roi.h > 1.0:
+        raise ConfigError("logo roi extends past the frame")
+    return roi
 
 
 def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
@@ -213,14 +289,22 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
     if capture.fps < 1 or capture.audio_rate < 8000 or capture.audio_block_ms < 10:
         raise ConfigError("capture rates out of range")
 
+    profile_name = str(data.get("device", {}).get("profile", "generic"))
+    profile = load_profile(profiles_dir, profile_name)
+    # The device profile supplies the logo ROI default; [detect.logo_absence]
+    # in the main config overrides it.
+    profile_roi = _parse_roi(profile.raw.get("roi", {}).get("logo"), _ROI_DEFAULTS)
+
     det = data.get("detect", {})
-    enabled = tuple(str(d) for d in det.get("enabled", PHASE1_DETECTORS))
+    enabled = tuple(str(d) for d in det.get("enabled", IMPLEMENTED_DETECTORS))
     for name in enabled:
         if name not in KNOWN_DETECTORS:
             raise ConfigError(f"unknown detector enabled: {name}")
     bf = det.get("black_frame", {})
     sil = det.get("silence", {})
     loud = det.get("loudness", {})
+    logo = det.get("logo_absence", {})
+    scene = det.get("scene_cut", {})
     detect = DetectConfig(
         enabled=enabled,
         black_frame=BlackFrameConfig(
@@ -236,7 +320,23 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
             delta_lufs=float(loud.get("delta_lufs", _LOUDNESS_DEFAULTS.delta_lufs)),
             baseline_s=float(loud.get("baseline_s", _LOUDNESS_DEFAULTS.baseline_s)),
         ),
+        logo_absence=LogoAbsenceConfig(
+            roi=_parse_roi(logo.get("roi"), profile_roi),
+            absence_frames=int(logo.get("absence_frames", _LOGO_DEFAULTS.absence_frames)),
+            template=str(logo.get("template", _LOGO_DEFAULTS.template)),
+            present_threshold=float(
+                logo.get("present_threshold", _LOGO_DEFAULTS.present_threshold)
+            ),
+        ),
+        scene_cut=SceneCutConfig(
+            diff_threshold=float(scene.get("diff_threshold", _SCENE_DEFAULTS.diff_threshold)),
+            window_s=float(scene.get("window_s", _SCENE_DEFAULTS.window_s)),
+            low_cpm=float(scene.get("low_cpm", _SCENE_DEFAULTS.low_cpm)),
+            high_cpm=float(scene.get("high_cpm", _SCENE_DEFAULTS.high_cpm)),
+        ),
     )
+    if detect.scene_cut.low_cpm >= detect.scene_cut.high_cpm:
+        raise ConfigError("scene_cut requires low_cpm < high_cpm")
 
     fus = data.get("fusion", {})
     fusion = FusionConfig(
@@ -245,6 +345,9 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
         mute_dwell_ms=int(fus.get("mute_dwell_ms", _FUSION_DEFAULTS.mute_dwell_ms)),
         unmute_dwell_ms=int(fus.get("unmute_dwell_ms", _FUSION_DEFAULTS.unmute_dwell_ms)),
         max_mute_s=float(fus.get("max_mute_s", _FUSION_DEFAULTS.max_mute_s)),
+        fp_unmute_dwell_ms=int(
+            fus.get("fp_unmute_dwell_ms", _FUSION_DEFAULTS.fp_unmute_dwell_ms)
+        ),
     )
     if not 0.0 < fusion.unmute_confidence < fusion.mute_confidence < 1.0:
         raise ConfigError(
@@ -263,8 +366,29 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
         options=dict(ctl.get(backend, {})),
     )
 
-    profile_name = str(data.get("device", {}).get("profile", "generic"))
-    profile = load_profile(profiles_dir, profile_name)
+    fp = data.get("fingerprint", {})
+    fingerprint = FingerprintConfig(
+        enabled=bool(fp.get("enabled", _FP_DEFAULTS.enabled)),
+        store=str(fp.get("store", _FP_DEFAULTS.store)),
+        hamming_threshold=int(fp.get("hamming_threshold", _FP_DEFAULTS.hamming_threshold)),
+        audio_corroboration=bool(
+            fp.get("audio_corroboration", _FP_DEFAULTS.audio_corroboration)
+        ),
+        learn=bool(fp.get("learn", _FP_DEFAULTS.learn)),
+        slot_snap_s=tuple(float(s) for s in fp.get("slot_snap_s", _FP_DEFAULTS.slot_snap_s)),
+        sample_interval_s=float(fp.get("sample_interval_s", _FP_DEFAULTS.sample_interval_s)),
+        window_s=float(fp.get("window_s", _FP_DEFAULTS.window_s)),
+        confirm_hits=int(fp.get("confirm_hits", _FP_DEFAULTS.confirm_hits)),
+        min_frame_std=float(fp.get("min_frame_std", _FP_DEFAULTS.min_frame_std)),
+        min_learn_s=float(fp.get("min_learn_s", _FP_DEFAULTS.min_learn_s)),
+        max_learn_s=float(fp.get("max_learn_s", _FP_DEFAULTS.max_learn_s)),
+        snap_min_samples=int(fp.get("snap_min_samples", _FP_DEFAULTS.snap_min_samples)),
+        audio_min_agreement=float(
+            fp.get("audio_min_agreement", _FP_DEFAULTS.audio_min_agreement)
+        ),
+    )
+    if fingerprint.hamming_threshold < 0 or fingerprint.confirm_hits < 1:
+        raise ConfigError("fingerprint thresholds out of range")
 
     log_level = str(data.get("log", {}).get("level", "info"))
     return Config(
@@ -273,5 +397,6 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
         fusion=fusion,
         control=control,
         profile=profile,
+        fingerprint=fingerprint,
         log_level=log_level,
     )

@@ -7,12 +7,15 @@ detectors over it, fuses their votes, and issues a mute command to the display
 through whatever control path that display supports — infrared, HDMI-CEC,
 RS-232, network API, or the host's own audio mixer.
 
-**Status: Phase 1 (Raspberry Pi reference) implemented.** Working today:
-`file_replay` and `hdmi_uvc` capture, the `black_frame` / `silence` /
-`loudness` detectors, vote fusion with hysteresis, the ad state machine, the
-`rs232_sharp` and `ir_lirc` controllers, and the `run` / `replay` / `doctor` /
-`ir-test` CLI. Vision, fingerprinting, and the remaining control backends land
-in later phases — see `docs/roadmap.md`.
+**Status: Phases 1–2 implemented.** Working today: `file_replay` and
+`hdmi_uvc` capture; the `black_frame`, `silence`, `loudness`, `logo_absence`
+(calibrated via `adhush calibrate`), `scene_cut`, and `fingerprint` detectors;
+vote fusion with hysteresis; the ad state machine with fingerprint promotion;
+the `rs232_sharp` and `ir_lirc` controllers; and the full CLI (`run`,
+`replay`, `calibrate`, `learn`, `doctor`, `ir-test`). Repeat ads are
+recognized from their first seconds and muted for their learned duration.
+The remaining control backends and platform shells land in later phases —
+see `docs/roadmap.md`.
 
 ## Quick start
 
@@ -20,8 +23,10 @@ in later phases — see `docs/roadmap.md`.
 pip install -e .                      # numpy only; add [pi] for pyserial
 cp config/adhush.example.toml config/adhush.toml   # then edit
 adhush doctor                         # verify environment and config
+adhush calibrate                      # learn the logo template (logo on screen)
 adhush run                            # live detection + mute control
 adhush replay clip.mp4 --labels labels.json        # offline scoring
+adhush learn clip.mp4 --labels ads.json            # seed the ad fingerprint store
 ```
 
 `replay` accepts any media file ffmpeg can decode, or an `.npz` fixture, and

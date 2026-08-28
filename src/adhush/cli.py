@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import heapq
 import json
 import logging
 import shutil
@@ -10,6 +11,7 @@ import signal
 import sys
 import threading
 import time
+from collections.abc import Iterator
 from pathlib import Path
 
 from adhush import __version__
@@ -20,10 +22,14 @@ from adhush.control import NullController, build_controller
 from adhush.control.base import ControlError
 from adhush.control.ir_lirc import IrLircController
 from adhush.detect import build_detectors
+from adhush.detect.fingerprint import FingerprintDetector
 from adhush.detect.fusion import Fusion
+from adhush.detect.logo_absence import build_template, save_template
 from adhush.engine import Pipeline, evaluate_onsets, run_live, run_offline
-from adhush.events import AdSegment
+from adhush.events import AdSegment, AudioEvent, FrameEvent
+from adhush.fingerprint import open_fingerprints
 from adhush.state import AdStateMachine
+from adhush.util.imageops import extract_roi
 
 _DEFAULT_CONFIG = Path("config/adhush.toml")
 
@@ -35,14 +41,33 @@ def _load(path: Path) -> Config:
         raise SystemExit(f"adhush: config error: {exc}") from exc
 
 
-def _build_pipeline(config: Config, controller: NullController | None, *, video: bool, audio: bool) -> Pipeline:
-    detectors = build_detectors(config.detect, video=video, audio=audio)
+def _build_pipeline(
+    config: Config, controller: NullController | None, *, video: bool, audio: bool
+) -> Pipeline:
+    fp_active = (
+        video and config.fingerprint.enabled and "fingerprint" in config.detect.enabled
+    )
+    matcher = learner = None
+    fingerprint = None
+    if fp_active:
+        _store, matcher, learner = open_fingerprints(config.fingerprint)
+        fingerprint = (config.fingerprint, matcher)
+    detectors = build_detectors(
+        config.detect, video=video, audio=audio, fingerprint=fingerprint
+    )
     if not detectors:
         raise SystemExit("adhush: no enabled detector matches the available modalities")
     fusion = Fusion(config.fusion, config.profile.fusion_weights, [d.name for d in detectors])
     machine = AdStateMachine(config.fusion)
     ctl = controller if controller is not None else build_controller(config.control)
-    return Pipeline(detectors, fusion, machine, ctl)
+    return Pipeline(
+        detectors,
+        fusion,
+        machine,
+        ctl,
+        learner=learner if config.fingerprint.learn else None,
+        matcher=matcher,
+    )
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -63,19 +88,21 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 def _cmd_replay(args: argparse.Namespace) -> int:
     config = _load(args.config) if args.config else None
-    detect_cfg = config.detect if config else DetectConfig()
-    fusion_cfg = config.fusion if config else FusionConfig()
-    weights = config.profile.fusion_weights if config else {}
 
     source = FileReplaySource(args.input)
     controller = NullController()
     with source:
         caps = source.caps()
-        detectors = build_detectors(detect_cfg, video=caps.video, audio=caps.audio)
-        if not detectors:
-            raise SystemExit("adhush: no detector matches the fixture's modalities")
-        fusion = Fusion(fusion_cfg, weights, [d.name for d in detectors])
-        pipeline = Pipeline(detectors, fusion, AdStateMachine(fusion_cfg), controller)
+        if config is not None:
+            # Full configured pipeline, fingerprint store included.
+            pipeline = _build_pipeline(config, controller, video=caps.video, audio=caps.audio)
+        else:
+            detectors = build_detectors(DetectConfig(), video=caps.video, audio=caps.audio)
+            if not detectors:
+                raise SystemExit("adhush: no detector matches the fixture's modalities")
+            fusion_cfg = FusionConfig()
+            fusion = Fusion(fusion_cfg, {}, [d.name for d in detectors])
+            pipeline = Pipeline(detectors, fusion, AdStateMachine(fusion_cfg), controller)
         transitions = run_offline(source, pipeline)
 
     for t in transitions:
@@ -179,9 +206,83 @@ def _cmd_ir_test(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_phase2(name: str) -> int:
-    print(f"adhush: '{name}' lands in Phase 2 (see docs/roadmap.md)")
-    return 2
+def _cmd_calibrate(args: argparse.Namespace) -> int:
+    """Build the logo edge template from material where the logo is visible."""
+    config = _load(args.config)
+    logo_cfg = config.detect.logo_absence
+    source = (
+        FileReplaySource(args.input) if args.input else build_capture(config.capture)
+    )
+    rois = []
+    with source:
+        if not source.caps().video:
+            raise SystemExit("adhush: calibrate needs a video-capable source")
+        start_ts: float | None = None
+        for frame in source.frames():
+            if start_ts is None:
+                start_ts = frame.ts
+            if frame.ts - start_ts > args.seconds:
+                break
+            roi = logo_cfg.roi
+            rois.append(extract_roi(frame.frame, roi.x, roi.y, roi.w, roi.h).copy())
+    if not rois:
+        raise SystemExit("adhush: no frames captured; nothing to calibrate from")
+    template = build_template(rois)
+    save_template(Path(logo_cfg.template), template)
+    print(
+        f"calibrated logo template from {len(rois)} frames"
+        f" (roi {logo_cfg.roi.x:.2f},{logo_cfg.roi.y:.2f}"
+        f" {logo_cfg.roi.w:.2f}x{logo_cfg.roi.h:.2f}) -> {logo_cfg.template}"
+    )
+    print("make sure the network logo was on screen the whole time; re-run if not")
+    return 0
+
+
+def _cmd_learn(args: argparse.Namespace) -> int:
+    """Seed the fingerprint store from a recording with labeled ad segments."""
+    config = _load(args.config)
+    fp_cfg = config.fingerprint
+    segments = sorted(_read_labels(args.labels), key=lambda s: s.start_ts)
+    if not segments:
+        raise SystemExit("adhush: labels file contains no segments")
+    _store, matcher, learner = open_fingerprints(fp_cfg)
+    detector = FingerprintDetector(fp_cfg, matcher)
+
+    learned: list[tuple[AdSegment, int | None]] = []
+
+    def flush(seg: AdSegment) -> None:
+        end = seg.start_ts + min(fp_cfg.window_s, seg.duration_s)
+        ad_id = learner.learn_segment(
+            seg.start_ts,
+            seg.duration_s,
+            detector.video_between(seg.start_ts, end),
+            detector.audio_between(seg.start_ts, end),
+        )
+        learned.append((seg, ad_id))
+
+    source = FileReplaySource(args.input)
+    with source:
+        if not source.caps().video:
+            raise SystemExit("adhush: learn needs a video-capable recording")
+        pending = list(segments)
+        events: Iterator[FrameEvent | AudioEvent] = heapq.merge(
+            source.frames(), source.audio_blocks(), key=lambda e: e.ts
+        )
+        for event in events:
+            if isinstance(event, FrameEvent):
+                detector.observe_frame(event)
+            else:
+                detector.observe_audio(event)
+            while pending and event.ts > pending[0].start_ts + fp_cfg.window_s + 1.0:
+                flush(pending.pop(0))
+        for seg in pending:
+            flush(seg)
+
+    for seg, ad_id in learned:
+        status = f"stored as ad {ad_id}" if ad_id is not None else "skipped"
+        print(f"  {seg.start_ts:8.1f}s +{seg.duration_s:.0f}s  {status}")
+    print(f"fingerprint store now holds {_store.count()} ad(s) at {fp_cfg.store}")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -210,9 +311,21 @@ def main(argv: list[str] | None = None) -> int:
     p_ir.add_argument("--gap", type=float, default=2.0, help="seconds between mute and unmute")
     p_ir.set_defaults(func=_cmd_ir_test)
 
-    for phase2 in ("calibrate", "learn"):
-        p = sub.add_parser(phase2, help="(Phase 2)")
-        p.set_defaults(func=lambda _a, _n=phase2: _cmd_phase2(_n))
+    p_cal = sub.add_parser(
+        "calibrate", help="build the logo template from logo-visible program material"
+    )
+    p_cal.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)
+    p_cal.add_argument("--input", type=Path, default=None, help="recording; default: live capture")
+    p_cal.add_argument("--seconds", type=float, default=10.0)
+    p_cal.set_defaults(func=_cmd_calibrate)
+
+    p_learn = sub.add_parser(
+        "learn", help="seed the fingerprint store from a labeled recording"
+    )
+    p_learn.add_argument("input", type=Path, help=".npz fixture or media file")
+    p_learn.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)
+    p_learn.add_argument("--labels", type=Path, required=True, help="JSON [{start_ts, duration_s}]")
+    p_learn.set_defaults(func=_cmd_learn)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

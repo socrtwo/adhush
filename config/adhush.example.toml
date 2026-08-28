@@ -15,8 +15,16 @@ profile = "sharp-lc46le830u"
 enabled = ["black_frame", "silence", "loudness", "logo_absence", "scene_cut", "fingerprint"]
 
 [detect.logo_absence]
-roi = { x = 0.84, y = 0.80, w = 0.14, h = 0.14 }
+roi = { x = 0.84, y = 0.80, w = 0.14, h = 0.14 }   # default comes from the device profile
 absence_frames = 45
+template = "data/logos/logo.npz"    # written by `adhush calibrate`
+present_threshold = 0.4
+
+[detect.scene_cut]
+diff_threshold = 12.0
+window_s = 10.0
+low_cpm = 15.0      # cut rate mapping: 0 confidence here...
+high_cpm = 40.0     # ...1.0 confidence here
 
 [detect.loudness]
 window_s = 1.5      # short window: quick unmute matters more than R128's 3 s
@@ -38,6 +46,10 @@ hamming_threshold = 10
 audio_corroboration = true
 learn = true
 slot_snap_s = [15, 30, 45, 60]
+sample_interval_s = 0.5
+window_s = 6.0          # how much of an ad's start is fingerprinted
+confirm_hits = 3        # consecutive matching samples to promote to AD
+snap_min_samples = 3    # airings before the learned duration beats the snap
 
 [fusion]
 mute_confidence = 0.72
@@ -45,6 +57,7 @@ unmute_confidence = 0.45
 mute_dwell_ms = 900
 unmute_dwell_ms = 400
 max_mute_s = 240          # hard ceiling; never stay muted past this
+fp_unmute_dwell_ms = 3000 # program evidence needed this long to cut a matched ad short
 
 [control]
 backend = "rs232_sharp"    # rs232_sharp | ir_lirc | ir_pigpio | cec | ir_blaster_net | network_ip | local_audio

@@ -7,7 +7,7 @@ Structure, interfaces, docs, config schema, CI.
 `file_replay` + `hdmi_uvc` capture, `black_frame`, `silence`, `loudness`,
 `fusion`, `state`, `ir_lirc` and `rs232_sharp` controllers, CLI `run`/`doctor`.
 
-## Phase 2 — vision and memory
+## Phase 2 — vision and memory (done)
 `logo_absence` with `calibrate`, `scene_cut`, `video_phash`, `audio_chroma`,
 `store`, `matcher`, `learner`.
 

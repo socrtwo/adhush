@@ -20,9 +20,13 @@ from dataclasses import dataclass
 from adhush.capture.base import CaptureSource
 from adhush.control.base import ControlError, MuteController
 from adhush.detect.base import Detector
+from adhush.detect.fingerprint import FingerprintDetector
 from adhush.detect.fusion import Fusion
+from adhush.detect.logo_absence import LogoAbsenceDetector
 from adhush.events import AdSegment, AudioEvent, FrameEvent
-from adhush.state import Action, AdStateMachine
+from adhush.fingerprint.learner import Learner
+from adhush.fingerprint.matcher import Match, Matcher
+from adhush.state import Action, AdState, AdStateMachine
 
 log = logging.getLogger(__name__)
 
@@ -46,12 +50,23 @@ class Pipeline:
         fusion: Fusion,
         machine: AdStateMachine,
         controller: MuteController,
+        *,
+        learner: Learner | None = None,
+        matcher: Matcher | None = None,
     ) -> None:
         self._detectors = detectors
         self._fusion = fusion
         self._machine = machine
         self._controller = controller
+        self._learner = learner
+        self._matcher = matcher
+        self._fp = next(
+            (d for d in detectors if isinstance(d, FingerprintDetector)), None
+        )
+        self._logos = [d for d in detectors if isinstance(d, LogoAbsenceDetector)]
         self._next_decision_ts: float | None = None
+        self._ad_start_est: float | None = None
+        self._mute_match: Match | None = None
         self.transitions: list[Transition] = []
 
     def warmup(self) -> None:
@@ -59,6 +74,8 @@ class Pipeline:
             detector.warmup()
         self._fusion.reset()
         self._next_decision_ts = None
+        self._ad_start_est = None
+        self._mute_match = None
         self.transitions = []
 
     def process(self, event: FrameEvent | AudioEvent) -> None:
@@ -81,12 +98,33 @@ class Pipeline:
     def _decide(self, ts: float) -> None:
         votes = [d.vote(ts) for d in self._detectors]
         decision = self._fusion.combine(votes, ts)
-        action = self._machine.update(decision)
+
+        match = self._fp.active_match(ts) if self._fp is not None else None
+        fp_hold = match is not None and ts < match.expected_end_ts
+        promote = fp_hold and self._machine.state in (AdState.PROGRAM, AdState.SUSPECT_AD)
+        program_evidence = any(d.program_present for d in self._logos)
+
+        action = self._machine.update(
+            decision, promote=promote, fp_hold=fp_hold, program_evidence=program_evidence
+        )
         if action is None:
             return
+
+        reasons = decision.reasons
+        if action is Action.MUTE:
+            if promote and match is not None:
+                self._mute_match = match
+                self._ad_start_est = match.est_start_ts
+                reasons = (
+                    f"fingerprint:promote ad={match.ad_id} dur={match.duration_s:.0f}",
+                    *reasons,
+                )
+            else:
+                self._mute_match = None
+                self._ad_start_est = ts - self._machine.mute_dwell_s
         self.transitions.append(
             Transition(
-                ts=ts, action=action, confidence=decision.confidence, reasons=decision.reasons
+                ts=ts, action=action, confidence=decision.confidence, reasons=reasons
             )
         )
         log.info("%s at ts=%.2f conf=%.2f", action.value, ts, decision.confidence)
@@ -99,6 +137,30 @@ class Pipeline:
             # A failed unmute is the dangerous direction; the next decision
             # cycle retries because the state machine has already left AD.
             log.exception("controller failed on %s", action.value)
+        if action is Action.UNMUTE:
+            self._finish_ad(ts)
+
+    def _finish_ad(self, ts: float) -> None:
+        """Feed the just-ended ad segment back into the fingerprint memory."""
+        start = self._ad_start_est
+        match, self._mute_match, self._ad_start_est = self._mute_match, None, None
+        if self._learner is None or self._fp is None or start is None:
+            return
+        duration = ts - start
+        if match is not None:
+            # Known ad: fold this airing's duration in. An early unmute
+            # (program evidence inside the window) shortens the estimate.
+            self._fp.abort_match()
+            self._learner.observe_duration(match.ad_id, duration)
+        else:
+            learned = self._learner.learn_segment(
+                start,
+                duration,
+                self._fp.video_between(start, ts),
+                self._fp.audio_between(start, ts),
+            )
+            if learned is not None and self._matcher is not None:
+                self._matcher.refresh()
 
 
 def _merged_offline(source: CaptureSource) -> Iterator[FrameEvent | AudioEvent]:
