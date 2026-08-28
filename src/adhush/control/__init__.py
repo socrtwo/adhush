@@ -12,6 +12,7 @@ from adhush.control.ir_lirc import IrLircController
 from adhush.control.ir_pigpio import IrPigpioController
 from adhush.control.local_audio import LocalAudioController
 from adhush.control.network_ip import NetworkIpController
+from adhush.control.relay_hdmi import RelayHdmiController
 from adhush.control.rs232_sharp import SharpRs232Controller
 
 __all__ = [
@@ -31,6 +32,7 @@ IMPLEMENTED_BACKENDS = (
     "ir_blaster_net",
     "network_ip",
     "local_audio",
+    "relay_hdmi",
 )
 _IR_BACKENDS = ("ir_lirc", "ir_pigpio", "ir_blaster_net")
 
@@ -99,4 +101,6 @@ def build_controller(config: ControlConfig, profile: Profile | None = None) -> M
         return NetworkIpController(options)
     if config.backend == "local_audio":
         return LocalAudioController(options)
+    if config.backend == "relay_hdmi":
+        return RelayHdmiController(options)
     raise ControlError(f"control backend '{config.backend}' is not implemented yet (see roadmap)")

@@ -27,6 +27,7 @@ KNOWN_CONTROL_BACKENDS = (
     "ir_blaster_net",
     "network_ip",
     "local_audio",
+    "relay_hdmi",
 )
 
 

@@ -33,6 +33,7 @@ general control API; do not assume network control without verifying.
 
 | Profile | Best path | Mute | Notes |
 |---|---|---|---|
+| `passthrough-box` | GPIO relay on the audio path | discrete + readback | any TV; docs/hardware-passthrough-box.md |
 | `sharp-lc46le830u` | RS-232C | discrete + readback | reference set |
 | `sony-bravia-generic` | Simple IP (TCP 20060) | discrete + readback | enable IP Control on the set |
 | `roku-tv-generic` | ECP (HTTP 8060) | toggle | enable "Control by mobile apps" |

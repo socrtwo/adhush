@@ -165,6 +165,14 @@ def _probe_one(
             return ProbeResult(backend, False, discrete, f"{host}:{port} unreachable: {error}")
         return ProbeResult(backend, True, discrete, f"{host}:{port} reachable")
 
+    if backend == "relay_hdmi":
+        if not can_import("pigpio"):
+            return ProbeResult(backend, False, True, "pigpio package not installed")
+        gpio = int(options.get("gpio", 23))
+        return ProbeResult(
+            backend, True, True, f"relay on GPIO {gpio} (verify wiring passes audio at rest)"
+        )
+
     if backend == "local_audio":
         platform = str(options.get("platform", sys.platform))
         tool = {"linux": str(options.get("tool", "pactl")), "darwin": "osascript",

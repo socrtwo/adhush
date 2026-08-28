@@ -369,7 +369,7 @@ class TestProfileLibrary:
 def test_build_controller_covers_new_backends() -> None:
     assert isinstance(build_controller(ControlConfig(backend="cec")), CecController)
     with pytest.raises(ControlError, match="not implemented"):
-        build_controller(ControlConfig(backend="relay_hdmi"))  # phase 5
+        build_controller(ControlConfig(backend="telepathy"))
 
 
 class TestProbe:

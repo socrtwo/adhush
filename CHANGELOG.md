@@ -5,6 +5,24 @@ Format follows Keep a Changelog; versioning follows SemVer.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-28
+### Added
+- Phase 5 (hardware passthrough box) implementation:
+  - `relay_hdmi` controller: a GPIO-driven relay physically opening the
+    intercepted audio path. Discrete, instant, TV-agnostic, with
+    commanded-state readback; wired through normally-closed contacts and
+    energized only to mute, so a crash, power loss, or shutdown always
+    fails *unmuted*. Injectable pin driver (pigpio by default).
+  - `passthrough-box` device profile and
+    `config/adhush-passthrough.example.toml` (HDMI-UVC capture, full
+    detector set, relay control, LAN-visible IPC with a token).
+  - `docs/hardware-passthrough-box.md`: signal topology, parts list,
+    fail-unmuted relay wiring, and the latency/delay-line design note.
+  - `scripts/install-pi.sh`: real installer — system packages, pigpiod,
+    venv, and an `adhush.service` systemd unit.
+  - Probe support for `relay_hdmi`; every roadmap control backend is now
+    implemented.
+
 ## [0.4.0] - 2026-08-28
 ### Added
 - Phase 4 (platforms) implementation:

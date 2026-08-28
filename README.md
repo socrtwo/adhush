@@ -7,18 +7,20 @@ detectors over it, fuses their votes, and issues a mute command to the display
 through whatever control path that display supports — infrared, HDMI-CEC,
 RS-232, network API, or the host's own audio mixer.
 
-**Status: Phases 1–4 implemented.** Working today: capture from HDMI-UVC,
-screen grab, camera-at-the-screen (with screen auto-crop), microphone,
-line-in, or file replay; the `black_frame`, `silence`, `loudness`,
-`logo_absence` (calibrated via `adhush calibrate`), `scene_cut`, and
-`fingerprint` detectors; vote fusion with hysteresis and the ad state machine
-with fingerprint promotion; seven control backends (`rs232_sharp`, `ir_lirc`,
-`ir_pigpio`, `cec`, `ir_blaster_net`, `network_ip`, `local_audio`) with
-`adhush probe` to discover which can drive your set; a device-profile library
-(Sharp reference, Samsung, LG, Sony BRAVIA, Vizio, Roku TV); a localhost
-HTTP+SSE API with a dependency-free web front end (`platforms/web`); and the
-full CLI. Repeat ads are recognized from their first seconds and muted for
-their learned duration. The inline HDMI passthrough box is Phase 5 — see
+**Status: all five roadmap phases implemented.** Working today: capture from
+HDMI-UVC, screen grab, camera-at-the-screen (with screen auto-crop),
+microphone, line-in, or file replay; the `black_frame`, `silence`,
+`loudness`, `logo_absence` (calibrated via `adhush calibrate`), `scene_cut`,
+and `fingerprint` detectors; vote fusion with hysteresis and the ad state
+machine with fingerprint promotion; eight control backends (`rs232_sharp`,
+`ir_lirc`, `ir_pigpio`, `cec`, `ir_blaster_net`, `network_ip`, `local_audio`,
+`relay_hdmi`) with `adhush probe` to discover which can drive your set; a
+device-profile library (Sharp reference, Samsung, LG, Sony BRAVIA, Vizio,
+Roku TV, passthrough box); a localhost HTTP+SSE API with a dependency-free
+web front end (`platforms/web`); the inline HDMI passthrough box
+(`docs/hardware-passthrough-box.md` + `scripts/install-pi.sh`); and the full
+CLI. Repeat ads are recognized from their first seconds and muted for their
+learned duration. Remaining ideas live under "Beyond the roadmap" in
 `docs/roadmap.md`.
 
 ## Quick start
@@ -73,8 +75,9 @@ A confirmed match mutes for the learned duration, snapped to the nearest
 Roku ECP), `cec`, `ir_lirc`, `ir_pigpio` (raw NEC / extended NEC / Samsung /
 Sharp / SIRC / RC-5 / raw-timing waveforms on a GPIO pin), `ir_blaster_net`
 (Global Caché iTach, Broadlink), `local_audio` (host mute for screen/app
-mode); `relay_hdmi` comes with the Phase 5 passthrough box. `adhush probe`
-reports which backends can drive your set, in the profile's preference order.
+mode), `relay_hdmi` (the passthrough box's GPIO relay physically opening the
+audio path — wired to fail unmuted). `adhush probe` reports which backends
+can drive your set, in the profile's preference order.
 
 Discrete mute-on / mute-off is strongly preferred over toggle. Toggle-only
 devices desynchronize; profiles must declare which they support so fusion can

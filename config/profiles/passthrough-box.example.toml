@@ -1,0 +1,19 @@
+# Phase 5 inline HDMI passthrough box: splitter + audio extractor + relay.
+# TV-agnostic — the box owns the audio path, so no TV cooperation is needed
+# and no IR/serial/network codes apply. See docs/hardware-passthrough-box.md.
+
+inherits = "generic"
+
+[identity]
+make = "AdHush"
+model = "passthrough-box"
+year = 0
+
+[control]
+backends = ["relay_hdmi"]
+discrete_mute = true       # the relay physically opens the audio path
+state_readback = true      # commanded pin state IS the path state
+
+[relay_hdmi]
+gpio = 23
+active_high = true         # energize to mute; de-energized contact passes audio

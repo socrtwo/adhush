@@ -30,5 +30,15 @@ phones and tablets currently use the web front end against a networked core.
 | iOS | camera, mic | net blaster, local audio | no IR hardware |
 | Web | mic, camera, tab capture | net blaster, local audio | WASM detectors |
 
-## Phase 5 — hardware passthrough box
+## Phase 5 — hardware passthrough box (done)
 Pi-based inline HDMI unit with audio interception, no TV cooperation needed.
+`relay_hdmi` control, the `passthrough-box` profile, wiring in
+`docs/hardware-passthrough-box.md`, and `scripts/install-pi.sh` for the
+systemd deployment.
+
+## Beyond the roadmap
+Candidates, in no particular order: on-device mobile capture and in-browser
+WASM detectors (the Phase 4 remainder), an audio delay line for retroactive
+mutes on the passthrough box, `metrics.py` (Prometheus text endpoint), RC-6 /
+Kaseikyo IR encoders, an LG webOS websocket backend, and profile
+contributions per docs/device-support.md.
