@@ -1,0 +1,65 @@
+# Copy to config/adhush.toml and edit.
+
+[capture]
+backend = "hdmi_uvc"        # hdmi_uvc | camera | microphone | line_in | screen | file_replay
+device = "/dev/video0"
+width = 1280
+height = 720
+fps = 30
+audio_device = "default"
+
+[device]
+profile = "sharp-lc46le830u"
+
+[detect]
+enabled = ["black_frame", "silence", "loudness", "logo_absence", "scene_cut", "fingerprint"]
+
+[detect.logo_absence]
+roi = { x = 0.84, y = 0.80, w = 0.14, h = 0.14 }
+absence_frames = 45
+
+[detect.loudness]
+window_s = 3.0
+delta_lufs = 2.5
+
+[detect.black_frame]
+luma_threshold = 16
+min_run_frames = 3
+
+[detect.silence]
+dbfs_threshold = -50.0
+min_run_ms = 400
+
+[fingerprint]
+enabled = true
+store = "data/fingerprints/ads.sqlite"
+hash = "phash"
+hamming_threshold = 10
+audio_corroboration = true
+learn = true
+slot_snap_s = [15, 30, 45, 60]
+
+[fusion]
+mute_confidence = 0.72
+unmute_confidence = 0.45
+mute_dwell_ms = 900
+unmute_dwell_ms = 400
+max_mute_s = 240          # hard ceiling; never stay muted past this
+
+[control]
+backend = "rs232_sharp"    # rs232_sharp | ir_lirc | ir_pigpio | cec | ir_blaster_net | network_ip | local_audio
+verify_with_audio = true
+
+[control.rs232_sharp]
+port = "/dev/ttyUSB0"
+baud = 9600
+
+[control.ir_lirc]
+remote = "sharp_aquos"
+mute_on = "KEY_MUTE_ON"
+mute_off = "KEY_MUTE_OFF"
+repeat = 2
+
+[log]
+level = "info"
+trace_detectors = false

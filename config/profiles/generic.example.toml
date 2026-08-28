@@ -1,0 +1,30 @@
+# Base profile. All device profiles inherit from this and override.
+
+[identity]
+make = "generic"
+model = "generic"
+year = 0
+
+[control]
+backends = ["ir_lirc", "cec", "local_audio"]
+discrete_mute = false
+state_readback = false
+
+[ir]
+protocol = "nec"
+carrier_hz = 38000
+# codes.mute_toggle = "0x..."
+# codes.mute_on = "0x..."
+# codes.mute_off = "0x..."
+
+[roi]
+logo = { x = 0.84, y = 0.80, w = 0.14, h = 0.14 }
+
+[fusion.weights]
+logo_absence = 0.30
+loudness = 0.15
+black_frame = 0.15
+silence = 0.15
+scene_cut = 0.10
+aspect_change = 0.05
+caption_gap = 0.10

@@ -1,0 +1,29 @@
+# Sharp AQUOS LC-46LE830U (2010). Verify port presence against your manual.
+
+inherits = "generic"
+
+[identity]
+make = "Sharp"
+model = "LC-46LE830U"
+year = 2010
+
+[control]
+backends = ["rs232_sharp", "ir_lirc", "cec", "local_audio"]
+discrete_mute = true        # via serial MUTE parameter; verify on your unit
+state_readback = true       # serial query form
+
+[rs232]
+baud = 9600
+databits = 8
+parity = "none"
+stopbits = 1
+# Command mnemonics are filled in during implementation from the AQUOS
+# RS-232C control specification for this generation. Do not guess codes here.
+
+[ir]
+protocol = "sharp"
+carrier_hz = 38000
+# Populate via `adhush ir-test` learn-and-verify sweep.
+
+[roi]
+logo = { x = 0.84, y = 0.80, w = 0.14, h = 0.14 }

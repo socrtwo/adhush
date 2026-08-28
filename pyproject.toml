@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adhush"
+version = "0.0.1"
+description = "Detects television commercials and mutes them automatically."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Paul D. Pruitt" }]
+keywords = [
+  "commercial-detection", "ad-detection", "ad-muting", "television",
+  "perceptual-hash", "audio-fingerprinting", "hdmi-capture", "hdmi-cec",
+  "infrared", "lirc", "rs232", "raspberry-pi", "computer-vision",
+  "home-automation", "cross-platform",
+]
+classifiers = [
+  "Development Status :: 1 - Planning",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Multimedia :: Video",
+  "Topic :: Home Automation",
+]
+dependencies = []
+
+[project.optional-dependencies]
+pi = []
+dev = ["pytest", "ruff", "mypy"]
+
+[project.scripts]
+adhush = "adhush.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
