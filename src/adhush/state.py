@@ -118,6 +118,15 @@ class AdStateMachine:
             self.state = AdState.PROGRAM
         return None
 
+    def cancel_ad(self, now: float) -> Action | None:
+        """User/API rejection: leave AD (or clear suspicion) immediately."""
+        if self.state is AdState.AD:
+            return self._leave_ad(now)
+        if self.state is AdState.SUSPECT_AD:
+            self.state = AdState.PROGRAM
+            self._mute_dwell.reset()
+        return None
+
     def _leave_ad(self, now: float) -> Action:
         self.state = AdState.RECOVERY
         self._recovery_until = now + _RECOVERY_S

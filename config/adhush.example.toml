@@ -73,6 +73,12 @@ mute_on = "KEY_MUTE_ON"
 mute_off = "KEY_MUTE_OFF"
 repeat = 2
 
+[ipc]
+enabled = false            # HTTP+SSE API for platform front ends (ADR 0006)
+host = "127.0.0.1"         # keep loopback unless the LAN is trusted
+port = 8675
+token = ""                 # require Authorization: Bearer <token> when set
+
 [log]
 level = "info"
 trace_detectors = false

@@ -369,7 +369,7 @@ class TestProfileLibrary:
 def test_build_controller_covers_new_backends() -> None:
     assert isinstance(build_controller(ControlConfig(backend="cec")), CecController)
     with pytest.raises(ControlError, match="not implemented"):
-        build_controller(ControlConfig(backend="local_audio"))
+        build_controller(ControlConfig(backend="relay_hdmi"))  # phase 5
 
 
 class TestProbe:
@@ -393,7 +393,7 @@ class TestProbe:
         assert by_name["cec"].available and by_name["cec"].discrete is False
         # Sharp profile deliberately ships no IR codes ("do not guess").
         assert not by_name["ir_pigpio"].available
-        assert not by_name["local_audio"].available  # later phase
+        assert by_name["local_audio"].available  # host mute, phase 4
 
     def test_missing_environment_reported(self) -> None:
         config = self._config()

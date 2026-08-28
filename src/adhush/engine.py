@@ -14,7 +14,7 @@ import heapq
 import logging
 import queue
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 from adhush.capture.base import CaptureSource
@@ -43,6 +43,14 @@ class Transition:
     reasons: tuple[str, ...]
 
 
+# Pipeline event listener: (kind, payload) with kind in {"transition",
+# "decision", "status"}; payloads are the engine's own dataclasses/dicts and
+# the IPC layer owns serializing them.
+Listener = Callable[[str, object], None]
+
+OVERRIDE_MODES = ("auto", "mute", "unmute")
+
+
 class Pipeline:
     def __init__(
         self,
@@ -68,6 +76,14 @@ class Pipeline:
         self._ad_start_est: float | None = None
         self._mute_match: Match | None = None
         self.transitions: list[Transition] = []
+        # IPC surface state; the lock covers everything the API threads touch.
+        self._lock = threading.RLock()
+        self._listeners: list[Listener] = []
+        self._override = "auto"
+        self._trace = False
+        self._confirm_current = False
+        self._reject_current = False
+        self._last_ts = 0.0
 
     def warmup(self) -> None:
         for detector in self._detectors:
@@ -96,55 +112,79 @@ class Pipeline:
         self._decide(event.ts)
 
     def _decide(self, ts: float) -> None:
-        votes = [d.vote(ts) for d in self._detectors]
-        decision = self._fusion.combine(votes, ts)
+        with self._lock:
+            self._last_ts = ts
+            votes = [d.vote(ts) for d in self._detectors]
+            decision = self._fusion.combine(votes, ts)
+            if self._trace:
+                self._emit("decision", decision)
 
-        match = self._fp.active_match(ts) if self._fp is not None else None
-        fp_hold = match is not None and ts < match.expected_end_ts
-        promote = fp_hold and self._machine.state in (AdState.PROGRAM, AdState.SUSPECT_AD)
-        program_evidence = any(d.program_present for d in self._logos)
-
-        action = self._machine.update(
-            decision, promote=promote, fp_hold=fp_hold, program_evidence=program_evidence
-        )
-        if action is None:
-            return
-
-        reasons = decision.reasons
-        if action is Action.MUTE:
-            if promote and match is not None:
-                self._mute_match = match
-                self._ad_start_est = match.est_start_ts
-                reasons = (
-                    f"fingerprint:promote ad={match.ad_id} dur={match.duration_s:.0f}",
-                    *reasons,
-                )
-            else:
-                self._mute_match = None
-                self._ad_start_est = ts - self._machine.mute_dwell_s
-        self.transitions.append(
-            Transition(
-                ts=ts, action=action, confidence=decision.confidence, reasons=reasons
+            match = self._fp.active_match(ts) if self._fp is not None else None
+            fp_hold = match is not None and ts < match.expected_end_ts
+            promote = fp_hold and self._machine.state in (
+                AdState.PROGRAM, AdState.SUSPECT_AD,
             )
-        )
-        log.info("%s at ts=%.2f conf=%.2f", action.value, ts, decision.confidence)
-        try:
+            program_evidence = any(d.program_present for d in self._logos)
+
+            action = self._machine.update(
+                decision, promote=promote, fp_hold=fp_hold, program_evidence=program_evidence
+            )
+            if action is None:
+                return
+
+            reasons = decision.reasons
             if action is Action.MUTE:
+                if promote and match is not None:
+                    self._mute_match = match
+                    self._ad_start_est = match.est_start_ts
+                    reasons = (
+                        f"fingerprint:promote ad={match.ad_id} dur={match.duration_s:.0f}",
+                        *reasons,
+                    )
+                else:
+                    self._mute_match = None
+                    self._ad_start_est = ts - self._machine.mute_dwell_s
+            self._record(
+                Transition(
+                    ts=ts, action=action, confidence=decision.confidence, reasons=reasons
+                )
+            )
+            if action is Action.UNMUTE:
+                self._finish_ad(ts)
+
+    def _record(self, transition: Transition) -> None:
+        """Log a transition, notify listeners, and drive the controller.
+
+        With a manual override active the machine keeps deciding (its record
+        stays truthful) but the controller stays pinned to the override.
+        """
+        self.transitions.append(transition)
+        log.info(
+            "%s at ts=%.2f conf=%.2f",
+            transition.action.value,
+            transition.ts,
+            transition.confidence,
+        )
+        self._emit("transition", transition)
+        if self._override != "auto":
+            return
+        try:
+            if transition.action is Action.MUTE:
                 self._controller.mute()
             else:
                 self._controller.unmute()
         except ControlError:
             # A failed unmute is the dangerous direction; the next decision
             # cycle retries because the state machine has already left AD.
-            log.exception("controller failed on %s", action.value)
-        if action is Action.UNMUTE:
-            self._finish_ad(ts)
+            log.exception("controller failed on %s", transition.action.value)
 
     def _finish_ad(self, ts: float) -> None:
         """Feed the just-ended ad segment back into the fingerprint memory."""
         start = self._ad_start_est
         match, self._mute_match, self._ad_start_est = self._mute_match, None, None
-        if self._learner is None or self._fp is None or start is None:
+        confirm, self._confirm_current = self._confirm_current, False
+        reject, self._reject_current = self._reject_current, False
+        if self._learner is None or self._fp is None or start is None or reject:
             return
         duration = ts - start
         if match is not None:
@@ -158,9 +198,107 @@ class Pipeline:
                 duration,
                 self._fp.video_between(start, ts),
                 self._fp.audio_between(start, ts),
+                force=confirm,
             )
             if learned is not None and self._matcher is not None:
                 self._matcher.refresh()
+
+    # -- IPC surface (called from API server threads) ------------------------
+
+    def add_listener(self, listener: Listener) -> None:
+        with self._lock:
+            self._listeners.append(listener)
+
+    def remove_listener(self, listener: Listener) -> None:
+        with self._lock:
+            if listener in self._listeners:
+                self._listeners.remove(listener)
+
+    def _emit(self, kind: str, payload: object) -> None:
+        for listener in list(self._listeners):
+            try:
+                listener(kind, payload)
+            except Exception:  # a broken client must never stop the loop
+                log.exception("pipeline listener failed")
+
+    def status(self) -> dict[str, object]:
+        with self._lock:
+            last = self.transitions[-1] if self.transitions else None
+            return {
+                "state": self._machine.state.value,
+                "muted": self._machine.muted,
+                "override": self._override,
+                "trace": self._trace,
+                "detectors": [d.name for d in self._detectors],
+                "transitions": len(self.transitions),
+                "last_transition": None
+                if last is None
+                else {
+                    "ts": last.ts,
+                    "action": last.action.value,
+                    "confidence": last.confidence,
+                    "reasons": list(last.reasons),
+                },
+                "media_ts": self._last_ts,
+            }
+
+    def set_trace(self, enabled: bool) -> None:
+        with self._lock:
+            self._trace = enabled
+
+    def set_override(self, mode: str) -> None:
+        """Pin the controller to mute/unmute, or return it to the machine."""
+        if mode not in OVERRIDE_MODES:
+            raise ValueError(f"override mode must be one of {OVERRIDE_MODES}")
+        with self._lock:
+            self._override = mode
+            try:
+                if mode == "mute":
+                    self._controller.mute()
+                elif mode == "unmute":
+                    self._controller.unmute()
+                elif self._machine.muted:  # back to auto: reconcile
+                    self._controller.mute()
+                else:
+                    self._controller.unmute()
+            except ControlError:
+                log.exception("controller failed applying override %s", mode)
+            self._emit("status", self.status())
+
+    def confirm_ad(self) -> bool:
+        """User confirms the current mute really is an ad; learn it even if
+        its duration falls outside the usual sanity bounds."""
+        with self._lock:
+            if self._machine.state is not AdState.AD:
+                return False
+            self._confirm_current = True
+            return True
+
+    def reject_ad(self) -> bool:
+        """User says the current mute is wrong: unmute now, skip learning,
+        and forget the fingerprint that caused a false match."""
+        with self._lock:
+            match = self._mute_match
+            self._reject_current = True
+            action = self._machine.cancel_ad(self._last_ts)
+            if action is not None:
+                self._record(
+                    Transition(
+                        ts=self._last_ts,
+                        action=action,
+                        confidence=0.0,
+                        reasons=("user:reject_ad",),
+                    )
+                )
+                self._finish_ad(self._last_ts)
+            if match is not None:
+                if self._fp is not None:
+                    self._fp.abort_match()
+                if self._learner is not None:
+                    self._learner.forget(match.ad_id)
+                if self._matcher is not None:
+                    self._matcher.refresh()
+            return action is not None
 
 
 def _merged_offline(source: CaptureSource) -> Iterator[FrameEvent | AudioEvent]:

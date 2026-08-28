@@ -113,6 +113,11 @@ class FingerprintStore:
         )
         self._db.commit()
 
+    def delete_ad(self, ad_id: int) -> None:
+        """Remove one ad and its hashes (user rejected a match as wrong)."""
+        self._db.execute("DELETE FROM ads WHERE ad_id = ?", (ad_id,))
+        self._db.commit()
+
     def prune(self, ttl_days: float, now: float | None = None) -> int:
         """Drop ads not re-observed within the TTL; returns rows removed."""
         ts = time.time() if now is None else now

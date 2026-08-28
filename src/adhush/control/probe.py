@@ -16,6 +16,7 @@ from __future__ import annotations
 import importlib.util
 import shutil
 import socket
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -163,5 +164,15 @@ def _probe_one(
         if error is not None:
             return ProbeResult(backend, False, discrete, f"{host}:{port} unreachable: {error}")
         return ProbeResult(backend, True, discrete, f"{host}:{port} reachable")
+
+    if backend == "local_audio":
+        platform = str(options.get("platform", sys.platform))
+        tool = {"linux": str(options.get("tool", "pactl")), "darwin": "osascript",
+                "win32": "nircmd"}.get(platform)
+        if tool is None:
+            return ProbeResult(backend, False, True, f"unsupported platform {platform}")
+        if which(tool) is None:
+            return ProbeResult(backend, False, True, f"{tool} not on PATH")
+        return ProbeResult(backend, True, True, f"host mute via {tool}")
 
     return ProbeResult(backend, False, None, "not implemented yet (see roadmap)")

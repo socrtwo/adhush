@@ -5,6 +5,29 @@ Format follows Keep a Changelog; versioning follows SemVer.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-28
+### Added
+- Phase 4 (platforms) implementation:
+  - IPC: versioned JSON wire schema (`ipc/protocol.py`) and a stdlib-only
+    localhost HTTP + Server-Sent-Events API (`ipc/api.py`, ADR 0006) with
+    status, override (auto/mute/unmute), confirm/reject ad, live detector
+    trace, optional bearer-token auth, and permissive CORS. `adhush run`
+    starts it when `[ipc] enabled = true`.
+  - Engine IPC surface: thread-safe status snapshots, controller override
+    pinning, event listeners, and user feedback — confirm forces learning a
+    segment; reject unmutes immediately, skips learning, and deletes the
+    fingerprint behind a false match.
+  - Capture: `screen` (x11grab / avfoundation / gdigrab), `camera`
+    (v4l2 / avfoundation / dshow with adaptive screen-rectangle detection,
+    glare-tolerant auto-crop), `microphone`, and `line_in`, all with
+    format-prefixed device strings and pure, testable argv builders.
+  - Control: `local_audio` host mute (pactl/amixer, osascript, nircmd) with
+    state readback where the platform allows; probe support included.
+  - Platform shells: `platforms/web/index.html` — a dependency-free static
+    front end over the API (SSE live state, override and feedback buttons) —
+    and concrete per-platform run instructions for Linux/Pi, Windows, macOS,
+    ChromeOS, Android, and iOS (mobile = thin client over a networked core).
+
 ## [0.3.0] - 2026-08-28
 ### Added
 - Phase 3 (breadth of control) implementation:

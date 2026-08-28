@@ -85,7 +85,19 @@ def _cmd_run(args: argparse.Namespace) -> int:
         pipeline = _build_pipeline(config, None, video=caps.video, audio=caps.audio)
         print(f"adhush {__version__}: running on {config.capture.backend} "
               f"(video={caps.video} audio={caps.audio}), control={config.control.backend}")
-        run_live(source, pipeline, stop)
+        api = None
+        if config.ipc.enabled:
+            from adhush.ipc.api import ApiServer
+
+            api = ApiServer(pipeline, config.ipc)
+            api.start()
+            print(f"ipc api on http://{api.address[0]}:{api.address[1]}"
+                  f" (open platforms/web/index.html to control)")
+        try:
+            run_live(source, pipeline, stop)
+        finally:
+            if api is not None:
+                api.close()
     return 0
 
 

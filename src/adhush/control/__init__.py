@@ -10,6 +10,7 @@ from adhush.control.cec import CecController
 from adhush.control.ir_blaster_net import IrBlasterNetController
 from adhush.control.ir_lirc import IrLircController
 from adhush.control.ir_pigpio import IrPigpioController
+from adhush.control.local_audio import LocalAudioController
 from adhush.control.network_ip import NetworkIpController
 from adhush.control.rs232_sharp import SharpRs232Controller
 
@@ -29,6 +30,7 @@ IMPLEMENTED_BACKENDS = (
     "cec",
     "ir_blaster_net",
     "network_ip",
+    "local_audio",
 )
 _IR_BACKENDS = ("ir_lirc", "ir_pigpio", "ir_blaster_net")
 
@@ -95,4 +97,6 @@ def build_controller(config: ControlConfig, profile: Profile | None = None) -> M
         return IrBlasterNetController(options)
     if config.backend == "network_ip":
         return NetworkIpController(options)
+    if config.backend == "local_audio":
+        return LocalAudioController(options)
     raise ControlError(f"control backend '{config.backend}' is not implemented yet (see roadmap)")

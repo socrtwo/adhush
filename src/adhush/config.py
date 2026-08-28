@@ -45,6 +45,7 @@ class CaptureConfig:
     audio_rate: int = 48000
     audio_block_ms: int = 100
     path: str = ""  # file_replay input
+    autocrop: bool = True  # camera: crop to the detected screen rectangle
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +156,15 @@ class ControlConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class IpcConfig:
+    enabled: bool = False
+    host: str = "127.0.0.1"  # keep it loopback unless the LAN is trusted
+    port: int = 8675
+    # Optional shared secret; when set, requests need Authorization: Bearer <token>.
+    token: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class Profile:
     """Resolved device profile: identity, control traits, fusion weights."""
 
@@ -177,6 +187,7 @@ class Config:
     control: ControlConfig
     profile: Profile
     fingerprint: FingerprintConfig = field(default_factory=FingerprintConfig)
+    ipc: IpcConfig = field(default_factory=IpcConfig)
     log_level: str = "info"
 
 
@@ -250,6 +261,7 @@ _SCENE_DEFAULTS = SceneCutConfig()
 _FUSION_DEFAULTS = FusionConfig()
 _CONTROL_DEFAULTS = ControlConfig()
 _FP_DEFAULTS = FingerprintConfig()
+_IPC_DEFAULTS = IpcConfig()
 _ROI_DEFAULTS = RoiConfig()
 
 
@@ -287,6 +299,7 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
         audio_rate=int(cap.get("audio_rate", _CAPTURE_DEFAULTS.audio_rate)),
         audio_block_ms=int(cap.get("audio_block_ms", _CAPTURE_DEFAULTS.audio_block_ms)),
         path=str(cap.get("path", "")),
+        autocrop=bool(cap.get("autocrop", _CAPTURE_DEFAULTS.autocrop)),
     )
     if capture.backend not in KNOWN_CAPTURE_BACKENDS:
         raise ConfigError(f"unknown capture backend: {capture.backend}")
@@ -395,6 +408,16 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
     if fingerprint.hamming_threshold < 0 or fingerprint.confirm_hits < 1:
         raise ConfigError("fingerprint thresholds out of range")
 
+    ipc_raw = data.get("ipc", {})
+    ipc = IpcConfig(
+        enabled=bool(ipc_raw.get("enabled", False)),
+        host=str(ipc_raw.get("host", _IPC_DEFAULTS.host)),
+        port=int(ipc_raw.get("port", _IPC_DEFAULTS.port)),
+        token=str(ipc_raw.get("token", "")),
+    )
+    if not 0 < ipc.port < 65536:
+        raise ConfigError("ipc.port out of range")
+
     log_level = str(data.get("log", {}).get("level", "info"))
     return Config(
         capture=capture,
@@ -403,5 +426,6 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
         control=control,
         profile=profile,
         fingerprint=fingerprint,
+        ipc=ipc,
         log_level=log_level,
     )

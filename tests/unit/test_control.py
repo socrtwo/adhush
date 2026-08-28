@@ -118,7 +118,7 @@ class TestIrLirc:
 
 def test_registry_rejects_unimplemented_backend() -> None:
     with pytest.raises(ControlError, match="not implemented"):
-        build_controller(ControlConfig(backend="local_audio"))
+        build_controller(ControlConfig(backend="relay_hdmi"))  # phase 5
 
 
 def test_null_controller_records() -> None:

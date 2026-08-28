@@ -1,10 +1,15 @@
 # windows front end
 
-Scaffold. This front end is a thin client over `src/adhush/ipc/api.py`.
-See `docs/roadmap.md` phase 4 for the capture and control matrix and
-`docs/adr/0002-python-core-with-thin-platform-shells.md` for the rationale.
+Run the Python core directly; the web page is the UI.
 
-## Open questions
-- Runtime host for the core on this platform
-- Available capture modalities
-- Available control backends
+```powershell
+pip install -e .
+adhush run --config config\adhush.toml
+```
+
+- **Capture**: `screen` (gdigrab of the desktop while a streaming app plays),
+  `camera` (`device = "Integrated Camera"` via dshow), or `microphone`
+  (`audio_device = "dshow:audio=Microphone (…)"`; audio-only detector set).
+- **Control**: `local_audio` (mutes the PC; needs `nircmd` on PATH),
+  `ir_blaster_net`, or `network_ip` for a smart TV.
+- **UI**: enable `[ipc]` and open `..\web\index.html`.

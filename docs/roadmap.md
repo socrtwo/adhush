@@ -14,8 +14,10 @@ Structure, interfaces, docs, config schema, CI.
 ## Phase 3 — breadth of control (done)
 `cec`, `ir_pigpio`, `ir_blaster_net`, `network_ip`, `probe`, profile library.
 
-## Phase 4 — platforms
+## Phase 4 — platforms (done: core surface + desktop/web; mobile = thin client)
 Shared core exposed over `ipc/api.py`; thin front ends per platform.
+On-device mobile capture and in-browser WASM detectors remain future work;
+phones and tablets currently use the web front end against a networked core.
 
 | Platform | Capture | Control | Notes |
 |---|---|---|---|

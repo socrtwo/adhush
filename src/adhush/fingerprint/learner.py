@@ -31,9 +31,15 @@ class Learner:
         duration_s: float,
         video_samples: list[tuple[float, int]],  # (media_ts, phash)
         audio_blocks: list[tuple[float, int]],  # (media_ts, chroma bits)
+        *,
+        force: bool = False,
     ) -> int | None:
-        """Store a confirmed ad segment; returns the ad_id, or None if skipped."""
-        if not self._cfg.min_learn_s <= duration_s <= self._cfg.max_learn_s:
+        """Store a confirmed ad segment; returns the ad_id, or None if skipped.
+
+        ``force`` (an explicit user confirmation through the API) bypasses the
+        duration sanity bounds but never the minimum-hash requirement.
+        """
+        if not force and not self._cfg.min_learn_s <= duration_s <= self._cfg.max_learn_s:
             log.debug("segment duration %.1fs outside learn bounds; skipped", duration_s)
             return None
         window_end = start_ts + self._cfg.window_s
@@ -54,6 +60,11 @@ class Learner:
         ad_id = self._store.add_ad(duration_s, video, audio)
         log.info("learned ad %d duration=%.1fs hashes=%d", ad_id, duration_s, len(video))
         return ad_id
+
+    def forget(self, ad_id: int) -> None:
+        """Drop a learned ad the user rejected as a false match."""
+        self._store.delete_ad(ad_id)
+        log.info("forgot ad %d on user rejection", ad_id)
 
     def observe_duration(self, ad_id: int, duration_s: float) -> None:
         """Fold one observed airing into the ad's duration estimate."""
