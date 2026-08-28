@@ -1,9 +1,9 @@
 # Roadmap
 
-## Phase 0 — scaffold (this commit)
+## Phase 0 — scaffold (done)
 Structure, interfaces, docs, config schema, CI.
 
-## Phase 1 — Raspberry Pi reference
+## Phase 1 — Raspberry Pi reference (done)
 `file_replay` + `hdmi_uvc` capture, `black_frame`, `silence`, `loudness`,
 `fusion`, `state`, `ir_lirc` and `rs232_sharp` controllers, CLI `run`/`doctor`.
 

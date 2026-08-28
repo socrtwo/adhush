@@ -15,4 +15,5 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements-dev.txt
       - run: ruff check src tests
+      - run: mypy src
       - run: pytest -q

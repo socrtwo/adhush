@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adhush"
-version = "0.0.1"
+version = "0.1.0"
 description = "Detects television commercials and mutes them automatically."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,7 +17,7 @@ keywords = [
   "home-automation", "cross-platform",
 ]
 classifiers = [
-  "Development Status :: 1 - Planning",
+  "Development Status :: 3 - Alpha",
   "Environment :: Console",
   "Intended Audience :: End Users/Desktop",
   "License :: OSI Approved :: MIT License",
@@ -26,10 +26,10 @@ classifiers = [
   "Topic :: Multimedia :: Video",
   "Topic :: Home Automation",
 ]
-dependencies = []
+dependencies = ["numpy>=1.26"]
 
 [project.optional-dependencies]
-pi = []
+pi = ["pyserial>=3.5"]
 dev = ["pytest", "ruff", "mypy"]
 
 [project.scripts]

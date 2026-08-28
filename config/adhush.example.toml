@@ -19,7 +19,7 @@ roi = { x = 0.84, y = 0.80, w = 0.14, h = 0.14 }
 absence_frames = 45
 
 [detect.loudness]
-window_s = 3.0
+window_s = 1.5      # short window: quick unmute matters more than R128's 3 s
 delta_lufs = 2.5
 
 [detect.black_frame]
