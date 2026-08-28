@@ -1,0 +1,40 @@
+# Configuration for the Phase 5 inline passthrough box.
+# Copy to config/adhush.toml on the box and adjust devices.
+# Wiring: docs/hardware-passthrough-box.md.
+
+[capture]
+backend = "hdmi_uvc"        # UVC dongle on the splitter's second output
+device = "/dev/video0"
+width = 1280
+height = 720
+fps = 30
+audio_device = "alsa:hw:1"  # the dongle's embedded audio, or a USB input
+                            # taking the extractor's second analog output
+
+[device]
+profile = "passthrough-box"
+
+[detect]
+# The box sees clean HDMI video, so the full detector set applies. Calibrate
+# the logo template once per channel lineup: adhush calibrate
+enabled = ["black_frame", "silence", "loudness", "logo_absence", "scene_cut", "fingerprint"]
+
+[control]
+backend = "relay_hdmi"
+verify_with_audio = false   # the relay is deterministic; no verification loop
+
+[control.relay_hdmi]
+gpio = 23
+active_high = true          # coil energized = muted; NC contacts pass audio
+
+[fingerprint]
+store = "data/fingerprints/ads.sqlite"
+
+[ipc]
+enabled = true              # phone control via platforms/web/index.html
+host = "0.0.0.0"            # LAN-visible on purpose: set a token!
+port = 8675
+token = "change-me"
+
+[log]
+level = "info"

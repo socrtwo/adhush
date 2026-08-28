@@ -1,0 +1,120 @@
+<!doctype html>
+<!-- AdHush web front end: a thin client over src/adhush/ipc/api.py.
+     Open this file directly in a browser (file:// works — the API sends
+     permissive CORS) and point it at a running `adhush run` with
+     [ipc] enabled = true. No build step, no dependencies. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AdHush</title>
+<style>
+  :root { --bg: #101418; --card: #1a2027; --text: #e8edf2; --dim: #8a97a5;
+          --ok: #46c46f; --bad: #e05555; --accent: #4aa3e0; }
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: var(--bg);
+         color: var(--text); display: grid; place-items: center; min-height: 100vh; }
+  main { width: min(28rem, 92vw); display: grid; gap: 1rem; padding: 2rem 0; }
+  h1 { font-size: 1.2rem; margin: 0; letter-spacing: 0.04em; }
+  .card { background: var(--card); border-radius: 12px; padding: 1rem 1.25rem; }
+  #state { font-size: 2rem; font-weight: 700; }
+  #state.muted { color: var(--bad); }
+  #state.program { color: var(--ok); }
+  .dim { color: var(--dim); font-size: 0.85rem; }
+  .row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
+  button { flex: 1; padding: 0.6rem 0.9rem; border: 0; border-radius: 8px;
+           background: #2a3542; color: var(--text); font: inherit; cursor: pointer; }
+  button:hover { background: #34424f; }
+  button.active { background: var(--accent); color: #06141f; }
+  input { width: 100%; box-sizing: border-box; padding: 0.5rem 0.7rem;
+          border-radius: 8px; border: 1px solid #2a3542; background: #0d1114;
+          color: var(--text); font: inherit; }
+  #log { max-height: 12rem; overflow-y: auto; font-family: ui-monospace, monospace;
+         font-size: 0.78rem; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ADHUSH</h1>
+  <div class="card">
+    <div id="state">connecting…</div>
+    <div id="detail" class="dim"></div>
+    <div class="row">
+      <button id="b-auto"   onclick="setOverride('auto')">Auto</button>
+      <button id="b-mute"   onclick="setOverride('mute')">Mute</button>
+      <button id="b-unmute" onclick="setOverride('unmute')">Unmute</button>
+    </div>
+    <div class="row">
+      <button onclick="command({type:'confirm_ad'})">✓ Is an ad</button>
+      <button onclick="command({type:'reject_ad'})">✗ Not an ad</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="dim">Core API (host:port of `adhush run`, [ipc] enabled)</div>
+    <div class="row">
+      <input id="base" value="http://127.0.0.1:8675">
+      <input id="token" placeholder="token (optional)">
+      <button style="flex:0" onclick="connect()">Connect</button>
+    </div>
+  </div>
+  <div class="card"><div id="log" class="dim"></div></div>
+</main>
+<script>
+let source = null;
+
+function base() { return document.getElementById('base').value.replace(/\/+$/, ''); }
+function headers() {
+  const token = document.getElementById('token').value.trim();
+  const all = {'Content-Type': 'application/json'};
+  if (token) all['Authorization'] = 'Bearer ' + token;
+  return all;
+}
+function logLine(text) {
+  const el = document.getElementById('log');
+  el.textContent = new Date().toLocaleTimeString() + '  ' + text + '\n' + el.textContent;
+}
+function render(status) {
+  const el = document.getElementById('state');
+  el.textContent = status.muted ? 'MUTED' : status.state.toUpperCase();
+  el.className = status.muted ? 'muted' : 'program';
+  document.getElementById('detail').textContent =
+    'override: ' + status.override + ' · detectors: ' + status.detectors.join(', ');
+  for (const mode of ['auto', 'mute', 'unmute'])
+    document.getElementById('b-' + mode).className = status.override === mode ? 'active' : '';
+}
+async function command(body) {
+  try {
+    const response = await fetch(base() + '/command', {
+      method: 'POST', headers: headers(), body: JSON.stringify({v: 1, ...body})});
+    logLine(body.type + ' → ' + await response.text());
+    refresh();
+  } catch (err) { logLine('command failed: ' + err); }
+}
+function setOverride(mode) { command({type: 'override', mode}); }
+async function refresh() {
+  try {
+    const response = await fetch(base() + '/status', {headers: headers()});
+    render((await response.json()).data);
+  } catch (err) { document.getElementById('state').textContent = 'unreachable'; }
+}
+function connect() {
+  if (source) source.close();
+  // EventSource cannot send Authorization headers; SSE therefore works
+  // tokenless (loopback) — with a token set, fall back to polling.
+  if (document.getElementById('token').value.trim()) {
+    logLine('token set: polling /status instead of SSE');
+    setInterval(refresh, 2000); refresh(); return;
+  }
+  source = new EventSource(base() + '/events');
+  source.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    if (message.type === 'status') render(message.data);
+    else logLine(message.type + ': ' + JSON.stringify(message.data));
+    if (message.type === 'transition') refresh();
+  };
+  source.onerror = () => { document.getElementById('state').textContent = 'unreachable'; };
+  refresh();
+}
+connect();
+</script>
+</body>
+</html>

@@ -8,7 +8,7 @@ model = "LC-46LE830U"
 year = 2010
 
 [control]
-backends = ["rs232_sharp", "ir_lirc", "cec", "local_audio"]
+backends = ["rs232_sharp", "ir_lirc", "ir_pigpio", "cec", "local_audio"]
 discrete_mute = true        # via serial MUTE parameter; verify on your unit
 state_readback = true       # serial query form
 

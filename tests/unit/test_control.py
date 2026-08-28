@@ -116,9 +116,11 @@ class TestIrLirc:
             IrLircController({"remote": "tv"}, runner=RecordingRunner())
 
 
-def test_registry_rejects_unimplemented_backend() -> None:
+def test_registry_rejects_unknown_backend() -> None:
+    # Every roadmap backend is implemented; the fallthrough guards typos and
+    # future additions.
     with pytest.raises(ControlError, match="not implemented"):
-        build_controller(ControlConfig(backend="cec"))
+        build_controller(ControlConfig(backend="telepathy"))
 
 
 def test_null_controller_records() -> None:

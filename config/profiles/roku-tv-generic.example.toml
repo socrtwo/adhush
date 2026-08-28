@@ -1,0 +1,26 @@
+# Roku TVs (TCL, Hisense, Sharp Roku models): External Control Protocol over
+# HTTP port 8060, no pairing needed (enable in Settings > System > Advanced >
+# Control by mobile apps). VolumeMute is a toggle; pair with
+# control.verify_with_audio. IR codes vary by panel maker — learn them into a
+# blaster or LIRC remote rather than trusting a shared table.
+
+inherits = "generic"
+
+[identity]
+make = "Roku TV"
+model = "generic"
+year = 0
+
+[control]
+backends = ["network_ip", "ir_blaster_net", "cec"]
+discrete_mute = false
+state_readback = false
+
+[network_ip]
+transport = "http"
+# host = "192.168.1.xx"    # set your TV's address in config/adhush.toml
+port = 8060
+
+[network_ip.commands.mute_toggle]
+method = "POST"
+path = "/keypress/VolumeMute"

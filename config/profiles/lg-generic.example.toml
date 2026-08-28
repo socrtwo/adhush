@@ -1,0 +1,24 @@
+# LG TVs (NEC remotes, 2010s models).
+# Codes are community-documented; confirm with `adhush probe` / `adhush ir-test`.
+# webOS network control needs a paired WebSocket session and is not yet a
+# backend; IR and CEC cover these sets meanwhile.
+
+inherits = "generic"
+
+[identity]
+make = "LG"
+model = "generic"
+year = 0
+
+[control]
+backends = ["ir_pigpio", "ir_lirc", "ir_blaster_net", "cec"]
+discrete_mute = false
+state_readback = false
+
+[ir]
+protocol = "nec"
+carrier_hz = 38000
+
+[ir.codes.mute_toggle]
+address = 0x04             # frame 0x20DF906F
+command = 0x09

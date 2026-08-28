@@ -1,7 +1,8 @@
-"""IPC exports.
+"""IPC exports."""
 
-STATUS: scaffold only — no implementation.
-See docs/architecture.md and CLAUDE.md before writing code here.
-"""
+from __future__ import annotations
 
-# TODO(claude-code): implement per docs/architecture.md
+from adhush.ipc.api import ApiServer
+from adhush.ipc.protocol import Command, ProtocolError, encode_event, parse_command
+
+__all__ = ["ApiServer", "Command", "ProtocolError", "encode_event", "parse_command"]

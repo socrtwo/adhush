@@ -107,3 +107,58 @@ class TestStateMachine:
         assert machine.state is AdState.SUSPECT_AD
         machine.update(_decision(False, 0.1, 0.3))
         assert machine.state is AdState.PROGRAM
+
+
+class TestStateMachineFingerprint:
+    def test_promote_jumps_straight_to_ad(self) -> None:
+        machine = AdStateMachine(CFG)
+        assert machine.update(_decision(False, 0.1, 0.0), promote=True) is Action.MUTE
+        assert machine.state is AdState.AD
+
+    def test_promote_also_fires_from_suspect(self) -> None:
+        machine = AdStateMachine(CFG)
+        machine.update(_decision(True, 0.9, 0.0))
+        assert machine.state is AdState.SUSPECT_AD
+        assert machine.update(_decision(True, 0.9, 0.2), promote=True) is Action.MUTE
+
+    def test_fp_hold_survives_absent_ad_evidence(self) -> None:
+        # Inside a matched window, no ad evidence from other detectors is NOT
+        # a reason to unmute: the fingerprint already identified the material.
+        machine = AdStateMachine(CFG)
+        machine.update(_decision(False, 0.1, 0.0), promote=True)
+        for ts in (1.0, 3.0, 8.0, 15.0):
+            assert machine.update(_decision(False, 0.1, ts), fp_hold=True) is None
+        assert machine.state is AdState.AD
+
+    def test_sustained_program_evidence_unmutes_early(self) -> None:
+        machine = AdStateMachine(CFG)
+        machine.update(_decision(False, 0.1, 0.0), promote=True)
+        kwargs = {"fp_hold": True, "program_evidence": True}
+        assert machine.update(_decision(False, 0.1, 5.0), **kwargs) is None
+        assert machine.update(_decision(False, 0.1, 7.0), **kwargs) is None
+        # fp_unmute_dwell_ms (3 s) served from 5.0:
+        assert machine.update(_decision(False, 0.1, 8.1), **kwargs) is Action.UNMUTE
+        assert machine.state is AdState.RECOVERY
+
+    def test_normal_rules_resume_after_window(self) -> None:
+        machine = AdStateMachine(CFG)
+        machine.update(_decision(False, 0.1, 0.0), promote=True)
+        # Window over, but fusion still sees the ad: stay muted.
+        assert machine.update(_decision(True, 0.9, 15.0)) is None
+        assert machine.state is AdState.AD
+        machine.update(_decision(False, 0.2, 20.0))
+        assert machine.update(_decision(False, 0.2, 20.5)) is Action.UNMUTE
+
+    def test_max_mute_ceiling_beats_fp_hold(self) -> None:
+        machine = AdStateMachine(CFG)
+        machine.update(_decision(False, 0.1, 0.0), promote=True)
+        ts = CFG.max_mute_s + 0.1
+        assert machine.update(_decision(False, 0.1, ts), fp_hold=True) is Action.UNMUTE
+
+    def test_recovery_ignores_promote(self) -> None:
+        machine = AdStateMachine(CFG)
+        machine.update(_decision(False, 0.1, 0.0), promote=True)
+        machine.update(_decision(False, 0.1, 10.0))
+        assert machine.update(_decision(False, 0.1, 10.4)) is Action.UNMUTE
+        assert machine.update(_decision(False, 0.1, 10.5), promote=True) is None
+        assert machine.state is AdState.RECOVERY

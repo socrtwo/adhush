@@ -39,12 +39,38 @@ class AdStateMachine:
         self.state = AdState.PROGRAM
         self._mute_dwell = DwellTimer(config.mute_dwell_ms / 1000.0)
         self._unmute_dwell = DwellTimer(config.unmute_dwell_ms / 1000.0)
+        self._fp_unmute_dwell = DwellTimer(config.fp_unmute_dwell_ms / 1000.0)
         self._ad_entered_ts: float | None = None
         self._recovery_until: float | None = None
 
-    def update(self, decision: MuteDecision) -> Action | None:
-        """Advance on one fusion decision; returns a controller action or None."""
+    def update(
+        self,
+        decision: MuteDecision,
+        *,
+        promote: bool = False,
+        fp_hold: bool = False,
+        program_evidence: bool = False,
+    ) -> Action | None:
+        """Advance on one fusion decision; returns a controller action or None.
+
+        ``promote`` is a confirmed fingerprint hit: it jumps PROGRAM or
+        SUSPECT_AD straight to AD with no dwell — the one sanctioned way a
+        single detector mutes the set. ``fp_hold`` marks that ``now`` is still
+        inside the matched ad's learned duration; while it holds, only
+        sustained positive ``program_evidence`` (e.g. the network logo
+        visibly back on screen) unmutes early — mere absence of ad evidence
+        does not, since the fingerprint already identified this material.
+        RECOVERY deliberately ignores promotion.
+        """
         now = decision.ts
+
+        if self.state in (AdState.PROGRAM, AdState.SUSPECT_AD) and promote:
+            self.state = AdState.AD
+            self._ad_entered_ts = now
+            self._mute_dwell.reset()
+            self._unmute_dwell.reset()
+            self._fp_unmute_dwell.reset()
+            return Action.MUTE
 
         if self.state is AdState.PROGRAM:
             if decision.mute:
@@ -76,6 +102,12 @@ class AdStateMachine:
             assert self._ad_entered_ts is not None
             if now - self._ad_entered_ts >= self._cfg.max_mute_s:
                 return self._leave_ad(now)
+            if fp_hold:
+                self._unmute_dwell.reset()
+                if self._fp_unmute_dwell.update(program_evidence, now):
+                    return self._leave_ad(now)
+                return None
+            self._fp_unmute_dwell.reset()
             if self._unmute_dwell.update(not decision.mute, now):
                 return self._leave_ad(now)
             return None
@@ -86,12 +118,22 @@ class AdStateMachine:
             self.state = AdState.PROGRAM
         return None
 
+    def cancel_ad(self, now: float) -> Action | None:
+        """User/API rejection: leave AD (or clear suspicion) immediately."""
+        if self.state is AdState.AD:
+            return self._leave_ad(now)
+        if self.state is AdState.SUSPECT_AD:
+            self.state = AdState.PROGRAM
+            self._mute_dwell.reset()
+        return None
+
     def _leave_ad(self, now: float) -> Action:
         self.state = AdState.RECOVERY
         self._recovery_until = now + _RECOVERY_S
         self._ad_entered_ts = None
         self._mute_dwell.reset()
         self._unmute_dwell.reset()
+        self._fp_unmute_dwell.reset()
         return Action.UNMUTE
 
     @property
@@ -101,3 +143,7 @@ class AdStateMachine:
     @property
     def ad_entered_ts(self) -> float | None:
         return self._ad_entered_ts
+
+    @property
+    def mute_dwell_s(self) -> float:
+        return self._cfg.mute_dwell_ms / 1000.0

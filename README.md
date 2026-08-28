@@ -7,12 +7,21 @@ detectors over it, fuses their votes, and issues a mute command to the display
 through whatever control path that display supports — infrared, HDMI-CEC,
 RS-232, network API, or the host's own audio mixer.
 
-**Status: Phase 1 (Raspberry Pi reference) implemented.** Working today:
-`file_replay` and `hdmi_uvc` capture, the `black_frame` / `silence` /
-`loudness` detectors, vote fusion with hysteresis, the ad state machine, the
-`rs232_sharp` and `ir_lirc` controllers, and the `run` / `replay` / `doctor` /
-`ir-test` CLI. Vision, fingerprinting, and the remaining control backends land
-in later phases — see `docs/roadmap.md`.
+**Status: all five roadmap phases implemented.** Working today: capture from
+HDMI-UVC, screen grab, camera-at-the-screen (with screen auto-crop),
+microphone, line-in, or file replay; the `black_frame`, `silence`,
+`loudness`, `logo_absence` (calibrated via `adhush calibrate`), `scene_cut`,
+and `fingerprint` detectors; vote fusion with hysteresis and the ad state
+machine with fingerprint promotion; eight control backends (`rs232_sharp`,
+`ir_lirc`, `ir_pigpio`, `cec`, `ir_blaster_net`, `network_ip`, `local_audio`,
+`relay_hdmi`) with `adhush probe` to discover which can drive your set; a
+device-profile library (Sharp reference, Samsung, LG, Sony BRAVIA, Vizio,
+Roku TV, passthrough box); a localhost HTTP+SSE API with a dependency-free
+web front end (`platforms/web`); the inline HDMI passthrough box
+(`docs/hardware-passthrough-box.md` + `scripts/install-pi.sh`); and the full
+CLI. Repeat ads are recognized from their first seconds and muted for their
+learned duration. Remaining ideas live under "Beyond the roadmap" in
+`docs/roadmap.md`.
 
 ## Quick start
 
@@ -20,8 +29,11 @@ in later phases — see `docs/roadmap.md`.
 pip install -e .                      # numpy only; add [pi] for pyserial
 cp config/adhush.example.toml config/adhush.toml   # then edit
 adhush doctor                         # verify environment and config
+adhush probe                          # discover which control paths work
+adhush calibrate                      # learn the logo template (logo on screen)
 adhush run                            # live detection + mute control
 adhush replay clip.mp4 --labels labels.json        # offline scoring
+adhush learn clip.mp4 --labels ads.json            # seed the ad fingerprint store
 ```
 
 `replay` accepts any media file ffmpeg can decode, or an `.npz` fixture, and
@@ -59,8 +71,13 @@ A confirmed match mutes for the learned duration, snapped to the nearest
 
 ## Control backends
 
-`ir_lirc`, `ir_pigpio`, `ir_blaster_net`, `cec`, `rs232_sharp`, `network_ip`,
-`local_audio`, `relay_hdmi`.
+`rs232_sharp`, `network_ip` (TCP APIs like Sony Simple IP, HTTP APIs like
+Roku ECP), `cec`, `ir_lirc`, `ir_pigpio` (raw NEC / extended NEC / Samsung /
+Sharp / SIRC / RC-5 / raw-timing waveforms on a GPIO pin), `ir_blaster_net`
+(Global Caché iTach, Broadlink), `local_audio` (host mute for screen/app
+mode), `relay_hdmi` (the passthrough box's GPIO relay physically opening the
+audio path — wired to fail unmuted). `adhush probe` reports which backends
+can drive your set, in the profile's preference order.
 
 Discrete mute-on / mute-off is strongly preferred over toggle. Toggle-only
 devices desynchronize; profiles must declare which they support so fusion can
@@ -82,6 +99,15 @@ ChromeOS -> Android -> iOS -> Web. See `docs/roadmap.md`.
 
 Raspberry Pi 4, 2 GB. See `docs/hardware-pi4.md` for the wiring, IR LED driver
 circuit, and capture-dongle notes.
+
+## Building the passthrough box
+
+- `docs/hardware-passthrough-box.md` — topology, parts, fail-unmuted wiring.
+- `docs/build-guide-beginner.md` — step-by-step build a 12-year-old can
+  follow: no soldering, low voltage only, ~$120–160 in parts.
+- `docs/build-guide-microcontrollers.md` — using an Arduino, ESP32/ESP8266,
+  or Pico as the mute actuator (with firmware sketches and matching config),
+  plus the minimum requirements for the box.
 
 ## License
 

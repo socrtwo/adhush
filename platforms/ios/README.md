@@ -1,10 +1,11 @@
 # ios front end
 
-Scaffold. This front end is a thin client over `src/adhush/ipc/api.py`.
-See `docs/roadmap.md` phase 4 for the capture and control matrix and
-`docs/adr/0002-python-core-with-thin-platform-shells.md` for the rationale.
+Pattern: **networked core** (ADR 0002). iOS has no Python runtime or IR
+hardware; the device is a remote control and status display.
 
-## Open questions
-- Runtime host for the core on this platform
-- Available capture modalities
-- Available control backends
+- **Thin client today**: open `../web/index.html` in Safari (serve it from
+  any LAN host or the files app) pointed at the core's `[ipc]` address with
+  a `token`. Add to Home Screen for an app-like feel.
+- **Capture**: on another device (Pi/PC); on-device camera/mic capture would
+  need a native app streaming to the core — future work.
+- **Control**: through the core (network TV APIs, IR blaster, CEC).
