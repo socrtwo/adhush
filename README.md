@@ -100,6 +100,15 @@ ChromeOS -> Android -> iOS -> Web. See `docs/roadmap.md`.
 Raspberry Pi 4, 2 GB. See `docs/hardware-pi4.md` for the wiring, IR LED driver
 circuit, and capture-dongle notes.
 
+## Building the passthrough box
+
+- `docs/hardware-passthrough-box.md` — topology, parts, fail-unmuted wiring.
+- `docs/build-guide-beginner.md` — step-by-step build a 12-year-old can
+  follow: no soldering, low voltage only, ~$120–160 in parts.
+- `docs/build-guide-microcontrollers.md` — using an Arduino, ESP32/ESP8266,
+  or Pico as the mute actuator (with firmware sketches and matching config),
+  plus the minimum requirements for the box.
+
 ## License
 
 MIT. See `LICENSE`.
