@@ -1,7 +1,8 @@
-"""Console entry point: 'python -m adhush' -> cli.main().
+"""Console entry point: 'python -m adhush' -> cli.main()."""
 
-STATUS: scaffold only — no implementation.
-See docs/architecture.md and CLAUDE.md before writing code here.
-"""
+import sys
 
-# TODO(claude-code): implement per docs/architecture.md
+from adhush.cli import main
+
+if __name__ == "__main__":
+    sys.exit(main())

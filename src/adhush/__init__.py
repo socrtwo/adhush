@@ -1,7 +1,5 @@
-"""AdHush package root. Exposes version and public API surface.
+"""AdHush package root. Exposes version and public API surface."""
 
-STATUS: scaffold only — no implementation.
-See docs/architecture.md and CLAUDE.md before writing code here.
-"""
+__version__ = "0.1.0"
 
-# TODO(claude-code): implement per docs/architecture.md
+__all__ = ["__version__"]

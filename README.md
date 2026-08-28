@@ -7,9 +7,26 @@ detectors over it, fuses their votes, and issues a mute command to the display
 through whatever control path that display supports — infrared, HDMI-CEC,
 RS-232, network API, or the host's own audio mixer.
 
-**Status: scaffold.** This repository currently contains structure, interfaces,
-documentation, and configuration schemas only. No detection or control logic is
-implemented yet.
+**Status: Phase 1 (Raspberry Pi reference) implemented.** Working today:
+`file_replay` and `hdmi_uvc` capture, the `black_frame` / `silence` /
+`loudness` detectors, vote fusion with hysteresis, the ad state machine, the
+`rs232_sharp` and `ir_lirc` controllers, and the `run` / `replay` / `doctor` /
+`ir-test` CLI. Vision, fingerprinting, and the remaining control backends land
+in later phases — see `docs/roadmap.md`.
+
+## Quick start
+
+```sh
+pip install -e .                      # numpy only; add [pi] for pyserial
+cp config/adhush.example.toml config/adhush.toml   # then edit
+adhush doctor                         # verify environment and config
+adhush run                            # live detection + mute control
+adhush replay clip.mp4 --labels labels.json        # offline scoring
+```
+
+`replay` accepts any media file ffmpeg can decode, or an `.npz` fixture, and
+reports precision/recall separately for mute-onset and unmute-onset against a
+JSON label file (`[{"start_ts": 16.0, "duration_s": 30.0}, ...]`).
 
 ## Design goals
 
