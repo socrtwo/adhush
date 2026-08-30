@@ -23,7 +23,7 @@ from adhush.control.ir_pigpio import (
     encode_sharp,
     encode_sirc,
 )
-from adhush.control.network_ip import NetworkIpController
+from adhush.control.network_ip import NetworkIpController, perform_login
 from adhush.control.probe import probe_backends
 
 REPO = Path(__file__).resolve().parents[2]
@@ -448,3 +448,93 @@ def test_cli_probe_reports_and_fails_without_hardware(capsys) -> None:
     # This machine has no serial port, LIRC, or CEC adapter.
     assert code == 1
     assert "no usable control path" in out
+
+
+class FakeStream:
+    """Stands in for a socket during the IP-control login handshake."""
+
+    def __init__(self, replies: list[bytes]) -> None:
+        self.sent: list[bytes] = []
+        self.timeouts: list[float | None] = []
+        self._replies = list(replies)
+
+    def sendall(self, data: bytes) -> None:
+        self.sent.append(data)
+
+    def recv(self, bufsize: int) -> bytes:
+        if not self._replies:
+            raise TimeoutError  # firmware that stays quiet
+        return self._replies.pop(0)
+
+    def settimeout(self, timeout: float | None) -> None:
+        self.timeouts.append(timeout)
+
+
+class TestIpControlLogin:
+    def test_answers_prompts_in_order(self) -> None:
+        stream = FakeStream([b"Login:", b"Password:", b"OK\r"])
+        assert perform_login(stream, "socrtwo", "hunter2") == b"OK\r"
+        assert stream.sent == [b"socrtwo\r\n", b"hunter2\r\n"]
+
+    def test_silent_firmware_still_receives_credentials(self) -> None:
+        # A set that never prompts and never acknowledges is not an error.
+        stream = FakeStream([])
+        assert perform_login(stream, "u", "p") == b""
+        assert stream.sent == [b"u\r\n", b"p\r\n"]
+
+    def test_explicit_rejection_raises(self) -> None:
+        stream = FakeStream([b"Login:", b"Password:", b"Login incorrect\r"])
+        with pytest.raises(ControlError, match="rejected IP control login"):
+            perform_login(stream, "socrtwo", "wrong")
+
+    def test_timeout_and_terminator_are_configurable(self) -> None:
+        stream = FakeStream([b"Login:", b"Password:", b"OK\r"])
+        perform_login(stream, "u", "p", terminator=b"\r", timeout_s=3.0)
+        assert stream.sent == [b"u\r", b"p\r"]
+        assert stream.timeouts == [3.0]
+
+
+class TestSharpProfileVerifiedAgainstManual:
+    """The LC-46LE830U profile now carries manual-confirmed values."""
+
+    def test_serial_settings_resolve(self) -> None:
+        # Regression: these lived under [rs232], which resolve_options never
+        # read, so the profile's baud silently never reached the controller.
+        profile = load_profile(PROFILES, "sharp-lc46le830u")
+        options = resolve_options(ControlConfig(backend="rs232_sharp"), profile, "rs232_sharp")
+        assert options["baud"] == 9600
+
+    def test_ip_control_sends_the_documented_mute_bytes(self) -> None:
+        profile = load_profile(PROFILES, "sharp-lc46le830u")
+        config = ControlConfig(
+            backend="network_ip",
+            sections={"network_ip": {"host": "tv.local", "login_id": "u", "login_password": "p"}},
+        )
+        options = resolve_options(config, profile, "network_ip")
+        assert options["login_id"] == "u"
+        sent: list[bytes] = []
+
+        def exchange(payload: bytes) -> bytes:
+            sent.append(payload)
+            return b"OK\r"
+
+        controller = NetworkIpController(options, tcp=exchange)
+        assert controller.supports_discrete()
+        controller.mute()
+        controller.unmute()
+        # Manual p. 58-59: four command chars + four space-padded parameter
+        # chars + CR; MUTE parameter 1 = on, 2 = off.
+        assert sent == [b"MUTE1   \r", b"MUTE2   \r"]
+
+    def test_ip_state_readback_maps_documented_values(self) -> None:
+        profile = load_profile(PROFILES, "sharp-lc46le830u")
+        options = resolve_options(
+            ControlConfig(backend="network_ip", sections={"network_ip": {"host": "h"}}),
+            profile,
+            "network_ip",
+        )
+        replies = [b"1\r", b"2\r", b"ERR\r"]
+        controller = NetworkIpController(options, tcp=lambda _p: replies.pop(0))
+        assert controller.state() is True
+        assert controller.state() is False
+        assert controller.state() is None  # "?" unsupported: degrade, do not raise

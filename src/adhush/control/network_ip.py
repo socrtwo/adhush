@@ -4,9 +4,11 @@ Entirely profile-driven so device specifics stay in TOML, not Python. Two
 transports:
 
 - ``tcp`` — raw command strings over a short-lived connection (e.g. Sony
-  BRAVIA Simple IP on port 20060). A command may declare an optional reply
-  check, and a ``state`` command with ``expect_on``/``expect_off`` substrings
-  gives real mute readback.
+  BRAVIA Simple IP on port 20060, or Sharp AQUOS IP control). A command may
+  declare an optional reply check, and a ``state`` command with
+  ``expect_on``/``expect_off`` substrings gives real mute readback. Sets that
+  guard the port with credentials (``login_id`` / ``login_password``) get the
+  handshake answered on every connection, since each command opens its own.
 - ``http`` — one request per command: method, path, optional body and
   headers (e.g. Roku ECP ``POST /keypress/VolumeMute``).
 
@@ -22,7 +24,7 @@ import socket
 import urllib.error
 import urllib.request
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol
 
 from adhush.control.base import ControlError, MuteController
 
@@ -32,12 +34,71 @@ TcpExchange = Callable[[bytes], bytes]
 HttpExchange = Callable[[str, str, bytes | None, dict[str, str]], tuple[int, bytes]]
 
 
-def _tcp_exchange(host: str, port: int, timeout_s: float) -> TcpExchange:
+# Credentials are answered per connection because each command opens its own;
+# that also sidesteps the idle-disconnect timers these sets apply.
+_LOGIN_TERMINATOR = b"\r\n"
+# Substrings a set sends when it refuses the credentials.
+_LOGIN_REJECTED = ("login incorrect", "denied", "invalid")
+
+
+class Stream(Protocol):
+    """The slice of a socket the login handshake needs; fakeable in tests."""
+
+    def sendall(self, data: bytes) -> None: ...
+
+    def recv(self, bufsize: int) -> bytes: ...
+
+    def settimeout(self, timeout: float | None) -> None: ...
+
+
+def perform_login(
+    stream: Stream,
+    login_id: str,
+    password: str,
+    *,
+    terminator: bytes = _LOGIN_TERMINATOR,
+    timeout_s: float = 2.0,
+) -> bytes:
+    """Answer a set's ``Login:``/``Password:`` prompts right after connecting.
+
+    Sharp AQUOS IP control wants the credentials "as soon as you connect to
+    the TV" (LC-xxLE830U manual, *Communication conditions for IP*). Firmware
+    varies in whether it prompts at all and how it acknowledges, so every read
+    here is best-effort: a missing prompt is normal and not an error, while an
+    explicit refusal raises. Returns whatever the set said after the password.
+    """
+    stream.settimeout(timeout_s)
+
+    def read() -> bytes:
+        try:
+            return stream.recv(4096)
+        except (TimeoutError, OSError):
+            return b""  # silent firmware is fine; send anyway
+
+    read()  # "Login:"
+    stream.sendall(login_id.encode("ascii") + terminator)
+    read()  # "Password:"
+    stream.sendall(password.encode("ascii") + terminator)
+    ack = read()
+    text = ack.decode("ascii", errors="replace").strip().lower()
+    if any(marker in text for marker in _LOGIN_REJECTED):
+        raise ControlError(f"tv rejected IP control login for '{login_id}'")
+    return ack
+
+
+def _tcp_exchange(
+    host: str,
+    port: int,
+    timeout_s: float,
+    login: tuple[str, str] | None = None,
+) -> TcpExchange:
     def exchange(payload: bytes) -> bytes:
         try:
             with socket.create_connection((host, port), timeout=timeout_s) as sock:
-                sock.sendall(payload)
                 sock.settimeout(timeout_s)
+                if login is not None:
+                    perform_login(sock, *login, timeout_s=timeout_s)
+                sock.sendall(payload)
                 try:
                     return sock.recv(4096)
                 except TimeoutError:
@@ -89,13 +150,18 @@ class NetworkIpController(MuteController):
         self._base_url = ""
         self._tcp: TcpExchange | None = None
         self._http: HttpExchange | None = None
+        login_id = str(options.get("login_id", ""))
+        login_password = str(options.get("login_password", ""))
+        login = (login_id, login_password) if login_id or login_password else None
         if self._transport == "tcp":
             if tcp is not None:
                 self._tcp = tcp
             else:
                 if not host:
                     raise ControlError("network_ip.host is required")
-                self._tcp = _tcp_exchange(host, int(options.get("port", 0) or 0), timeout_s)
+                self._tcp = _tcp_exchange(
+                    host, int(options.get("port", 0) or 0), timeout_s, login
+                )
         else:
             scheme = str(options.get("scheme", "http"))
             port = int(options.get("port", 8060))
