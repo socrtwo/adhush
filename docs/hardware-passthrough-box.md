@@ -28,7 +28,7 @@ is the only audible one.
 | 1×2 HDMI splitter | powered; must pass the source's resolution |
 | HDMI audio extractor | HDMI in → HDMI out + analog (3.5 mm/RCA) or TOSLINK |
 | USB 3.0 HDMI-to-UVC dongle | 720p30 capture is enough |
-| Relay module, 3.3 V logic | opto-isolated board; **audio through the NC (normally closed) contacts** |
+| Relay module, 2-channel, 5 V | opto-isolated board; **audio through the NC (normally closed) contacts**. 5 V is what retail stocks: power VCC from header pin 2, and the 3.3 V GPIO still drives the opto input, whose LED conducts from ~2 V |
 | Analog: any relay works | Optical: use a relay-driven TOSLINK switch instead of bare contacts |
 
 Content protection caveat: the splitter/extractor path only works where the
@@ -47,14 +47,23 @@ mute is the failure AdHush must never produce.
 
 Both stereo channels switch together: use a 2-channel module (one channel per
 audio leg) driven from the same GPIO, and keep audio ground common (do not
-switch ground).
+switch ground). One GPIO pin feeding two IN pins needs a Y-splitter jumper or a
+breadboard rail; a 1-channel DPDT module does it from a single input.
+
+Polarity is per board and not visible from the outside. Many 5 V modules are
+active-low: if `adhush probe --active` mutes at rest and passes audio during the
+test, set `active_high = false` under `[control.relay_hdmi]`. Before the service
+claims the pin it is a high-impedance input, and an opto input's LED cannot draw
+its trigger current through the SoC's ~50 kΩ internal pull, so the relay stays
+released either way — fail-unmuted holds from power-on, not just from
+`relay_hdmi.close()`.
 
 ## Software
 
 ```sh
 sudo scripts/install-pi.sh              # deps, pigpiod, venv, systemd unit
 cp config/adhush-passthrough.example.toml config/adhush.toml
-adhush probe                            # should report relay_hdmi usable
+adhush probe --active                   # relay_hdmi usable, then a real mute/unmute pair
 adhush run
 ```
 

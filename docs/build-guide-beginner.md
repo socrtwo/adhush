@@ -1,5 +1,8 @@
 # Build the AdHush box — beginner's guide
 
+**An illustrated, print-ready version of this guide is in
+`docs/print/AdHush-beginner-guide-5V.pdf`** — same steps, a diagram for each one.
+
 This guide is written so a 12-year-old can follow it. No soldering, nothing
 dangerous: every part plugs together or screws down with a small screwdriver.
 Everything runs on low-voltage USB power — **never** open or wire anything
@@ -23,8 +26,8 @@ from instructions and type commands carefully, you can build this.
 | 3 | Powered HDMI splitter, 1 in → 2 out | Makes a copy of the TV picture | $15 |
 | 4 | HDMI audio extractor (HDMI in → HDMI out + headphone/RCA audio out) | Pulls the sound out into a normal audio cable | $15–20 |
 | 5 | USB 3.0 HDMI-to-USB capture stick (says "UVC", 1080p is fine) | Lets the Pi see the copied picture | $15–25 |
-| 6 | Relay module, 2-channel, 3.3 V logic, with screw terminals ("opto-isolated" is best) | The click-switch that cuts the sound | $7 |
-| 7 | 3 female-to-female jumper wires | Connect the Pi to the relay | $3 |
+| 6 | Relay module, 2-channel, **5 V**, with screw terminals ("opto-isolated" is best) | The click-switch that cuts the sound | $7 |
+| 7 | 4 female-to-female jumper wires, plus one Y-splitter jumper (1 socket in, 2 out) or a mini breadboard | Connect the Pi to the relay, and feed one signal to both relay channels | $6 |
 | 8 | Two 3.5 mm audio cables (one will be cut in half) + one you keep whole as a spare | Carry the sound | $6 |
 | 9 | 2 short HDMI cables (plus the ones you already have) | Connect everything | $10 |
 | 10 | Small screwdriver, scissors or wire strippers | Tools | — |
@@ -85,16 +88,26 @@ The relay is the switch AdHush clicks.
    BACK, not stuck off.)
 4. Do the same with the **white/green** wires on relay channel 2 (COM and NC).
 5. Jumper wires from the Pi to the relay board:
-   - Pi **pin 1 (3.3 V)** → relay **VCC**
+   - Pi **pin 2 (5 V)** → relay **VCC** — pin 4 is also 5 V, either works
    - Pi **pin 6 (GND)** → relay **GND**
-   - Pi **pin 16 (GPIO 23)** → relay **IN1** — and also to **IN2** if your
-     board doesn't gang the channels (a spare jumper split works).
+   - Pi **pin 16 (GPIO 23)** → relay **IN1 *and* IN2**, through the Y-splitter
+     jumper. Both channels need the same signal, because left and right must
+     switch together, and one Pi pin only holds one jumper socket. A
+     1-channel DPDT board, if you find one, needs no splitter.
+   Pin 1 is the corner pin nearest the microSD slot; pin 2 is right beside it.
    Look up "Raspberry Pi GPIO pinout" for a picture; count carefully.
 6. Plug one half of the cut cable into the **extractor's audio out**, and
    the other half into your **speakers/soundbar**.
 
-👨‍🔧 Have an adult check: ground joined, audio on COM+NC (not NO), 3.3 V (not
-5 V) on VCC. Then power up. You should hear the TV through the speakers. Turn
+The relay's coil wants the full 5 V, which is why VCC goes to pin 2 — but its
+input pin only has to light an opto-coupler's internal LED, which conducts from
+about 2 V, so the Pi's 3.3 V signal drives it. That is what makes a shop-bought
+5 V board work from 3.3 V logic. (Earlier revisions of this guide asked for a
+3.3 V module; almost nobody stocks them.)
+
+👨‍🔧 Have an adult check: ground joined, audio on COM+NC (not NO), **5 V (pin 2,
+not pin 1)** on VCC, and the little JD-VCC jumper cap still in place if your
+board has one. Then power up. You should hear the TV through the speakers. Turn
 the TV's own speakers all the way down — the relay path is now the sound.
 
 ## Step 4 — Wake it up
@@ -102,11 +115,24 @@ the TV's own speakers all the way down — the relay path is now the sound.
 In the Pi's terminal, inside the `adhush` folder:
 
 ```
-adhush probe
+adhush probe --active
 ```
 
-It should say `relay_hdmi ... ok`. Then, while a normal show (not a
-commercial) is on, teach it what the channel's logo looks like:
+It should say `relay_hdmi ... ok`, then cut the sound for two seconds and bring
+it back — one click each way. That proves the whole wiring in one command.
+
+**If it works backwards** — silent at rest, sound during the test — your board
+mutes on a low signal instead of a high one. Some 5 V boards do. It is a
+one-line fix in `config/adhush.toml`, not a wiring mistake:
+
+```toml
+[control.relay_hdmi]
+gpio = 23
+active_high = false
+```
+
+Then, while a normal show (not a commercial) is on, teach it what the channel's
+logo looks like:
 
 ```
 adhush calibrate
@@ -140,7 +166,10 @@ that mistake) and **"✓ Is an ad"** (to teach it one it missed).
 |---|---|
 | No picture on TV | Reseat HDMI cables; splitter power; swap splitter outputs |
 | No sound at all | Cable halves swapped? Red/white on COM+**NC**? Grounds joined? |
-| Sound never mutes | `adhush probe`; is `pigpiod` running? (`sudo systemctl start pigpiod`) |
+| Sound never mutes | `adhush probe --active`; is `pigpiod` running? (`sudo systemctl start pigpiod`) Is VCC really on pin 2 — a 5 V board will not pull in on 3.3 V |
+| Muted at rest, sound during the test | Set `active_high = false` (see Step 4) |
+| Relay buzzes or chatters | Not enough current: use the official Pi supply and keep the JD-VCC cap on. If it still buzzes, that board wants real 3.3 V logic or a level shifter |
+| Sound on one side only | Only one channel is wired, or one screw is loose |
 | Mutes the show by mistake | Press "✗ Not an ad" on the phone page — it learns |
 | `adhush run` errors | Read the message; `adhush doctor` lists what's missing |
 

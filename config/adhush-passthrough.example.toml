@@ -24,8 +24,11 @@ backend = "relay_hdmi"
 verify_with_audio = false   # the relay is deterministic; no verification loop
 
 [control.relay_hdmi]
-gpio = 23
-active_high = true          # coil energized = muted; NC contacts pass audio
+gpio = 23                   # physical pin 16; VCC to pin 2 (5 V), GND to pin 6
+active_high = true          # coil energized = muted; NC contacts pass audio.
+                            # Many retail 5 V modules are active-low instead:
+                            # if `adhush probe --active` comes out inverted,
+                            # set this to false. Nothing else changes.
 
 [fingerprint]
 store = "data/fingerprints/ads.sqlite"
