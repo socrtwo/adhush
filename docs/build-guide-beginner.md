@@ -2,6 +2,8 @@
 
 **An illustrated, print-ready version of this guide is in
 `docs/print/AdHush-beginner-guide-5V.pdf`** — same steps, a diagram for each one.
+Putting the Pi in a Retroflag NESPi 4 case? Read `docs/build-guide-nespi4.md`
+too: the case sits on the header pins this guide uses for relay power.
 
 This guide is written so a 12-year-old can follow it. No soldering, nothing
 dangerous: every part plugs together or screws down with a small screwdriver.

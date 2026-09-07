@@ -6,7 +6,12 @@ wired for a **5 V** relay module (the kind shops actually stock) off the Pi's
 5 V pin. Every diagram is inline SVG and the fonts are embedded, so the file is
 self-contained and needs no network to render.
 
-Regenerate the PDF with any headless Chromium:
+`beginner-guide-nespi4.html` / `AdHush-beginner-guide-NESPi4.pdf` is the same
+guide re-cut for a Pi 4 B inside a Retroflag NESPi 4 case (`docs/build-guide-nespi4.md`):
+an extra case-assembly step, relay power from a USB-A breakout because the case's
+plug covers header pins 1–8, and one wire leaving the case.
+
+Regenerate either PDF with any headless Chromium:
 
 ```
 chromium --headless --no-pdf-header-footer \

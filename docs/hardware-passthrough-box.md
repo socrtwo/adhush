@@ -52,6 +52,13 @@ switch ground). One GPIO pin feeding two IN pins needs a breadboard rail
 female Dupont splitter is not a stock part. A 1-channel DPDT module does it
 from a single input.
 
+**Enclosures.** A case whose front-panel board sits on the header changes the
+power plan. The Retroflag NESPi 4's plug occupies pins 1–8 (BCM 2/3/4/14 plus
+both 5 V pins, 3.3 V and the pin-6 ground), so there the relay takes 5 V and
+ground from a case USB port through a USB-A breakout — the port is the Pi's,
+so its ground is the Pi's — and only the GPIO 23 signal leaves the case. See
+`docs/build-guide-nespi4.md`.
+
 Polarity is per board and not visible from the outside. Many 5 V modules are
 active-low: if `adhush probe --active` mutes at rest and passes audio during the
 test, set `active_high = false` under `[control.relay_hdmi]`. Before the service
