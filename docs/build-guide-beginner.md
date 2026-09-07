@@ -27,7 +27,7 @@ from instructions and type commands carefully, you can build this.
 | 4 | HDMI audio extractor (HDMI in → HDMI out + headphone/RCA audio out) | Pulls the sound out into a normal audio cable | $15–20 |
 | 5 | USB 3.0 HDMI-to-USB capture stick (says "UVC", 1080p is fine) | Lets the Pi see the copied picture | $15–25 |
 | 6 | Relay module, 2-channel, **5 V**, with screw terminals ("opto-isolated" is best) | The click-switch that cuts the sound | $7 |
-| 7 | 4 female-to-female jumper wires, plus one Y-splitter jumper (1 socket in, 2 out) or a mini breadboard | Connect the Pi to the relay, and feed one signal to both relay channels | $6 |
+| 7 | Jumper wire kit with a mini breadboard (you need 2 female-to-female and 3 male-to-female wires) | Connect the Pi to the relay, and feed one signal to both relay channels | $8–10 |
 | 8 | Two 3.5 mm audio cables (one will be cut in half) + one you keep whole as a spare | Carry the sound | $6 |
 | 9 | 2 short HDMI cables (plus the ones you already have) | Connect everything | $10 |
 | 10 | Small screwdriver, scissors or wire strippers | Tools | — |
@@ -78,7 +78,14 @@ The relay is the switch AdHush clicks.
 1. Take one 3.5 mm audio cable and **cut it in the middle**. Strip about
    2 cm of the outer cover from each cut end. Inside are small colored wires
    (usually red, white/green, and a bare or copper one — that bare one is
-   "ground").
+   "ground"). If the strands look shiny and painted, they are: scrape the
+   last 1 cm with sandpaper or the back of a knife until the copper shows, or
+   the screw terminals will not make contact.
+
+   **No-scissors option:** two "3.5 mm plug to screw terminal" adapters
+   (about $6 a pair) replace the cut cable. Plug one into the extractor and
+   one into the speakers, and run short wires between their screws and the
+   relay's screws. Same wiring, nothing to cut or scrape.
 2. Twist the **ground** wires from both halves together — ground is never
    switched. Wrap the joint in tape.
 3. Screw the **red** wire from one half into relay channel 1's **COM**
@@ -90,10 +97,12 @@ The relay is the switch AdHush clicks.
 5. Jumper wires from the Pi to the relay board:
    - Pi **pin 2 (5 V)** → relay **VCC** — pin 4 is also 5 V, either works
    - Pi **pin 6 (GND)** → relay **GND**
-   - Pi **pin 16 (GPIO 23)** → relay **IN1 *and* IN2**, through the Y-splitter
-     jumper. Both channels need the same signal, because left and right must
-     switch together, and one Pi pin only holds one jumper socket. A
-     1-channel DPDT board, if you find one, needs no splitter.
+   - Pi **pin 16 (GPIO 23)** → relay **IN1 *and* IN2**. Both channels need
+     the same signal, because left and right must switch together, and one Pi
+     pin only holds one jumper socket. So go through the breadboard: a
+     male-to-female wire from pin 16 into any breadboard row, then two more
+     male-to-female wires from that same row out to IN1 and IN2. (A 1-channel
+     DPDT board, if you find one, switches both from a single IN pin.)
    Pin 1 is the corner pin nearest the microSD slot; pin 2 is right beside it.
    Look up "Raspberry Pi GPIO pinout" for a picture; count carefully.
 6. Plug one half of the cut cable into the **extractor's audio out**, and

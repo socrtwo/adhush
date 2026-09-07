@@ -47,8 +47,10 @@ mute is the failure AdHush must never produce.
 
 Both stereo channels switch together: use a 2-channel module (one channel per
 audio leg) driven from the same GPIO, and keep audio ground common (do not
-switch ground). One GPIO pin feeding two IN pins needs a Y-splitter jumper or a
-breadboard rail; a 1-channel DPDT module does it from a single input.
+switch ground). One GPIO pin feeding two IN pins needs a breadboard rail
+(three male-to-female jumpers: pin 16 in, IN1 and IN2 out); a 1-female-to-2-
+female Dupont splitter is not a stock part. A 1-channel DPDT module does it
+from a single input.
 
 Polarity is per board and not visible from the outside. Many 5 V modules are
 active-low: if `adhush probe --active` mutes at rest and passes audio during the

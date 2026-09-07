@@ -370,7 +370,7 @@ The TV always gets its picture &mdash; only the sound gets switched.</figcaption
       <path d="M0 22 c 20 -14, 40 14, 60 0" fill="none" stroke="var(--wire-power)" stroke-width="2"/>
       <path d="M0 36 c 20 -14, 40 14, 60 0" fill="none" stroke="currentColor" stroke-width="2"/>
       <text x="30" y="74">7 &middot; Jumper wires</text>
-      <text x="30" y="90">F-to-F &times;4 + Y-splitter</text>
+      <text x="30" y="90">kit + mini breadboard</text>
     </g>
     <!-- Audio cables -->
     <g transform="translate(300,136)">
@@ -415,9 +415,8 @@ list now is much easier than finding a missing part halfway through.</figcaption
 <tr><td>HDMI audio extractor (HDMI in &#8594; HDMI out + headphone/RCA out)</td><td>Pulls the sound onto a normal audio cable</td><td class="price">$15&ndash;20</td></tr>
 <tr><td>USB HDMI capture stick (must say &ldquo;UVC&rdquo;; USB 3.0 is best)</td><td>Lets the Pi see the copied picture</td><td class="price">$8&ndash;25</td></tr>
 <tr class="pick"><td><strong>Relay module, 2-channel, <span class="v5">5 V</span>, with screw terminals</strong> &mdash; opto-isolated is best. This is the kind hobby shops keep in stock.</td><td>The click-switch that cuts the sound</td><td class="price">$7</td></tr>
-<tr><td>Female-to-female jumper wires (a strip of 4 is plenty)</td><td>Connect the Pi to the relay</td><td class="price">$3</td></tr>
-<tr class="pick"><td><strong>One Y-splitter jumper</strong> (1 socket in, 2 sockets out) &mdash; or a mini breadboard</td><td>Sends the one mute signal to <em>both</em> relay channels (Step 5 explains)</td><td class="price">$3</td></tr>
-<tr><td>Two 3.5 mm audio cables (one gets cut in half)</td><td>Carry the sound</td><td class="price">$6</td></tr>
+<tr class="pick"><td><strong>Jumper wire kit with a mini breadboard</strong> &mdash; you will use 2 female-to-female and 3 male-to-female wires</td><td>Connect the Pi to the relay, and send the one mute signal to <em>both</em> relay channels (Step 5 explains)</td><td class="price">$8&ndash;10</td></tr>
+<tr><td>Two 3.5 mm audio cables (one gets cut in half) &mdash; or, to skip the cutting, two &ldquo;3.5 mm plug to screw terminal&rdquo; adapters</td><td>Carry the sound</td><td class="price">$6</td></tr>
 <tr><td>2 short HDMI cables</td><td>Connect the boxes</td><td class="price">$10</td></tr>
 <tr><td>Small screwdriver, scissors, electrical tape</td><td>Tools you probably already have</td><td class="price">&mdash;</td></tr>
 </tbody>
@@ -810,10 +809,13 @@ speakers. Make sure the cable you are about to cut is unplugged from everything 
 <strong>NO</strong> screws stay empty.</figcaption>
 </figure>
 <ol class="todo">
-<li>Cut one audio cable in the middle. Strip about 2 cm of the outer cover off each cut end to
-reveal the small wires inside: one <strong>red</strong>, one <strong>white or green</strong>, and a
-bare copper one &mdash; that bare one is <strong>ground</strong>. (Some cables use a copper mesh
-instead; gather it and twist it into a strand.)</li>
+<li>Cut one audio cable in the middle. Strip about 2 cm of the outer cover off each cut end.
+Inside are three small wires: one <strong>red</strong>, one <strong>white or green</strong>, and a
+bare copper one. The bare one is <strong>ground</strong>. (Some cables use a copper mesh instead;
+gather it and twist it into a strand.)</li>
+<li>Look closely at the strands. If they are shiny and look painted, they are &mdash; scrape the last
+1 cm with sandpaper or the back of a knife until dull copper shows. Painted strands will not make
+contact in a screw terminal.</li>
 <li>Twist the two <strong>ground</strong> wires together and wrap the joint in tape. Ground is never
 switched.</li>
 <li>Screw the <strong>red</strong> wires into channel 1&rsquo;s <strong>COM</strong> and
@@ -824,12 +826,20 @@ switched.</li>
 <li>Plug one half of the cut cable into the <strong>extractor&rsquo;s audio out</strong> and the
 other half into your <strong>speakers</strong>.</li>
 </ol>
+<div class="note">
+<span class="boxtitle">No-scissors option</span>
+<p>Two <strong>&ldquo;3.5 mm plug to screw terminal&rdquo;</strong> adapters (about $6 a pair) do the
+same job as the cut cable, with nothing to cut or scrape. Plug one adapter into the extractor and
+one into the speakers. Each has three screws: <strong>L</strong>, <strong>R</strong>, and
+<strong>G</strong> (ground). Run short wires L&#8594;relay channel 1&#8594;L, R&#8594;channel
+2&#8594;R, and join the two G screws to each other with one wire. That is the whole sound path.</p>
+</div>
 </section>
 
 <!-- ==================== STEP 5: PI TO RELAY, 5V ==================== -->
 <section class="step">
 <div class="step-head"><div class="badge">5</div><h2>Connect the Pi to the relay &nbsp;<span class="adult">ADULT CHECK</span></h2></div>
-<p>Four little jumper wires, and this is the part where the <span class="v5">5 volt</span> change
+<p>Five little jumper wires and a breadboard, and this is the part where the <span class="v5">5 volt</span> change
 matters. Power comes from the Pi&rsquo;s <strong>5 V pin</strong>. The go/stop signal comes from
 <strong>GPIO 23</strong>, which lives on <strong>physical pin 16</strong>.</p>
 <figure class="diagram">
@@ -904,7 +914,7 @@ matters. Power comes from the Pi&rsquo;s <strong>5 V pin</strong>. The go/stop s
     <text x="484" y="152" font-size="10" opacity="0.75">ground / return</text>
     <text x="484" y="186" font-weight="700" fill="var(--accent)">IN1 + IN2</text>
     <text x="484" y="202" font-size="10" opacity="0.75">both, from the one pin</text>
-    <text x="484" y="220" font-size="10" opacity="0.75">(use the Y-splitter)</text>
+    <text x="484" y="220" font-size="10" opacity="0.75">(via the breadboard)</text>
   </g>
 </svg>
 <figcaption>Purple = <span class="v5">5 V power</span> from pin 2. Black = ground from pin 6.
@@ -923,10 +933,11 @@ right beside it; odd numbers run down one side, even numbers down the other. Cou
 </table>
 <h3>Getting one signal into two IN pins</h3>
 <p>Both channels need the <em>same</em> signal, because left and right sound must switch at the same
-instant &mdash; but one Pi pin only holds one jumper socket. That is what the <strong>Y-splitter
-jumper</strong> is for: one socket on pin 16, two sockets out to IN1 and IN2. A mini breadboard does
-the same job. (A <strong>1-channel DPDT</strong> board, if you find one, switches both sound wires
-from a single IN pin and needs no splitter.)</p>
+instant. But one Pi pin only holds one jumper socket. So the signal takes a hop through the
+<strong>mini breadboard</strong>: one male-to-female wire from pin 16 into any breadboard row, then
+two more male-to-female wires from that <em>same row</em> out to IN1 and IN2. Every hole in a row is
+joined inside the board, so all three wires are connected. (A <strong>1-channel DPDT</strong> board,
+if you find one, switches both sound wires from a single IN pin and needs no breadboard.)</p>
 
 <div class="safety">
 <span class="boxtitle"><span class="adult">ADULT CHECK</span> before power-on</span>
@@ -958,9 +969,9 @@ silence, then another <em>click</em> and the sound returns. That is the whole bu
 
 <div class="fixbox">
 <span class="boxtitle">If the relay works backwards &mdash; the one 5 V gotcha</span>
-<p>Some 5 V boards mute when the signal goes <em>high</em>, others when it goes <em>low</em>, and
-you cannot tell from the outside &mdash; so you test. If your sound is <strong>off at rest</strong>
-and comes <strong>on</strong> during the two-second test, your board is the other kind. One-line fix,
+<p>Some 5 V boards mute when the signal goes <em>high</em>. Others mute when it goes <em>low</em>.
+You cannot tell from the outside, so you test. If your sound is <strong>off at rest</strong> and
+comes <strong>on</strong> during the two-second test, your board is the other kind. One-line fix,
 not a wiring mistake.</p>
 <p>Open the settings file: <code>nano config/adhush.toml</code>, find the
 <code>[control.relay_hdmi]</code> part, and change <code>true</code> to <code>false</code>:</p>
@@ -1026,7 +1037,7 @@ before. To make the box start by itself whenever it has power, run
 </section>
 
 <!-- ==================== FIX-IT ==================== -->
-<section class="step">
+<section class="step newpage">
 <div class="step-head"><div class="badge plain">?</div><h2>If something&rsquo;s wrong</h2></div>
 <table>
 <thead><tr><th style="width:38%">Problem</th><th>Try this</th></tr></thead>
@@ -1035,20 +1046,16 @@ before. To make the box start by itself whenever it has power, run
 <tr><td>No sound at all</td><td>Are both wires on COM + <strong>NC</strong> (not NO)? Are the grounds twisted together? Is each cable half plugged into the extractor and the speakers?</td></tr>
 <tr><td>Sound only on one side</td><td>Only one channel is wired, or one screw is loose. Channel 1 carries red, channel 2 carries white/green.</td></tr>
 <tr><td>Muted at rest, sound during the test</td><td>Your board is the other kind. Set <code>active_high = false</code> &mdash; see the <em>relay works backwards</em> box in Step 6.</td></tr>
-<tr><td>Relay never clicks at all</td><td>Run <code>adhush probe --active</code>. Start the helper service: <code>sudo systemctl start pigpiod</code>. Check that VCC really is on <span class="v5">pin 2</span> and not pin 1 &mdash; a 5 V board will not pull in on 3.3 V.</td></tr>
-<tr><td>Relay buzzes or chatters</td><td>The board is not getting enough current. Use the official Pi power supply, and make sure the <strong>JD-VCC cap</strong> is on. If it still buzzes, that board wants a real 3.3 V-logic module or a small logic-level shifter &mdash; not your fault, and not worth fighting.</td></tr>
+<tr><td>Relay never clicks at all</td><td>Run <code>sudo systemctl start pigpiod</code>, then <code>adhush probe --active</code> again. Check VCC is on <span class="v5">pin 2</span>, not pin 1 &mdash; a 5 V board will not pull in on 3.3 V.</td></tr>
+<tr><td>Relay buzzes or chatters</td><td>Not enough current. Use the official Pi power supply and keep the <strong>JD-VCC cap</strong> on. If it still buzzes, that board wants a 3.3 V-logic module instead &mdash; not your fault.</td></tr>
 <tr><td>It mutes my show!</td><td>Press <strong>Not an ad</strong> on the phone page &mdash; it learns from that.</td></tr>
 <tr><td><code>adhush run</code> shows an error</td><td>Read the message, then run <code>adhush doctor</code> &mdash; it lists exactly what is missing.</td></tr>
 </tbody>
 </table>
 
-<div class="note">
-<span class="boxtitle">One honest note</span>
-<p>A few channels and streaming boxes copy-protect their HDMI signal, so the capture stick sees
-nothing at all. AdHush never tries to break that protection. For those sources the box can still
-work in listen-only mode, using just the sound to spot ads &mdash; see
-<code>docs/hardware-passthrough-box.md</code> in the project.</p>
-</div>
+<p class="mini"><strong>One honest note.</strong> A few channels and streaming boxes copy-protect
+their HDMI signal, so the capture stick sees nothing. AdHush never tries to break that protection.
+For those sources the box still works in listen-only mode, using just the sound to spot ads.</p>
 
 <footer>
 <p><strong>AdHush</strong> &mdash; open source under the MIT license &middot;
