@@ -39,8 +39,20 @@ or TV with HDMI, and your home Wi-Fi password. Speakers or a soundbar with a
 ## Step 1 — Set up the Pi (👨‍🔧 with an adult)
 
 1. On a computer, install **Raspberry Pi Imager** (from raspberrypi.com),
-   put in the microSD card, and write **Raspberry Pi OS** to it. In the
-   imager's settings gear, set a username/password and your Wi-Fi.
+   put in the microSD card, and write **Raspberry Pi OS (64-bit)** to it —
+   the plain, recommended one at the top of the list. In the imager's
+   settings gear, set a username/password and your Wi-Fi.
+
+   Three things about that choice, because the wrong pick wastes an evening:
+   - **64-bit**, not 32-bit. AdHush is all number-crunching, and 64-bit is
+     about 25% faster at it. More importantly, numpy has ready-made 64-bit
+     downloads; on 32-bit the Pi may have to *build* numpy, which takes
+     about an hour and can run out of memory on a 2 GB board.
+   - **Not** the one labelled **Legacy**. That one is older and comes with
+     Python 3.9. AdHush needs 3.11 or newer, so the install would stop with
+     an error on your very first command.
+   - **Desktop**, not **Lite**. Lite has no desktop, so step 3 below (the
+     Terminal window) has nowhere to happen.
 2. Put the card in the Pi, connect keyboard, mouse, and a monitor, and plug
    in the power. Wait for the desktop.
 3. Open the black **Terminal** window and type these lines, pressing Enter
@@ -206,6 +218,7 @@ that mistake) and **"✓ Is an ad"** (to teach it one it missed).
 | Sound on one side only | Only one channel is wired, or one screw is loose |
 | Mutes the show by mistake | Press "✗ Not an ad" on the phone page — it learns |
 | `adhush run` errors | Read the message; `adhush doctor` lists what's missing |
+| `install-pi.sh` says the Python version is too old | The Legacy (Python 3.9) image got written. Re-flash with **Raspberry Pi OS (64-bit)**, per Step 1 |
 
 One honest note: some sources copy-protect their HDMI signal so the capture
 stick sees nothing. AdHush never tries to break that protection. If your

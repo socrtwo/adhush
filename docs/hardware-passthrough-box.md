@@ -62,6 +62,13 @@ released either way — fail-unmuted holds from power-on, not just from
 
 ## Software
 
+Platform baseline: **64-bit Raspberry Pi OS**, Bookworm or newer. The 64-bit
+userland is what gets prebuilt `aarch64` numpy wheels from PyPI (on `armv7l`
+pip may fall back to compiling numpy, which does not fit the 2 GB board
+comfortably), and Bookworm is the first release whose system Python satisfies
+`requires-python >= 3.11`. The installer builds a venv, so PEP 668's
+externally-managed marking is not in the way.
+
 ```sh
 sudo scripts/install-pi.sh              # deps, pigpiod, venv, systemd unit
 cp config/adhush-passthrough.example.toml config/adhush.toml

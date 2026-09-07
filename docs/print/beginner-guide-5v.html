@@ -547,8 +547,9 @@ the power in <em>last</em> &mdash; a Pi turns on the moment it gets power.</figc
 </figure>
 <ol class="todo">
 <li>On a computer, install <strong>Raspberry Pi Imager</strong> (free, from raspberrypi.com). Put
-in the microSD card and write <strong>Raspberry Pi OS</strong> to it. In the imager&rsquo;s settings
-gear, set a username, a password, and your Wi-Fi name and password.</li>
+in the microSD card and write <strong>Raspberry Pi OS (64-bit)</strong> to it &mdash; the plain,
+recommended one at the top of the list. In the imager&rsquo;s settings gear, set a username, a
+password, and your Wi-Fi name and password.</li>
 <li>Move the card into the Pi. Connect the monitor, keyboard, and mouse. Power last. Wait for the
 desktop to appear.</li>
 <li>Open the black <strong>Terminal</strong> window and type these four lines, pressing Enter after
@@ -558,6 +559,21 @@ each one. Type them exactly &mdash; capital letters matter:</li>
 cd adhush
 sudo scripts/install-pi.sh
 cp config/adhush-passthrough.example.toml config/adhush.toml</code></pre>
+<div class="note">
+<span class="boxtitle">Three things about picking the OS</span>
+<p>The wrong pick in that list wastes an evening, so read these before you click Write.</p>
+<ul>
+<li><strong>64-bit</strong>, not 32-bit. AdHush is all number-crunching, and 64-bit is about 25%
+faster at it. More importantly, the maths library it needs has ready-made 64-bit downloads &mdash;
+on 32-bit the Pi may have to <em>build</em> that library itself, which takes about an hour and can
+run out of memory on a 2 GB board.</li>
+<li><strong>Not</strong> the one labelled <strong>Legacy</strong>. That one is older and comes with
+Python 3.9. AdHush needs 3.11 or newer, so the install would stop with an error on your very first
+command.</li>
+<li><strong>Desktop</strong>, not <strong>Lite</strong>. Lite has no desktop at all, so there
+would be no Terminal window to open in step 3.</li>
+</ul>
+</div>
 <p>That last line makes the box&rsquo;s settings file. Leave it alone for now &mdash; the defaults
 match this build. You&rsquo;ll come back to it in Step 6 only if the relay turns out to click backwards.</p>
 </section>
