@@ -8,8 +8,9 @@ device = "/dev/video0"
 width = 1280
 height = 720
 fps = 30
-audio_device = "alsa:hw:1"  # the dongle's embedded audio, or a USB input
-                            # taking the extractor's second analog output
+audio_device = "alsa:hw:1,0"  # card 1, device 0: usually the capture stick.
+                              # `adhush doctor` lists the cards it can see;
+                              # alsa:hw:CARD=<id>,DEV=0 survives reboots.
 
 [device]
 profile = "passthrough-box"

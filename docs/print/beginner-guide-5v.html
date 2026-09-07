@@ -633,6 +633,31 @@ end into the <strong>splitter&rsquo;s IN</strong> instead.</li>
 </ol>
 <p><strong>Test it:</strong> turn on the TV. You should see your channels exactly like before. Black
 screen? Try the splitter&rsquo;s other output, or swap in a different HDMI cable.</p>
+
+<h3>Then tell the Pi which gadget is the sound</h3>
+<p>The Pi can hear from more than one place &mdash; its own headphone jack, the capture stick, anything
+else that is USB. It needs to know which one is the stick. In the terminal, inside the
+<code>adhush</code> folder, type:</p>
+<pre><code>adhush doctor</code></pre>
+<p>Near the bottom it prints a list of <strong>sound cards</strong>. It looks like this:</p>
+<pre><code>  sound cards &mdash; put the capture stick's card in capture.audio_device:
+    card 0: Headphones       bcm2835_Headpho - bcm2835 Headphones
+            use alsa:hw:0,0  (or alsa:hw:CARD=Headphones,DEV=0, which survives reboots)
+    card 1: MS2109           USB-Audio - MS2109  <span class="cmt">&lt;- USB, probably the stick</span>
+            use alsa:hw:1,0  (or alsa:hw:CARD=MS2109,DEV=0, which survives reboots)
+  video devices &mdash; capture.device: /dev/video0 /dev/video1</code></pre>
+<ol class="todo">
+<li>Find the card marked <strong>USB, probably the stick</strong> and read its number. On most Pis it
+is <strong>card 1</strong> &mdash; and that is what the settings file already says, so you are done.</li>
+<li>If your number is different: open the settings with <code>nano config/adhush.toml</code>, find
+the line that starts <code>audio_device =</code>, and change the <code>1</code> in
+<code>"alsa:hw:1,0"</code> to your number. Save with <strong>Ctrl+O</strong>, Enter, then
+<strong>Ctrl+X</strong>.</li>
+<li>Run <code>adhush doctor</code> again. The line <code>audio device alsa:hw:&hellip; present</code>
+should now say <code>ok</code>.</li>
+</ol>
+<p class="mini">If the box ever goes deaf after a reboot, USB gadgets sometimes swap numbers. Paste the
+name form instead &mdash; the one like <code>alsa:hw:CARD=MS2109,DEV=0</code> &mdash; and it stays put.</p>
 </section>
 
 <!-- ==================== STEP 3 ==================== -->
@@ -1044,6 +1069,7 @@ before. To make the box start by itself whenever it has power, run
 <tbody>
 <tr><td>No picture on the TV</td><td>Reseat the HDMI cables; check the splitter&rsquo;s power; swap OUT 1 and OUT 2.</td></tr>
 <tr><td>No sound at all</td><td>Are both wires on COM + <strong>NC</strong> (not NO)? Are the grounds twisted together? Is each cable half plugged into the extractor and the speakers?</td></tr>
+<tr><td>Never hears anything, or <code>doctor</code> says the audio device FAILs</td><td>Wrong card number. Re-read the sound-card list in <code>adhush doctor</code> and fix <code>audio_device</code> (end of Step 2).</td></tr>
 <tr><td>Sound only on one side</td><td>Only one channel is wired, or one screw is loose. Channel 1 carries red, channel 2 carries white/green.</td></tr>
 <tr><td>Muted at rest, sound during the test</td><td>Your board is the other kind. Set <code>active_high = false</code> &mdash; see the <em>relay works backwards</em> box in Step 6.</td></tr>
 <tr><td>Relay never clicks at all</td><td>Run <code>sudo systemctl start pigpiod</code>, then <code>adhush probe --active</code> again. Check VCC is on <span class="v5">pin 2</span>, not pin 1 &mdash; a 5 V board will not pull in on 3.3 V.</td></tr>

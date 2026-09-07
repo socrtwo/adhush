@@ -16,6 +16,7 @@ from pathlib import Path
 
 from adhush import __version__
 from adhush.capture import build_capture
+from adhush.capture.devices import alsa_pcm_node, list_sound_cards, list_video_devices
 from adhush.capture.file_replay import FileReplaySource
 from adhush.config import Config, ConfigError, DetectConfig, FusionConfig, load_config
 from adhush.control import NullController, build_controller, resolve_options
@@ -152,6 +153,23 @@ def _read_labels(path: Path) -> list[AdSegment]:
         raise SystemExit(f"adhush: bad labels file {path}: {exc}") from exc
 
 
+def _print_capture_devices() -> None:
+    """What the kernel sees, so a builder can fill in [capture] without guessing."""
+    cards = list_sound_cards()
+    if cards:
+        print("  sound cards — put the capture stick's card in capture.audio_device:")
+        for card in cards:
+            tag = "  <- USB, probably the stick" if card.is_usb else ""
+            print(f"    card {card.index}: {card.id:<16} {card.driver}{tag}")
+            print(
+                f"            use {card.alsa_by_index()}"
+                f"  (or {card.alsa_by_name()}, which survives reboots)"
+            )
+    videos = list_video_devices()
+    if videos:
+        print("  video devices — capture.device: " + " ".join(str(v) for v in videos))
+
+
 def _cmd_doctor(args: argparse.Namespace) -> int:
     failures = 0
 
@@ -191,6 +209,13 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
                     f"capture device {config.capture.device} present",
                     Path(config.capture.device).exists(),
                 )
+                node = alsa_pcm_node(config.capture.audio_device)
+                if node is not None:
+                    check(
+                        f"audio device {config.capture.audio_device} present",
+                        node.exists(),
+                        "pick a card from the list below",
+                    )
             if config.control.backend == "rs232_sharp":
                 port = str(config.control.options.get("port", "/dev/ttyUSB0"))
                 check(f"serial port {port} present", Path(port).exists())
@@ -198,6 +223,8 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
             check(f"config {args.config} parses", False, str(exc))
     else:
         print(f"  [--] no config at {args.config} (copy config/adhush.example.toml)")
+
+    _print_capture_devices()
 
     print("all checks passed" if failures == 0 else f"{failures} check(s) failed")
     return 0 if failures == 0 else 1

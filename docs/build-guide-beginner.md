@@ -70,6 +70,30 @@ Think of it as making a copy of the TV signal so the Pi can watch too:
 Turn on the TV: you should see your channels exactly like before. If the
 screen is black, try the splitter's other output, or a different HDMI cable.
 
+### Find your sound device
+
+The Pi can hear from more than one place (its own headphone jack, the
+capture stick, anything else USB). It needs to know which one is the stick.
+In the terminal, inside the `adhush` folder:
+
+```
+adhush doctor
+```
+
+Near the bottom it prints a list of **sound cards**. Find the one marked
+`<- USB, probably the stick` and read its card number. On most Pis it is
+**card 1**, and that is what the settings file already says, so you are done.
+
+If your number is different, open the settings file with
+`nano config/adhush.toml`, find the line that starts `audio_device =`, and
+change the `1` in `"alsa:hw:1,0"` to your number. Save with Ctrl+O, Enter,
+then Ctrl+X. Run `adhush doctor` again: the line
+`audio device alsa:hw:... present` should now say `ok`.
+
+(If the box ever goes deaf after a reboot, USB gadgets sometimes swap
+numbers. `adhush doctor` also prints a name form like
+`alsa:hw:CARD=MS2109,DEV=0`; paste that instead and it will stay put.)
+
 ## Step 3 — Build the sound path (scissors time, 👨‍🔧 check before power-on)
 
 The sound will now travel: extractor → **through the relay** → speakers.
@@ -175,6 +199,7 @@ that mistake) and **"✓ Is an ad"** (to teach it one it missed).
 |---|---|
 | No picture on TV | Reseat HDMI cables; splitter power; swap splitter outputs |
 | No sound at all | Cable halves swapped? Red/white on COM+**NC**? Grounds joined? |
+| The box never hears anything / `doctor` says audio device FAIL | Wrong card number. Re-read the sound-card list in `adhush doctor` and fix `audio_device` (Step 2) |
 | Sound never mutes | `adhush probe --active`; is `pigpiod` running? (`sudo systemctl start pigpiod`) Is VCC really on pin 2 — a 5 V board will not pull in on 3.3 V |
 | Muted at rest, sound during the test | Set `active_high = false` (see Step 4) |
 | Relay buzzes or chatters | Not enough current: use the official Pi supply and keep the JD-VCC cap on. If it still buzzes, that board wants real 3.3 V logic or a level shifter |
