@@ -1,8 +1,6 @@
-// The Kotlin plugins are declared once here (apply false) so that Gradle loads
-// them a single time for both modules; each module applies its own without a
-// version. The Android Gradle Plugin stays in `app` only, so that `core` never
-// needs it resolved (see settings.gradle.kts).
-plugins {
-    kotlin("jvm") version "2.0.21" apply false
-    kotlin("android") version "2.0.21" apply false
-}
+// Intentionally empty: each module declares its own plugins, with versions,
+// so that `core` never needs the Android Gradle Plugin resolved (see
+// settings.gradle.kts). Gradle warns that the Kotlin plugin is loaded twice;
+// the usual cure (declaring it here with `apply false`) puts the Kotlin
+// Android plugin on a classpath that cannot see AGP and fails outright, so
+// the warning is the lesser evil until core-only builds can be dropped.
