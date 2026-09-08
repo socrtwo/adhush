@@ -40,6 +40,13 @@ parameter returns the present value for some commands; where `MUTE?` is not
 one of them the set answers `ERR`, and `rs232_sharp.state()` degrades to
 `None` rather than failing.
 
+**Volume, not just mute.** The command table (p. 59) also lists `VOLM` with
+parameter "Volume (0–60)" — absolute volume, not a step. That matters for any
+build whose microphone is downstream of the TV's own volume control, because
+*ducking* to a low level keeps the sensor alive where muting blinds it; see
+`docs/android-app-design.md`. Whether this set answers `VOLM?` with the current
+value is untested. No controller uses `VOLM` yet.
+
 **Network (same commands, no cable).** Enable under MENU > Initial Setup >
 Internet Setup > Network Setup > IP Control Setup, which also sets the port and
 an optional login ID and password (p. 58). `network_ip` answers that handshake

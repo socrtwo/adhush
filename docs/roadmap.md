@@ -36,9 +36,17 @@ Pi-based inline HDMI unit with audio interception, no TV cooperation needed.
 `docs/hardware-passthrough-box.md`, and `scripts/install-pi.sh` for the
 systemd deployment.
 
+## Phase 6 — Android on-device app (designed, not implemented)
+Mic capture plus a Kotlin port of the detector, fusion, and state-machine
+layers, commanding the TV over Wi-Fi with no hardware at all. Ducks with
+`VOLM` instead of muting so the microphone keeps hearing the set through the
+break. Design in `docs/android-app-design.md`; the decision to maintain a
+second on-device implementation is ADR 0007, with shared labelled fixtures as
+the conformance harness.
+
 ## Beyond the roadmap
-Candidates, in no particular order: on-device mobile capture and in-browser
-WASM detectors (the Phase 4 remainder), an audio delay line for retroactive
+Candidates, in no particular order: in-browser WASM detectors (the rest of the
+Phase 4 remainder), an iOS on-device core following ADR 0007, an audio delay line for retroactive
 mutes on the passthrough box, `metrics.py` (Prometheus text endpoint), RC-6 /
 Kaseikyo IR encoders, an LG webOS websocket backend, and profile
 contributions per docs/device-support.md.
