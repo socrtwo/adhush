@@ -36,7 +36,7 @@ Pi-based inline HDMI unit with audio interception, no TV cooperation needed.
 `docs/hardware-passthrough-box.md`, and `scripts/install-pi.sh` for the
 systemd deployment.
 
-## Phase 6 — Android on-device app (designed, not implemented)
+## Phase 6 — Android on-device app (core implemented and conformance-tested; app built in CI, not yet run on a phone)
 Mic capture plus a Kotlin port of the detector, fusion, and state-machine
 layers, commanding the TV over Wi-Fi with no hardware at all. Ducks with
 `VOLM` instead of muting so the microphone keeps hearing the set through the

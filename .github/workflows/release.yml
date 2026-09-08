@@ -18,6 +18,17 @@ jobs:
       - run: pip install -r requirements-dev.txt build
       - run: ruff check src tests && mypy src && pytest -q
       - run: python -m build
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Android core tests and debug APK
+        working-directory: platforms/android
+        run: ./gradlew :core:test :app:assembleDebug --no-daemon
+      - name: Name the APK by version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cp platforms/android/app/build/outputs/apk/debug/app-debug.apk "dist/adhush-${version}-android-debug.apk"
       - name: Bundle the web front end
         run: |
           version="${GITHUB_REF_NAME#v}"
@@ -38,3 +49,4 @@ jobs:
             dist/*.whl
             dist/*.tar.gz
             dist/adhush-web-*.zip
+            dist/adhush-*-android-debug.apk

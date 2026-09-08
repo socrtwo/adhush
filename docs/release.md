@@ -10,7 +10,7 @@ The honest platform matrix for this release. "Core" is the Python engine
 | **Linux / Raspberry Pi** | yes (reference) | desktop: `adhush service install` (systemd --user); headless box: `scripts/install-pi.sh` | `adhush overlay` (Tk; `apt install python3-tk`) | wheel or `pip install -e .` |
 | **ChromeOS** | yes, in the Linux container | `adhush service install` inside the container | Chrome's Mini window (Document Picture-in-Picture) floats above everything; the Tk overlay works inside the container's window | wheel in Crostini, then open the served page in Chrome |
 | **Web** | no — thin client | n/a | Mini window (Document PiP in Chromium 116+); popup elsewhere | open `http://<core>:8675/` — the core serves it |
-| **Android** | **no — thin client** | the core runs on a Pi/PC; the installed web app reconnects on open | none; a home-screen app with live status and the three buttons | open `http://<core>:8675/` in Chrome → *Add to Home screen* |
+| **Android** | **yes — on-device app** (since 0.7.0; Sharp LC-46LE830U via `VOLM` ducking) | microphone foreground service | notification + Quick Settings tile | `adhush-<ver>-android-debug.apk` from the release, sideloaded; or the thin-client web app as before |
 | **iOS** | **no — thin client** | same | none; Safari has no PiP for documents | open the address in Safari → Share → *Add to Home Screen* |
 
 ## What "always running" means

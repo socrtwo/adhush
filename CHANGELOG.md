@@ -4,6 +4,22 @@ All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
 ## [Unreleased]
+### Added
+- **Android on-device app** (`platforms/android`, ADR 0007): a pure-Kotlin
+  `core` — DSP (arbitrary-length FFT via Bluestein), the loudness detector
+  ported constant-for-constant, a microphone silence detector with an
+  adaptive room floor, fusion and the state machine ported verbatim, 12-bit
+  chroma fingerprints with an **audio-primary** pair-key matcher and learner,
+  a file-backed store, the Sharp AQUOS IP client with login handshake and a
+  **ducking** controller (`VOLM`, persisted pre-duck volume, remote-wins), and
+  the engine — plus a thin `app`: microphone foreground service, encrypted
+  settings, notification actions, a *Not an ad* Quick Settings tile, and a
+  *Test TV* button that settles whether the set answers `VOLM?`.
+- Conformance harness: `tools/gen_conformance.py` writes fixtures from the
+  Python core; the Kotlin tests reproduce the signal and match every block
+  (worst LUFS delta 5e-10) and replay fusion/state decisions tick for tick.
+- CI builds the debug APK on every change under `platforms/android` and the
+  release workflow attaches it to each release.
 
 ## [0.6.0] - 2026-09-08
 ### Added

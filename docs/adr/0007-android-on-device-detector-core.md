@@ -4,7 +4,7 @@ Date: 2026-09-08
 
 ## Status
 
-Accepted (design). Implementation not started.
+Accepted. Core implemented in `platforms/android/core` with the conformance harness described below; app shell in `platforms/android/app`, CI-built.
 
 ## Context
 
