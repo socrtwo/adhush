@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
-## [Unreleased]
+## [0.7.0] - 2026-09-08
 ### Added
 - **Android on-device app** (`platforms/android`, ADR 0007): a pure-Kotlin
   `core` — DSP (arbitrary-length FFT via Bluestein), the loudness detector
@@ -18,7 +18,8 @@ Format follows Keep a Changelog; versioning follows SemVer.
 - Conformance harness: `tools/gen_conformance.py` writes fixtures from the
   Python core; the Kotlin tests reproduce the signal and match every block
   (worst LUFS delta 5e-10) and replay fusion/state decisions tick for tick.
-- CI builds the debug APK on every change under `platforms/android` and the
+- CI builds the debug APK on every change under `platforms/android` (verified:
+  the workflow assembles and uploads `adhush-android-debug`) and the
   release workflow attaches it to each release.
 
 ## [0.6.0] - 2026-09-08

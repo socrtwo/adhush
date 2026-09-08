@@ -64,8 +64,10 @@ Battery → Unrestricted) or Android may pause the service overnight.
   login handshake, refusal, ducking, restore-after-crash and the
   remote-wins rule. An end-to-end engine test mutes an ad pod after the dwell,
   unmutes when it ends, and learns it.
-- **App**: compiled and packaged **only in CI** — this tree was written where
-  the Android SDK cannot be downloaded. It has not run on a phone yet. The
+- **App**: compiles and packages in CI (`.github/workflows/android.yml`
+  assembles the debug APK and uploads it as the `adhush-android-debug`
+  artifact) — this tree was written where the Android SDK cannot be
+  downloaded, so CI is the compiler. It has not run on a phone yet. The
   microphone path (`UNPROCESSED` vs `CAMCORDER`), the foreground-service
   lifecycle and the notification actions are the first things to try.
 - **Thresholds that need your room**: the mic silence detector's
