@@ -14,6 +14,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import io.adhush.core.Aquos
 import io.adhush.core.ControlError
 import io.adhush.core.SharpIpClient
 import io.adhush.core.SocketTransport
@@ -59,7 +60,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun save() {
         settings.host = findViewById<EditText>(R.id.host).text.toString().trim()
-        settings.port = findViewById<EditText>(R.id.port).text.toString().toIntOrNull() ?: io.adhush.core.Aquos.DEFAULT_PORT
+        settings.port = findViewById<EditText>(R.id.port).text.toString().toIntOrNull() ?: Aquos.DEFAULT_PORT
         settings.loginId = findViewById<EditText>(R.id.login).text.toString().trim()
         settings.password = findViewById<EditText>(R.id.password).text.toString()
         settings.duckLevel = (findViewById<EditText>(R.id.duck).text.toString().toIntOrNull() ?: 4).coerceIn(0, 60)

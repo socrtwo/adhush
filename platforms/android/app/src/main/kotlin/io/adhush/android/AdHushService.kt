@@ -20,6 +20,8 @@ import io.adhush.core.Assembly
 import io.adhush.core.ControlError
 import io.adhush.core.Engine
 import io.adhush.core.FileFingerprintStore
+import io.adhush.core.MuteController
+import io.adhush.core.Override as CoreOverride
 import io.adhush.core.SharpController
 import io.adhush.core.SharpIpClient
 import io.adhush.core.SocketTransport
@@ -140,7 +142,7 @@ class AdHushService : Service() {
     // -- notification ---------------------------------------------------------
 
     private fun describe(s: Status): String {
-        val state = if (s.override != io.adhush.core.Override.AUTO) "override: ${s.override.wire}" else if (s.muted) "DUCKED — ad" else s.state.wire.uppercase()
+        val state = if (s.override != CoreOverride.AUTO) "override: ${s.override.wire}" else if (s.muted) "DUCKED — ad" else s.state.wire.uppercase()
         return "$state · ${"%.2f".format(s.confidence)} · ${s.adsLearned} ads learned"
     }
 
@@ -184,7 +186,7 @@ class AdHushService : Service() {
     }
 
     /** Runs the controller's network calls off the mic thread; failures surface in the notification, never in the engine. */
-    private inner class NetworkedController(private val inner: SharpController) : io.adhush.core.MuteController {
+    private inner class NetworkedController(private val inner: SharpController) : MuteController {
         override fun mute() = io.execute { try { inner.mute() } catch (e: ControlError) { main.post { update("mute failed: ${e.message}") } } }
         override fun unmute() = io.execute { try { inner.unmute() } catch (e: ControlError) { main.post { update("restore failed: ${e.message}") } } }
         override fun state(): Boolean? = inner.state()

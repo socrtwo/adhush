@@ -56,15 +56,7 @@ def main() -> None:
         loud.observe_audio(AudioEvent(ts=ts, samples=samples, sample_rate=RATE))
         vote = loud.vote(ts)
         lines.append(
-            "block {i} {ts!r} {dbfs:.9f} {flat:.12f} {st:.9f} {conf:.9f} {chroma}".format(
-                i=i,
-                ts=ts,
-                dbfs=block_dbfs(samples),
-                flat=spectral_flatness(samples),
-                st=loud._last_short_term,
-                conf=vote.confidence,
-                chroma=chroma_bits(samples, RATE),
-            )
+            f"block {i} {ts!r} {block_dbfs(samples):.9f} {spectral_flatness(samples):.12f} {loud._last_short_term:.9f} {vote.confidence:.9f} {chroma_bits(samples, RATE)}"
         )
 
     weights = {"a": 0.15, "b": 0.15, "c": 0.30}
@@ -82,7 +74,7 @@ def main() -> None:
     script += [(0.0, 0.0, 1.0, True, True)] * 3  # fingerprint: promote instantly
     script += [(0.0, 0.0, 1.0, False, True)] * 30  # hold inside the learned window
     script += [(0.0, 0.0, 0.0, False, False)] * 12  # window over -> unmute by dwell
-    lines.append(f"weights a=0.15 b=0.15 c=0.30")
+    lines.append("weights a=0.15 b=0.15 c=0.30")
     for i, (a, b, c, promote, hold) in enumerate(script):
         ts = i * 0.1
         votes = [
