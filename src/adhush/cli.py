@@ -1,4 +1,5 @@
-"""Argument parsing, subcommands: run, calibrate, learn, replay, probe, doctor, ir-test."""
+"""Argument parsing, subcommands: run, calibrate, learn, replay, probe, doctor, ir-test,
+overlay, service."""
 
 from __future__ import annotations
 
@@ -6,8 +7,10 @@ import argparse
 import heapq
 import json
 import logging
+import os
 import shutil
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -87,18 +90,74 @@ def _cmd_run(args: argparse.Namespace) -> int:
         print(f"adhush {__version__}: running on {config.capture.backend} "
               f"(video={caps.video} audio={caps.audio}), control={config.control.backend}")
         api = None
+        overlay: subprocess.Popen[bytes] | None = None
+        want_overlay = config.ui.overlay if args.overlay is None else bool(args.overlay)
         if config.ipc.enabled:
             from adhush.ipc.api import ApiServer
 
-            api = ApiServer(pipeline, config.ipc)
+            api = ApiServer(pipeline, config.ipc, on_shutdown=stop.set)
             api.start()
-            print(f"ipc api on http://{api.address[0]}:{api.address[1]}"
-                  f" (open platforms/web/index.html to control)")
+            print(f"ipc api on http://{api.address[0]}:{api.address[1]}/"
+                  f" (open that address on any device on your network)")
+            if want_overlay:
+                overlay = _spawn_overlay(api.address, config.ipc.token)
+        elif want_overlay:
+            print("overlay skipped: it needs [ipc] enabled = true")
         try:
             run_live(source, pipeline, stop)
         finally:
+            if overlay is not None:
+                overlay.terminate()
             if api is not None:
                 api.close()
+    return 0
+
+
+def _has_display() -> bool:
+    if sys.platform in ("win32", "darwin"):
+        return True
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def _spawn_overlay(address: tuple[str, int], token: str) -> subprocess.Popen[bytes] | None:
+    """Start the mini window as a separate process so a UI hiccup cannot stall detection."""
+    if not _has_display():
+        print("overlay skipped: no display (set [ui] overlay = false to silence this)")
+        return None
+    host, port = address
+    if host in ("0.0.0.0", "::"):
+        host = "127.0.0.1"
+    argv = [sys.executable, "-m", "adhush", "overlay", "--base", f"http://{host}:{port}"]
+    if token:
+        argv += ["--token", token]
+    try:
+        return subprocess.Popen(argv)
+    except OSError as exc:
+        print(f"overlay failed to start: {exc}")
+        return None
+
+
+def _cmd_overlay(args: argparse.Namespace) -> int:
+    from adhush.ui.overlay import main as overlay_main
+
+    return overlay_main(
+        base=args.base, token=args.token, position_file=args.position_file
+    )
+
+
+def _cmd_service(args: argparse.Namespace) -> int:
+    from adhush.service import ServiceError, install, status, uninstall
+
+    config = Path(args.config).resolve()
+    try:
+        if args.action == "install":
+            print(install(config, overlay=not args.no_overlay))
+        elif args.action == "uninstall":
+            print(uninstall())
+        else:
+            print(status())
+    except ServiceError as exc:
+        raise SystemExit(f"adhush: service: {exc}") from exc
     return 0
 
 
@@ -368,6 +427,12 @@ def main(argv: list[str] | None = None) -> int:
 
     p_run = sub.add_parser("run", help="run live detection and control")
     p_run.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)
+    p_run.add_argument(
+        "--overlay",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="show the always-on-top mini window (default: [ui] overlay in config)",
+    )
     p_run.set_defaults(func=_cmd_run)
 
     p_replay = sub.add_parser("replay", help="replay a recording offline and score against labels")
@@ -410,6 +475,26 @@ def main(argv: list[str] | None = None) -> int:
     p_learn.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)
     p_learn.add_argument("--labels", type=Path, required=True, help="JSON [{start_ts, duration_s}]")
     p_learn.set_defaults(func=_cmd_learn)
+
+    p_overlay = sub.add_parser(
+        "overlay", help="always-on-top mini window for a running core (thin IPC client)"
+    )
+    p_overlay.add_argument("--base", default="http://127.0.0.1:8675", help="core API address")
+    p_overlay.add_argument("--token", default="", help="[ipc] token if one is set")
+    p_overlay.add_argument(
+        "--position-file", type=Path, default=None, help="where the window remembers its spot"
+    )
+    p_overlay.set_defaults(func=_cmd_overlay)
+
+    p_service = sub.add_parser(
+        "service", help="keep the core running: start at login on this machine"
+    )
+    p_service.add_argument("action", choices=("install", "uninstall", "status"))
+    p_service.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)
+    p_service.add_argument(
+        "--no-overlay", action="store_true", help="run the service without the mini window"
+    )
+    p_service.set_defaults(func=_cmd_service)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

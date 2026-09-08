@@ -40,6 +40,18 @@ adhush learn clip.mp4 --labels ads.json            # seed the ad fingerprint sto
 reports precision/recall separately for mute-onset and unmute-onset against a
 JSON label file (`[{"start_ts": 16.0, "duration_s": 30.0}, ...]`).
 
+## Keep it running, see it at a glance (0.6.0)
+
+```
+adhush run                    # with [ipc] enabled: serves the web app at :8675 and
+                              # opens the always-on-top mini window (✗ ✓ ■)
+adhush service install        # start at login on Linux/ChromeOS, macOS, Windows
+```
+
+Phones and tablets open `http://<core-host>:8675/` and add it to the home
+screen. Which platform gets what — and what mobile does *not* get yet — is in
+`docs/release.md`.
+
 ## Design goals
 
 1. **Detector plurality.** No single heuristic is reliable. Every detector is a

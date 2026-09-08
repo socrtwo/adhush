@@ -5,6 +5,39 @@ Format follows Keep a Changelog; versioning follows SemVer.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-08
+### Added
+- **Always-on-top mini window** (`adhush overlay`, `src/adhush/ui/overlay.py`,
+  ADR 0008): a small, borderless, translucent, draggable pill showing
+  PROGRAM / SUSPECT / MUTED with ✗ not-an-ad, ✓ is-an-ad and ■ stop. Standard
+  library only (tkinter + urllib), runs as its own process so it can never
+  stall detection, remembers where you put it. Started automatically by
+  `adhush run` when a display exists; `[ui] overlay` / `--no-overlay` turn it
+  off.
+- **Always running**: `adhush service install|uninstall|status` installs the
+  core as a start-at-login service on Linux/ChromeOS (systemd user unit),
+  macOS (launchd agent) and Windows (Task Scheduler logon task), in the
+  user's session so the overlay has a display.
+- **`shutdown` IPC command**: the one sanctioned way a UI stops the core.
+  Additive to protocol v1.
+- **The core serves the web front end** at `/` (`[ipc] web_root`), so any
+  phone, tablet or PC on the network needs only the core's address. Fixed
+  allow-list of files, no path traversal, static files public while the API
+  stays token-gated.
+- **Installable web app**: `platforms/web` gains a manifest, a service worker
+  and icons, so the front end installs to the home screen on Android, iOS,
+  ChromeOS and desktop browsers. A **Mini window** button opens a Document
+  Picture-in-Picture window (Chromium 116+): a real always-on-top floating
+  control on ChromeOS, Windows and macOS browsers; a popup fallback elsewhere.
+- Tag-triggered release workflow builds the wheel, sdist and a web-front-end
+  zip and publishes them as a GitHub Release.
+- `docs/release.md`: what each platform gets in this release, including what
+  it does not (no native Android/iOS binaries yet; see ADR 0007).
+### Changed
+- `adhush run` prints the served address rather than a file path.
+- Overrides win in the status display: a forced mute reads MUTED before the
+  state machine ticks.
+
 ## [0.5.0] - 2026-08-28
 ### Added
 - Phase 5 (hardware passthrough box) implementation:

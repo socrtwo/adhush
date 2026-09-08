@@ -39,6 +39,10 @@ enabled = true              # phone control via platforms/web/index.html
 host = "0.0.0.0"            # LAN-visible on purpose: set a token!
 port = 8675
 token = "change-me"
+web_root = "platforms/web"  # the core serves the web app at http://host:port/
+
+[ui]
+overlay = true             # always-on-top mini window next to `adhush run` (needs [ipc])
 
 [log]
 level = "info"

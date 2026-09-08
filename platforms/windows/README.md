@@ -1,15 +1,20 @@
 # windows front end
 
-Run the Python core directly; the web page is the UI.
+Run the Python core here; two UIs come with it.
 
-```powershell
-pip install -e .
-adhush run --config config\adhush.toml
+```
+pip install adhush-0.6.0-py3-none-any.whl     # or: pip install -e .
+adhush run --config config/adhush.toml         # opens the mini window
+adhush service install                         # keep it running: Task Scheduler logon task
 ```
 
-- **Capture**: `screen` (gdigrab of the desktop while a streaming app plays),
-  `camera` (`device = "Integrated Camera"` via dshow), or `microphone`
-  (`audio_device = "dshow:audio=Microphone (…)"`; audio-only detector set).
-- **Control**: `local_audio` (mutes the PC; needs `nircmd` on PATH),
-  `ir_blaster_net`, or `network_ip` for a smart TV.
-- **UI**: enable `[ipc]` and open `..\web\index.html`.
+- **Mini window**: `adhush run` starts `adhush overlay` — a small, borderless,
+  always-on-top, draggable pill (PROGRAM / SUSPECT / MUTED, ✗ ✓ ■). Standard
+  library only; tkinter ships with the python.org installer. `[ui] overlay = false` or `--no-overlay` disables it.
+- **Web app**: with `[ipc] enabled = true` the core serves it at
+  `http://127.0.0.1:8675/` — and the ▣ button there opens a Chrome/Edge
+  Picture-in-Picture mini window too.
+- **Capture**: `screen` (gdigrab), `camera` (dshow), or `microphone` (`audio_device = "dshow:audio=Microphone (…)"`).
+- **Control**: `local_audio` (needs `nircmd` on PATH), `ir_blaster_net`, or `network_ip`.
+- **Stopping**: ■ on either UI sends `shutdown`; the service does not restart a
+  clean exit. `adhush service uninstall` removes the login entry.

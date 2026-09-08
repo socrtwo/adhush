@@ -1,0 +1,40 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt build
+      - run: ruff check src tests && mypy src && pytest -q
+      - run: python -m build
+      - name: Bundle the web front end
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          (cd platforms/web && zip -r "../../dist/adhush-web-${version}.zip" .)
+      - name: Release notes from the changelog
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" {on=1; next}
+            on && /^## \[/ {exit}
+            on {print}' CHANGELOG.md > dist/notes.md
+          echo >> dist/notes.md
+          echo "Platform matrix: docs/release.md" >> dist/notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: dist/notes.md
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/adhush-web-*.zip

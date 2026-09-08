@@ -14,14 +14,17 @@ run a second, on-device implementation of the core for this.
 Accuracy is structurally below the passthrough box (three audio detectors
 versus six audio+video). It is the convenience build.
 
-## Thin client (works today)
+## Thin client (works today — this is what 0.6.0 ships)
 
 Pattern: **networked core** (ADR 0002). The core runs on a Pi or PC on the same
 LAN; the phone is a thin client. Preferred whenever a passthrough box or IR is
 in play, and the only option for a TV without network control.
 
-- Open `../web/index.html` (or serve it) in Chrome and point it at the core's
-  `[ipc]` address; set a `token` on non-loopback binds.
+- Run the core on a Pi or PC with `[ipc] enabled = true` and a `token`. In
+  Chrome open `http://<core-host>:8675/` — the core serves the app — then
+  **Add to Home screen**. It installs as a full-screen app with live status,
+  ✓ ✗ and ■ Stop. No floating window on Android: Chrome for Android has no
+  document Picture-in-Picture.
 - **Control**: the core drives the TV (IR blaster / network / CEC). Phones with
   a built-in IR emitter need a native shell — future work.
 - Termux users can already run the audio-only core on-device today
