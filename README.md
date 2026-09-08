@@ -102,6 +102,15 @@ compensate with state verification where available.
 - **Audio only** — microphone or line-in; a reduced but useful detector set.
 - **Screen capture** — for streaming apps on desktop, ChromeOS, and Web.
 
+## Android app (0.7.0)
+
+`platforms/android` is a phone-only build for the Sharp LC-46LE830U: the
+detector core ported to Kotlin, listening through the microphone, ducking the
+set's volume over its IP port during commercials and restoring it after. No
+Pi, no cables. CI builds a debug APK (`adhush-<ver>-android-debug.apk` on each
+release) to sideload; see `platforms/android/README.md` and
+`docs/android-app-design.md`. It has not yet been run on a phone.
+
 ## Platform roadmap
 
 Linux/Raspberry Pi (reference) -> Windows -> macOS -> Linux desktop ->
