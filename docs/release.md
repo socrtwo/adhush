@@ -1,11 +1,11 @@
-# Release 0.7.0 — what runs where
+# Release 0.7.1 — what runs where
 
 The honest platform matrix for this release. "Core" is the Python engine
 (`adhush run`); "UI" is what you look at and tap.
 
 | Platform | Core runs here? | Always running | Always-on-top mini window | How to get it |
 |---|---|---|---|---|
-| **Windows** | yes | `adhush service install` (Task Scheduler, at logon) | `adhush overlay` (Tk) — also the Mini window button in Chrome/Edge | `pip install adhush-0.7.0-py3-none-any.whl` |
+| **Windows** | yes | `adhush service install` (Task Scheduler, at logon) | `adhush overlay` (Tk) — also the Mini window button in Chrome/Edge | `pip install adhush-0.7.1-py3-none-any.whl` |
 | **macOS** | yes | `adhush service install` (launchd agent) | `adhush overlay` (Tk); Mini window in Chrome/Edge | wheel; tkinter ships with python.org Python |
 | **Linux / Raspberry Pi** | yes (reference) | desktop: `adhush service install` (systemd --user); headless box: `scripts/install-pi.sh` | `adhush overlay` (Tk; `apt install python3-tk`) | wheel or `pip install -e .` |
 | **ChromeOS** | yes, in the Linux container | `adhush service install` inside the container | Chrome's Mini window (Document Picture-in-Picture) floats above everything; the Tk overlay works inside the container's window | wheel in Crostini, then open the served page in Chrome |
@@ -44,8 +44,8 @@ core. Only ■ does.
 ## Reproducing the artifacts
 
 ```
-python -m build                       # dist/adhush-0.7.0-py3-none-any.whl, .tar.gz
-(cd platforms/web && zip -r ../../dist/adhush-web-0.7.0.zip .)
+python -m build                       # dist/adhush-0.7.1-py3-none-any.whl, .tar.gz
+(cd platforms/web && zip -r ../../dist/adhush-web-0.7.1.zip .)
 ```
 
 Pushing a `v*` tag runs `.github/workflows/release.yml`, which does the same

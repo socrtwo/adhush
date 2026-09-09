@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
-## [Unreleased]
+## [0.7.1] - 2026-09-09
 ### Changed
 - Android: the Sharp client keeps **one connection** open and reconnects when
   the set drops it, instead of a connection per command — the first run
