@@ -40,6 +40,7 @@ class AdHushService : Service() {
     private lateinit var settings: Settings
     private var engine: Engine? = null
     private var controller: SharpController? = null
+    private var transport: SocketTransport? = null
     private var mic: MicSource? = null
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -83,7 +84,8 @@ class AdHushService : Service() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             update("microphone permission missing"); stopSelf(); return
         }
-        val transport = SocketTransport(settings.host, settings.port, 2000, settings.login)
+        val transport = SocketTransport(settings.host, settings.port, 2500, settings.login)
+        this.transport = transport
         val ctl = SharpController(
             SharpIpClient(transport), PrefsDuckPersistence(this),
             duckLevel = settings.duckLevel, normalVolume = settings.normalVolume, useMuteInstead = settings.useMute,
@@ -133,6 +135,7 @@ class AdHushService : Service() {
         val ctl = controller
         engine?.close(); engine = null
         if (ctl != null) runCatching { ctl.close() }   // restore if ducked
+        transport?.close(); transport = null
         io.shutdown()
         super.onDestroy()
     }

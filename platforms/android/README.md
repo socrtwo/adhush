@@ -67,9 +67,14 @@ Battery → Unrestricted) or Android may pause the service overnight.
 - **App**: compiles and packages in CI (`.github/workflows/android.yml`
   assembles the debug APK and uploads it as the `adhush-android-debug`
   artifact) — this tree was written where the Android SDK cannot be
-  downloaded, so CI is the compiler. It has not run on a phone yet. The
-  microphone path (`UNPROCESSED` vs `CAMCORDER`), the foreground-service
-  lifecycle and the notification actions are the first things to try.
+  downloaded, so CI is the compiler. First run on a phone (2026-09-09):
+  installs, the settings screen works, and *Test TV* reached the set — it
+  answered `ERR` to `VOLM?` on the first connection and then nothing at all
+  on the connections opened right after it. The client now keeps one
+  connection open and treats silence as unconfirmed rather than rejected;
+  *Test TV* logs every raw exchange. Still untried: the microphone path
+  (`UNPROCESSED` vs `CAMCORDER`), the foreground-service lifecycle and the
+  notification actions.
 - **Thresholds that need your room**: the mic silence detector's
   `quietMarginDb` (4 dB) and the fingerprint verify agreement (0.7) are
   starting guesses; see the design's testing section.

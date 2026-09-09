@@ -259,12 +259,16 @@ Never `VOICE_RECOGNITION` or `VOICE_COMMUNICATION`. Read in 4800-sample
 
 ### Talking to the TV
 
-Port `network_ip.py`'s shape directly: **one short-lived TCP connection per
-command**, which is what makes the manual's 3-minute idle disconnect a
-non-issue, and answer the login handshake on each connection exactly as
-`perform_login` does — read the prompt best-effort (silent firmware is normal),
-send id + CRLF, read, send password + CRLF, and treat only an explicit refusal
-as an error.
+**One TCP connection, kept open and reopened whenever the set drops it.** The
+design first copied `network_ip.py`'s connection-per-command shape; the first
+run on a phone (2026-09-09) showed the LC-46LE830U answering the first
+connection and ignoring the ones opened moments later, so the app now holds
+one connection, answers the login handshake once on it exactly as
+`perform_login` does — read the prompt best-effort, send id + CRLF, read, send
+password + CRLF, treat only an explicit refusal as an error — and reconnects
+on end-of-stream, a socket error, or three silent replies in a row. The
+5-second `VOLM?` poll keeps it inside the 3-minute idle disconnect anyway.
+A silent reply is *unconfirmed*, not a rejection: only `ERR` is.
 
 ```kotlin
 suspend fun send(cmd: String, param: String): String =

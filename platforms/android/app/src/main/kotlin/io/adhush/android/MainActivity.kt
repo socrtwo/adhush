@@ -69,23 +69,36 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Answers the design's open question on the real set: does VOLM? return the volume? */
+    /**
+     * One connection for the whole test, like the service uses. Every raw
+     * exchange is logged (escaped bytes), so a screenshot of this log says
+     * exactly what the set answers — the first phone test showed a set that
+     * ignored per-command connections and says nothing to some commands.
+     */
     private fun testTv() {
         log("testing ${settings.host}:${settings.port} …")
         thread {
-            val client = SharpIpClient(SocketTransport(settings.host, settings.port, 2500, settings.login))
-            val lines = ArrayList<String>()
-            try {
-                val vol = client.queryVolume()
-                lines.add("VOLM? → " + (vol?.toString() ?: "no answer (ERR): the app will use your Normal volume"))
-                val mute = client.queryMute()
-                lines.add("MUTE? → " + (mute?.let { if (it) "muted" else "not muted" } ?: "no answer"))
-                client.muteOn(); Thread.sleep(1500); client.muteOff()
-                lines.add("MUTE 1 then MUTE 2 → OK (did the sound drop for a second?)")
-                if (vol != null) { client.setVolume(settings.duckLevel); Thread.sleep(1500); client.setVolume(vol); lines.add("VOLM ${settings.duckLevel} then VOLM $vol → OK (ducking works)") }
-            } catch (e: ControlError) {
-                lines.add("FAILED: ${e.message}")
+            fun say(line: String) = runOnUiThread { log(line) }
+            val transport = SocketTransport(settings.host, settings.port, 2500, settings.login)
+            transport.trace = { say("  $it") }
+            val client = SharpIpClient(transport)
+            fun confirmed(ok: Boolean) = if (ok) "OK" else "sent, the set said nothing — did it happen?"
+            transport.use {
+                try {
+                    val vol = client.queryVolume()
+                    say("VOLM? → " + (vol?.toString() ?: "no answer: the app will use your Normal volume"))
+                    val mute = client.queryMute()
+                    say("MUTE? → " + (mute?.let { if (it) "muted" else "not muted" } ?: "no answer"))
+                    val m1 = client.muteOn(); Thread.sleep(1500); val m2 = client.muteOff()
+                    say("MUTE1 → ${confirmed(m1)}; MUTE2 → ${confirmed(m2)}")
+                    val back = vol ?: settings.normalVolume
+                    val d1 = client.setVolume(settings.duckLevel); Thread.sleep(1500); val d2 = client.setVolume(back)
+                    say("VOLM ${settings.duckLevel} → ${confirmed(d1)}; VOLM $back → ${confirmed(d2)} (ducking is what the app does)")
+                    say("done — if the sound dipped twice, the TV path works")
+                } catch (e: ControlError) {
+                    say("FAILED: ${e.message}")
+                }
             }
-            runOnUiThread { lines.forEach { log(it) } }
         }
     }
 

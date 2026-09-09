@@ -50,8 +50,11 @@ value is untested. No controller uses `VOLM` yet.
 **Network (same commands, no cable).** Enable under MENU > Initial Setup >
 Internet Setup > Network Setup > IP Control Setup, which also sets the port and
 an optional login ID and password (p. 58). `network_ip` answers that handshake
-on every connection via `perform_login`, which is why the manual's 3-minute
-idle disconnect is harmless — each command opens its own connection. Serial is
+on every connection via `perform_login` and opens a connection per command.
+The Android app's first run against a real set found the firmware ignoring
+connections opened back-to-back, so the app holds one connection open
+(`platforms/android`); if `network_ip` shows the same symptom on this set,
+it needs the same change. Serial is
 still the better choice for an unattended box: it cannot be broken by Wi-Fi
 dropping, DHCP reassigning the TV, or a firmware update clearing a menu
 toggle.

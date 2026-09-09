@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [Unreleased]
+### Changed
+- Android: the Sharp client keeps **one connection** open and reconnects when
+  the set drops it, instead of a connection per command — the first run
+  against an LC-46LE830U showed the set ignoring connections opened
+  back-to-back. A silent reply is now "unconfirmed", not a rejection; only
+  `ERR` rejects. *Test TV* logs every raw exchange, including the login
+  prompts, and tests ducking with the configured normal volume when the set
+  will not answer `VOLM?`.
+
 ## [0.7.0] - 2026-09-08
 ### Added
 - **Android on-device app** (`platforms/android`, ADR 0007): a pure-Kotlin

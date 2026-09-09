@@ -10,17 +10,24 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** A fake AQUOS set on loopback: prompts for login, then answers one framed command. */
-private class FakeTv(private val login: Pair<String, String>? = null, private val volumeQueryAnswers: Boolean = true) : AutoCloseable {
+/** A fake AQUOS set on loopback: prompts for login, then answers framed commands until the client hangs up. */
+private class FakeTv(
+    private val login: Pair<String, String>? = null,
+    private val volumeQueryAnswers: Boolean = true,
+    private val hangUpAfterEach: Boolean = false,
+    private val silentOnMute: Boolean = false,
+) : AutoCloseable {
     val server = ServerSocket(0)
     val port get() = server.localPort
     val received = ArrayList<String>()
-    var volume = 20
-    var muted = false
+    @Volatile var connections = 0
+    @Volatile var volume = 20
+    @Volatile var muted = false
     private val worker = thread(isDaemon = true) {
         try {
             while (true) {
                 val sock = server.accept()
+                connections++
                 sock.soTimeout = 2000
                 val input = sock.getInputStream(); val out = sock.getOutputStream()
                 val buf = ByteArray(256)
@@ -32,18 +39,23 @@ private class FakeTv(private val login: Pair<String, String>? = null, private va
                     if (id != login.first || pw != login.second) { out.write("Login incorrect\r\n".toByteArray()); out.flush(); sock.close(); continue }
                     out.write("\r\n".toByteArray()); out.flush()
                 }
-                val n = input.read(buf)
-                val cmd = String(buf, 0, n, US_ASCII)
-                synchronized(received) { received.add(cmd) }
-                val reply = when {
-                    cmd == "VOLM?   \r" -> if (volumeQueryAnswers) "$volume\r\n" else "ERR\r\n"
-                    cmd.startsWith("VOLM") -> { volume = cmd.substring(4, 8).trim().toInt(); "OK\r\n" }
-                    cmd == "MUTE1   \r" -> { muted = true; "OK\r\n" }
-                    cmd == "MUTE2   \r" -> { muted = false; "OK\r\n" }
-                    cmd == "MUTE?   \r" -> if (muted) "1\r\n" else "2\r\n"
-                    else -> "ERR\r\n"
+                while (true) {
+                    val n = try { input.read(buf) } catch (_: Exception) { -1 }
+                    if (n < 0) break
+                    val cmd = String(buf, 0, n, US_ASCII)
+                    synchronized(received) { received.add(cmd) }
+                    val reply = when {
+                        cmd == "VOLM?   \r" -> if (volumeQueryAnswers) "$volume\r\n" else "ERR\r\n"
+                        cmd.startsWith("VOLM") -> { volume = cmd.substring(4, 8).trim().toInt(); "OK\r\n" }
+                        cmd == "MUTE1   \r" -> { muted = true; if (silentOnMute) "" else "OK\r\n" }
+                        cmd == "MUTE2   \r" -> { muted = false; if (silentOnMute) "" else "OK\r\n" }
+                        cmd == "MUTE?   \r" -> if (muted) "1\r\n" else "2\r\n"
+                        else -> "ERR\r\n"
+                    }
+                    if (reply.isNotEmpty()) { out.write(reply.toByteArray()); out.flush() }
+                    if (hangUpAfterEach) break
                 }
-                out.write(reply.toByteArray()); out.flush(); sock.close()
+                sock.close()
             }
         } catch (_: Exception) {}
     }
@@ -70,6 +82,31 @@ class SharpTest {
         assertEquals(4, client.queryVolume())
         assertEquals(false, client.queryMute())
         assertTrue(tv.received.contains("MUTE1   \r"))
+        assertEquals(1, tv.connections, "one connection carries every command")
+    }
+
+    @Test fun `a set that hangs up is reconnected transparently`() = FakeTv(hangUpAfterEach = true).use { tv ->
+        val transport = SocketTransport("127.0.0.1", tv.port, 1500)
+        val client = SharpIpClient(transport)
+        client.muteOn(); assertTrue(tv.muted)
+        Thread.sleep(50)   // let the fake finish closing before the next exchange
+        client.muteOff(); assertFalse(tv.muted)
+        client.setVolume(9); assertEquals(9, tv.volume)
+        assertTrue(transport.connections >= 2, "reopened after the hang-up, got ${transport.connections}")
+    }
+
+    @Test fun `a silent set is unconfirmed, ERR is a rejection`() = FakeTv(silentOnMute = true).use { tv ->
+        val client = SharpIpClient(SocketTransport("127.0.0.1", tv.port, 300))
+        assertFalse(client.muteOn(), "no OK came back, so unconfirmed"); assertTrue(tv.muted)
+        assertTrue(client.setVolume(5), "VOLM is still confirmed")
+        val errSet = SharpIpClient { "ERR\r\n".toByteArray(US_ASCII) }
+        assertFailsWith<ControlError> { errSet.muteOn() }
+    }
+
+    @Test fun `escape makes raw replies readable`() {
+        assertEquals("OK\\r\\n", Aquos.escape("OK\r\n".toByteArray(US_ASCII)))
+        assertEquals("(nothing)", Aquos.escape(ByteArray(0)))
+        assertEquals("\\x00", Aquos.escape(byteArrayOf(0)))
     }
 
     @Test fun `a refused login is an error, not a silent no-op`() = FakeTv(login = Pair("me", "pw")).use { tv ->
