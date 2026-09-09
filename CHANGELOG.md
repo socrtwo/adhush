@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
-## [Unreleased]
+## [0.7.2] - 2026-09-09
 ### Fixed
 - Sharp IP login: fields are ended with **CR**, not CRLF — the LC-46LE830U
   took the stray LF as the password and refused every login. The Android
