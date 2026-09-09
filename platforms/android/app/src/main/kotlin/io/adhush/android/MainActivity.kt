@@ -24,11 +24,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var settings: Settings
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                AdHushService.BROADCAST_STATUS -> findViewById<TextView>(R.id.status).text = intent.getStringExtra("text") ?: ""
+            val i = intent ?: return
+            when (i.action) {
+                AdHushService.BROADCAST_STATUS -> findViewById<TextView>(R.id.status).text = i.getStringExtra("text") ?: ""
                 AdHushService.BROADCAST_SURVEY -> {
                     log("— survey saved; press Share survey to send the numbers (no audio is stored) —")
-                    (intent.getStringExtra("summary") ?: "").lines().reversed().forEach { log(it) }
+                    (i.getStringExtra("summary") ?: "").lines().reversed().forEach { log(it) }
                 }
             }
         }
