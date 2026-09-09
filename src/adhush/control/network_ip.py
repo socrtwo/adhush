@@ -36,9 +36,12 @@ HttpExchange = Callable[[str, str, bytes | None, dict[str, str]], tuple[int, byt
 
 # Credentials are answered per connection because each command opens its own;
 # that also sidesteps the idle-disconnect timers these sets apply.
-_LOGIN_TERMINATOR = b"\r\n"
+# The LC-46LE830U ends each login field at CR; with CRLF the stray LF became the
+# password and the set answered "User Name or Password mismatch" (phone test,
+# 2026-09-09). Override per set with the ``login_terminator`` option.
+_LOGIN_TERMINATOR = b"\r"
 # Substrings a set sends when it refuses the credentials.
-_LOGIN_REJECTED = ("login incorrect", "denied", "invalid")
+_LOGIN_REJECTED = ("login incorrect", "denied", "invalid", "mismatch")
 
 
 class Stream(Protocol):
@@ -91,13 +94,16 @@ def _tcp_exchange(
     port: int,
     timeout_s: float,
     login: tuple[str, str] | None = None,
+    login_terminator: bytes = _LOGIN_TERMINATOR,
 ) -> TcpExchange:
     def exchange(payload: bytes) -> bytes:
         try:
             with socket.create_connection((host, port), timeout=timeout_s) as sock:
                 sock.settimeout(timeout_s)
                 if login is not None:
-                    perform_login(sock, *login, timeout_s=timeout_s)
+                    perform_login(
+                        sock, *login, terminator=login_terminator, timeout_s=timeout_s
+                    )
                 sock.sendall(payload)
                 try:
                     return sock.recv(4096)
@@ -153,6 +159,7 @@ class NetworkIpController(MuteController):
         login_id = str(options.get("login_id", ""))
         login_password = str(options.get("login_password", ""))
         login = (login_id, login_password) if login_id or login_password else None
+        login_terminator = str(options.get("login_terminator", "\r")).encode("ascii")
         if self._transport == "tcp":
             if tcp is not None:
                 self._tcp = tcp
@@ -160,7 +167,11 @@ class NetworkIpController(MuteController):
                 if not host:
                     raise ControlError("network_ip.host is required")
                 self._tcp = _tcp_exchange(
-                    host, int(options.get("port", 0) or 0), timeout_s, login
+                    host,
+                    int(options.get("port", 0) or 0),
+                    timeout_s,
+                    login,
+                    login_terminator,
                 )
         else:
             scheme = str(options.get("scheme", "http"))

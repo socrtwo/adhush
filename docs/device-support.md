@@ -51,6 +51,9 @@ value is untested. No controller uses `VOLM` yet.
 Internet Setup > Network Setup > IP Control Setup, which also sets the port and
 an optional login ID and password (p. 58). `network_ip` answers that handshake
 on every connection via `perform_login` and opens a connection per command.
+Login fields end with CR (`login_terminator = "\r"`, the default — with CRLF
+this set took the stray LF as the password and answered "User Name or
+Password mismatch").
 The Android app's first run against a real set found the firmware ignoring
 connections opened back-to-back, so the app holds one connection open
 (`platforms/android`); if `network_ip` shows the same symptom on this set,

@@ -69,10 +69,12 @@ Battery → Unrestricted) or Android may pause the service overnight.
   artifact) — this tree was written where the Android SDK cannot be
   downloaded, so CI is the compiler. First run on a phone (2026-09-09):
   installs, the settings screen works, and *Test TV* reached the set — it
-  answered `ERR` to `VOLM?` on the first connection and then nothing at all
-  on the connections opened right after it. The client now keeps one
-  connection open and treats silence as unconfirmed rather than rejected;
-  *Test TV* logs every raw exchange. Still untried: the microphone path
+  prompted `Login:` / `Password:` and answered `User Name or Password
+  mismatch. Connection Closed.` to credentials sent with CRLF-ended fields.
+  The client now ends fields with CR (falling back to CRLF once if refused),
+  recognises that wording as a refusal, keeps one connection open and treats
+  silence as unconfirmed rather than rejected; *Test TV* logs every raw
+  exchange. Not yet seen: a command answered. Still untried: the microphone path
   (`UNPROCESSED` vs `CAMCORDER`), the foreground-service lifecycle and the
   notification actions.
 - **Thresholds that need your room**: the mic silence detector's

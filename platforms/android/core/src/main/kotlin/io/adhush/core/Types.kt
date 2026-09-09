@@ -35,4 +35,4 @@ interface MuteController {
     fun close()
 }
 
-class ControlError(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+open class ControlError(message: String, cause: Throwable? = null) : RuntimeException(message, cause)

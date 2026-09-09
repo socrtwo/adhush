@@ -17,6 +17,7 @@ private class FakeTv(
     private val hangUpAfterEach: Boolean = false,
     private val silentOnMute: Boolean = false,
     private val promptDelayMs: Long = 0,
+    private val wantCrlf: Boolean = false,
 ) : AutoCloseable {
     val server = ServerSocket(0)
     val port get() = server.localPort
@@ -41,10 +42,17 @@ private class FakeTv(
                 if (login != null) {
                     if (promptDelayMs > 0) Thread.sleep(promptDelayMs)
                     out.write("Login:".toByteArray()); out.flush()
-                    val id = readLine(input)
-                    out.write("Password:".toByteArray()); out.flush()
-                    val pw = readLine(input)
-                    if (id != login.first || pw != login.second) { out.write("Login incorrect\r\n".toByteArray()); out.flush(); return }
+                    val id = readField(sock)
+                    out.write("\r\nPassword:".toByteArray()); out.flush()
+                    val pw = readField(sock)
+                    if (id != login.first || pw != login.second) {
+                        out.write("\r\nUser Name or Password mismatch. Connection Closed.\r\n".toByteArray()); out.flush()
+                        // Hang up like the set does, with a FIN the client can read past — unread
+                        // input would turn the close into a reset that discards our last words.
+                        while (input.available() > 0) input.read()
+                        sock.shutdownOutput(); Thread.sleep(50)
+                        return
+                    }
                     out.write("\r\n".toByteArray()); out.flush()
                 }
                 while (true) {
@@ -64,10 +72,21 @@ private class FakeTv(
                     if (hangUpAfterEach) break
                 }
     }
-    private fun readLine(input: java.io.InputStream): String {
+    /**
+     * Like the real set: a field ends at CR and nothing is stripped, so a client
+     * that sends CRLF hands the LF to the next field. With [wantCrlf] the fake
+     * instead insists on an LF after the CR, refusing when none follows.
+     */
+    private fun readField(sock: java.net.Socket): String? {
+        val input = sock.getInputStream()
         val sb = StringBuilder()
-        while (true) { val c = input.read(); if (c < 0 || c == '\n'.code) break; if (c != '\r'.code) sb.append(c.toChar()) }
-        return sb.toString().trim()
+        while (true) { val c = input.read(); if (c < 0) return null; if (c == '\r'.code) break; sb.append(c.toChar()) }
+        if (wantCrlf) {
+            val was = sock.soTimeout; sock.soTimeout = 200
+            val next = try { input.read() } catch (_: Exception) { -1 } finally { sock.soTimeout = was }
+            if (next != '\n'.code) return null
+        }
+        return sb.toString()
     }
     override fun close() { server.close() }
 }
@@ -127,10 +146,25 @@ class SharpTest {
             assertEquals(1, tv.connections)
         }
 
-    @Test fun `a refused login is an error, not a silent no-op`() = FakeTv(login = Pair("me", "pw")).use { tv ->
-        val client = SharpIpClient(SocketTransport("127.0.0.1", tv.port, 3000, Pair("me", "wrong")))
-        assertFailsWith<ControlError> { client.muteOn() }
+    @Test fun `a refused login is an error naming the set's words, not a silent no-op`() = FakeTv(login = Pair("me", "pw")).use { tv ->
+        val transport = SocketTransport("127.0.0.1", tv.port, 3000, Pair("me", "wrong"))
+        val e = assertFailsWith<ControlError> { SharpIpClient(transport).muteOn() }
+        assertTrue("mismatch" in (e.message ?: ""), e.message)
+        assertEquals(2, transport.connections, "CR refused, CRLF tried once, then given up")
     }
+
+    @Test fun `a set that wants CRLF-terminated login fields gets them on the second connection`() =
+        FakeTv(login = Pair("me", "pw"), wantCrlf = true).use { tv ->
+            val transport = SocketTransport("127.0.0.1", tv.port, 3000, Pair("me", "pw"))
+            val trace = ArrayList<String>(); transport.trace = { synchronized(trace) { trace.add(it) } }
+            val client = SharpIpClient(transport)
+            try { assertTrue(client.muteOn()) } catch (e: ControlError) { throw AssertionError("${e.message}; trace=$trace", e) }
+            assertTrue(tv.muted)
+            assertEquals(2, transport.connections)
+            assertTrue(transport.terminator.contentEquals(Aquos.CRLF))
+            client.muteOff(); assertFalse(tv.muted)
+            assertEquals(2, transport.connections, "the answer is remembered")
+        }
 
     @Test fun `unreachable set is a ControlError`() {
         assertFailsWith<ControlError> { SharpIpClient(SocketTransport("127.0.0.1", 1, 300)).muteOn() }

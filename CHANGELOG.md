@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [Unreleased]
+### Fixed
+- Sharp IP login: fields are ended with **CR**, not CRLF — the LC-46LE830U
+  took the stray LF as the password and refused every login. The Android
+  client falls back to CRLF once if a set refuses CR; `network_ip` gains a
+  `login_terminator` option (default `"\r"`). "User Name or Password
+  mismatch" now counts as a refusal on both platforms, so the app says
+  *rejected login* instead of *unreachable*.
+
 ## [0.7.1] - 2026-09-09
 ### Changed
 - Android: the Sharp client keeps **one connection** open and reconnects when

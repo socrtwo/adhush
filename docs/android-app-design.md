@@ -263,12 +263,22 @@ Never `VOICE_RECOGNITION` or `VOICE_COMMUNICATION`. Read in 4800-sample
 design first copied `network_ip.py`'s connection-per-command shape; the first
 run on a phone (2026-09-09) showed the LC-46LE830U answering the first
 connection and ignoring the ones opened moments later, so the app now holds
-one connection, answers the login handshake once on it exactly as
-`perform_login` does — read the prompt best-effort, send id + CRLF, read, send
-password + CRLF, treat only an explicit refusal as an error — and reconnects
+one connection, answers the login handshake once on it — read the prompt
+best-effort, send id + **CR**, read, send password + CR, treat only an explicit
+refusal as an error — and reconnects
 on end-of-stream, a socket error, or three silent replies in a row. The
 5-second `VOLM?` poll keeps it inside the 3-minute idle disconnect anyway.
 A silent reply is *unconfirmed*, not a rejection: only `ERR` is.
+
+The second phone run corrected the first reading: the set had not been
+ignoring connections, it had been refusing the login on every one —
+`User Name or Password mismatch. Connection Closed.` — and hanging up, which
+the first build read as an empty reply. Two causes, both fixed: "mismatch" was
+not in the refusal word list, and the fields were ended with CRLF, so on a set
+that ends a field at CR the stray LF became the password (the refusal arrived
+right after the id on one connection, before any password was sent). Fields
+now end with CR; if a set refuses that, the client tries CRLF once and
+remembers the answer.
 
 ```kotlin
 suspend fun send(cmd: String, param: String): String =

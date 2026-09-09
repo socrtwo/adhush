@@ -474,23 +474,35 @@ class TestIpControlLogin:
     def test_answers_prompts_in_order(self) -> None:
         stream = FakeStream([b"Login:", b"Password:", b"OK\r"])
         assert perform_login(stream, "socrtwo", "hunter2") == b"OK\r"
-        assert stream.sent == [b"socrtwo\r\n", b"hunter2\r\n"]
+        assert stream.sent == [b"socrtwo\r", b"hunter2\r"]
 
     def test_silent_firmware_still_receives_credentials(self) -> None:
         # A set that never prompts and never acknowledges is not an error.
         stream = FakeStream([])
         assert perform_login(stream, "u", "p") == b""
-        assert stream.sent == [b"u\r\n", b"p\r\n"]
+        assert stream.sent == [b"u\r", b"p\r"]
 
     def test_explicit_rejection_raises(self) -> None:
         stream = FakeStream([b"Login:", b"Password:", b"Login incorrect\r"])
         with pytest.raises(ControlError, match="rejected IP control login"):
             perform_login(stream, "socrtwo", "wrong")
 
+    def test_sharp_mismatch_wording_is_a_rejection(self) -> None:
+        # What an LC-46LE830U actually says (phone test, 2026-09-09).
+        stream = FakeStream(
+            [
+                b"Login:",
+                b"\r\nPassword:",
+                b"\r\nUser Name or Password mismatch. Connection Closed.\r\n",
+            ]
+        )
+        with pytest.raises(ControlError, match="rejected IP control login"):
+            perform_login(stream, "socrtwo", "wrong")
+
     def test_timeout_and_terminator_are_configurable(self) -> None:
         stream = FakeStream([b"Login:", b"Password:", b"OK\r"])
-        perform_login(stream, "u", "p", terminator=b"\r", timeout_s=3.0)
-        assert stream.sent == [b"u\r", b"p\r"]
+        perform_login(stream, "u", "p", terminator=b"\r\n", timeout_s=3.0)
+        assert stream.sent == [b"u\r\n", b"p\r\n"]
         assert stream.timeouts == [3.0]
 
 

@@ -18,8 +18,10 @@ import java.nio.charset.StandardCharsets.US_ASCII
  */
 object Aquos {
     const val DEFAULT_PORT = 10002
-    private val LOGIN_TERMINATOR = "\r\n".toByteArray(US_ASCII)
-    private val LOGIN_REJECTED = listOf("login incorrect", "denied", "invalid")
+    /** The LC-46LE830U ends each login field at CR: with CRLF the stray LF became the password ("mismatch"). */
+    val CR: ByteArray = "\r".toByteArray(US_ASCII)
+    val CRLF: ByteArray = "\r\n".toByteArray(US_ASCII)
+    private val LOGIN_REJECTED = listOf("login incorrect", "denied", "invalid", "mismatch")
 
     fun frame(command: String, parameter: String): ByteArray {
         require(command.length == 4) { "AQUOS command must be 4 characters: $command" }
@@ -50,19 +52,28 @@ object Aquos {
         }
     }
 
+    /** Thrown when the set explicitly refuses the credentials; a [ControlError] the caller may retry differently. */
+    class LoginRefused(loginId: String, val said: String) : ControlError("tv rejected IP control login for '$loginId': $said")
+
     fun performLogin(
         input: InputStream, output: OutputStream, loginId: String, password: String,
-        trace: ((String) -> Unit)? = null,
+        trace: ((String) -> Unit)? = null, terminator: ByteArray = CR,
     ): ByteArray {
         trace?.invoke("login prompt: " + escape(readSome(input)))
-        output.write(loginId.toByteArray(US_ASCII) + LOGIN_TERMINATOR); output.flush()
-        trace?.invoke("password prompt: " + escape(readSome(input)))
-        output.write(password.toByteArray(US_ASCII) + LOGIN_TERMINATOR); output.flush()
+        output.write(loginId.toByteArray(US_ASCII) + terminator); output.flush()
+        val pwPrompt = readSome(input)
+        trace?.invoke("password prompt: " + escape(pwPrompt))
+        refusalIn(pwPrompt)?.let { throw LoginRefused(loginId, it) }  // some firmware decides on the id alone
+        output.write(password.toByteArray(US_ASCII) + terminator); output.flush()
         val ack = readSome(input)
         trace?.invoke("login reply: " + escape(ack))
-        val text = String(ack, US_ASCII).trim().lowercase()
-        if (LOGIN_REJECTED.any { it in text }) throw ControlError("tv rejected IP control login for '$loginId'")
+        refusalIn(ack)?.let { throw LoginRefused(loginId, it) }
         return ack
+    }
+
+    private fun refusalIn(bytes: ByteArray): String? {
+        val text = String(bytes, US_ASCII).trim()
+        return if (LOGIN_REJECTED.any { it in text.lowercase() }) text else null
     }
 }
 
@@ -87,6 +98,10 @@ class SocketTransport(
     @Volatile var trace: ((String) -> Unit)? = null
     private var sock: Socket? = null
     private var silentInARow = 0
+    /** CR first (what the LC-46LE830U wants); flipped to CRLF once if the set refuses the login. */
+    var terminator: ByteArray = Aquos.CR
+        private set
+    private var terminatorSettled = false
     /** How many connections were opened; tests read it. */
     var connections = 0
         private set
@@ -120,19 +135,29 @@ class SocketTransport(
     }
 
     private fun open(): Socket {
-        val s = Socket()
-        try {
-            s.connect(InetSocketAddress(host, port), timeoutMs)
-            s.soTimeout = timeoutMs
-            s.tcpNoDelay = true
-            connections++
-            trace?.invoke("connected to $host:$port (connection $connections)")
-            login?.let { Aquos.performLogin(s.getInputStream(), s.getOutputStream(), it.first, it.second, trace) }
-            settle(s)
-        } catch (e: Exception) {
-            runCatching { s.close() }; throw e
+        while (true) {
+            val s = Socket()
+            try {
+                s.connect(InetSocketAddress(host, port), timeoutMs)
+                s.soTimeout = timeoutMs
+                s.tcpNoDelay = true
+                connections++
+                trace?.invoke("connected to $host:$port (connection $connections)")
+                login?.let {
+                    Aquos.performLogin(s.getInputStream(), s.getOutputStream(), it.first, it.second, trace, terminator)
+                    terminatorSettled = true
+                }
+                settle(s)
+                return s
+            } catch (e: Aquos.LoginRefused) {
+                runCatching { s.close() }
+                if (terminatorSettled || terminator.contentEquals(Aquos.CRLF)) throw e
+                terminator = Aquos.CRLF
+                trace?.invoke("login refused with CR-terminated fields; retrying with CRLF")
+            } catch (e: Exception) {
+                runCatching { s.close() }; throw e
+            }
         }
-        return s
     }
 
     /**
