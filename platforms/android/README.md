@@ -67,16 +67,15 @@ Battery → Unrestricted) or Android may pause the service overnight.
 - **App**: compiles and packages in CI (`.github/workflows/android.yml`
   assembles the debug APK and uploads it as the `adhush-android-debug`
   artifact) — this tree was written where the Android SDK cannot be
-  downloaded, so CI is the compiler. First run on a phone (2026-09-09):
-  installs, the settings screen works, and *Test TV* reached the set — it
-  prompted `Login:` / `Password:` and answered `User Name or Password
-  mismatch. Connection Closed.` to credentials sent with CRLF-ended fields.
-  The client now ends fields with CR (falling back to CRLF once if refused),
-  recognises that wording as a refusal, keeps one connection open and treats
-  silence as unconfirmed rather than rejected; *Test TV* logs every raw
-  exchange. Not yet seen: a command answered. Still untried: the microphone path
-  (`UNPROCESSED` vs `CAMCORDER`), the foreground-service lifecycle and the
-  notification actions.
+  downloaded, so CI is the compiler. **Verified on a phone against a real
+  LC-46LE830U (2026-09-09, third run):** login accepted (the set answers the
+  password with a bare CRLF), `VOLM?` → the current volume, `MUTE?` → `2`,
+  `MUTE1`/`MUTE2` → `OK`, `VOLM4`/`VOLM19` → `OK` — replies end with a
+  single CR. So volume tracking is automatic on this set and *Normal volume*
+  is only a fallback. The service starts and reports `listening
+  (UNPROCESSED)`. Not yet observed: a real commercial break end to end, the
+  notification actions, the Quick Settings tile, and a full evening of
+  battery and stability.
 - **Thresholds that need your room**: the mic silence detector's
   `quietMarginDb` (4 dB) and the fingerprint verify agreement (0.7) are
   starting guesses; see the design's testing section.

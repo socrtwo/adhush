@@ -376,10 +376,10 @@ plausible later feature, not part of this design.
 
 ## Open questions
 
-- Does this set answer `VOLM?` with the current volume, or `ERR`? The command
-  table marks query support per command in columns that did not survive text
-  extraction. Decides whether volume tracking is automatic or user-configured.
-  **Test first; the whole ducking design degrades gracefully either way.**
+- ~~Does this set answer `VOLM?` with the current volume, or `ERR`?~~
+  **Answered 2026-09-09: yes.** `VOLM?` → `19\r`, `MUTE?` → `2\r`, and
+  `VOLM4` / `MUTE1` / `MUTE2` each → `OK\r`. Volume tracking is automatic;
+  the user-set normal volume is only a fallback.
 - What ducked volume is genuinely inaudible yet still detectable in this room?
   Needs the room fixtures.
 - Does the TV's own audio processing (surround, DRC) compress the loudness

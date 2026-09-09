@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [Unreleased]
+### Verified
+- LC-46LE830U over IP from the Android app: login accepted, `VOLM?` and
+  `MUTE?` answer, mute/unmute and ducking confirmed `OK`. Documented in
+  `docs/device-support.md` and the Android README.
+
 ## [0.7.2] - 2026-09-09
 ### Fixed
 - Sharp IP login: fields are ended with **CR**, not CRLF — the LC-46LE830U

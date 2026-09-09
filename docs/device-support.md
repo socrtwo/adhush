@@ -44,8 +44,11 @@ one of them the set answers `ERR`, and `rs232_sharp.state()` degrades to
 parameter "Volume (0–60)" — absolute volume, not a step. That matters for any
 build whose microphone is downstream of the TV's own volume control, because
 *ducking* to a low level keeps the sensor alive where muting blinds it; see
-`docs/android-app-design.md`. Whether this set answers `VOLM?` with the current
-value is untested. No controller uses `VOLM` yet.
+`docs/android-app-design.md`. This set answers `VOLM?` with the current value
+(`19\r`) and `MUTE?` with `1`/`2` — verified from the Android app on
+2026-09-09; `VOLM<n>` and `MUTE1`/`MUTE2` reply `OK\r`. Of the Python
+controllers only `network_ip`'s profile uses `MUTE`; `VOLM` ducking lives in
+the Android app so far.
 
 **Network (same commands, no cable).** Enable under MENU > Initial Setup >
 Internet Setup > Network Setup > IP Control Setup, which also sets the port and
