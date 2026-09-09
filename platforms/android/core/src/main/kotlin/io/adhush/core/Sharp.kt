@@ -144,7 +144,13 @@ class SocketTransport(
                 connections++
                 trace?.invoke("connected to $host:$port (connection $connections)")
                 login?.let {
-                    Aquos.performLogin(s.getInputStream(), s.getOutputStream(), it.first, it.second, trace, terminator)
+                    try {
+                        Aquos.performLogin(s.getInputStream(), s.getOutputStream(), it.first, it.second, trace, terminator)
+                    } catch (e: IOException) {
+                        // The set hangs up on refused credentials, sometimes before its
+                        // words arrive: a dropped line mid-handshake means refused.
+                        throw Aquos.LoginRefused(it.first, "hung up during the login handshake (${e.message})")
+                    }
                     terminatorSettled = true
                 }
                 settle(s)

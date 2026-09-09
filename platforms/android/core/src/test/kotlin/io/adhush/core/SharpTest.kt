@@ -149,7 +149,9 @@ class SharpTest {
     @Test fun `a refused login is an error naming the set's words, not a silent no-op`() = FakeTv(login = Pair("me", "pw")).use { tv ->
         val transport = SocketTransport("127.0.0.1", tv.port, 3000, Pair("me", "wrong"))
         val e = assertFailsWith<ControlError> { SharpIpClient(transport).muteOn() }
-        assertTrue("mismatch" in (e.message ?: ""), e.message)
+        // The refusal text, or — when the hang-up beats it — the hang-up itself; never "unreachable".
+        assertTrue("rejected IP control login" in (e.message ?: ""), e.message)
+        assertTrue("mismatch" in (e.message ?: "") || "hung up" in (e.message ?: ""), e.message)
         assertEquals(2, transport.connections, "CR refused, CRLF tried once, then given up")
     }
 
