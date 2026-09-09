@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
-## [Unreleased]
+## [0.7.4] - 2026-09-09
 ### Fixed
 - Loudness detector (both cores): the baseline was taken from the first
   short-term value above the gate, which on a phone is a window still half
