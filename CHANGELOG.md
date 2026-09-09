@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
-## [Unreleased]
+## [0.7.3] - 2026-09-09
 ### Added
 - Android **room survey**: a 10-minute recording of what the detectors
   measure (dBFS, flatness, short-term LUFS, silence floor, confidences,
