@@ -18,7 +18,7 @@ class RoomSurvey(
     private val silenceCfg: MicSilenceConfig = MicSilenceConfig(),
 ) {
     data class Row(
-        val ts: Double, val dbfs: Double, val flatness: Double, val stLufs: Double,
+        val ts: Double, val dbfs: Double, val flatness: Double, val stLufs: Double, val baselineLufs: Double?,
         val floorDbfs: Double, val silenceConf: Double, val loudnessConf: Double, val ducked: Boolean,
     )
 
@@ -42,6 +42,7 @@ class RoomSurvey(
             dbfs = Dsp.blockDbfs(block.samples),
             flatness = Dsp.spectralFlatness(block.samples),
             stLufs = loudness.lastShortTerm,
+            baselineLufs = loudness.baselineLufs,
             floorDbfs = silence.floorDbfs,
             silenceConf = silence.vote(t).confidence,
             loudnessConf = loudness.vote(t).confidence,
@@ -54,10 +55,11 @@ class RoomSurvey(
     fun writeTsv(file: File) {
         file.parentFile?.mkdirs()
         file.bufferedWriter().use { w ->
-            w.write("ts_s\tdbfs\tflatness\tst_lufs\tfloor_dbfs\tsilence_conf\tloudness_conf\tducked\n")
+            w.write("ts_s\tdbfs\tflatness\tst_lufs\tbaseline_lufs\tfloor_dbfs\tsilence_conf\tloudness_conf\tducked\n")
             for (r in _rows) w.write(
-                String.format(Locale.US, "%.2f\t%.1f\t%.3f\t%.1f\t%.1f\t%.2f\t%.2f\t%d\n",
-                    r.ts, r.dbfs, r.flatness, r.stLufs, r.floorDbfs, r.silenceConf, r.loudnessConf, if (r.ducked) 1 else 0)
+                String.format(Locale.US, "%.2f\t%.1f\t%.3f\t%.1f\t%s\t%.1f\t%.2f\t%.2f\t%d\n",
+                    r.ts, r.dbfs, r.flatness, r.stLufs, r.baselineLufs?.let { String.format(Locale.US, "%.1f", it) } ?: "",
+                    r.floorDbfs, r.silenceConf, r.loudnessConf, if (r.ducked) 1 else 0)
             )
         }
     }

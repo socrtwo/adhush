@@ -8,6 +8,8 @@ data class LoudnessConfig(
     val windowS: Double = 1.5,
     val deltaLufs: Double = 2.5,
     val baselineS: Double = 120.0,
+    /** Elevated longer than any ad pod: the baseline is wrong and may follow. */
+    val maxElevatedS: Double = 180.0,
 )
 
 /**
@@ -22,13 +24,17 @@ class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Det
     private var weightsKey: Pair<Int, Int>? = null
     private val window = ArrayDeque<Pair<Double, Double>>()  // (duration, weighted mean-square)
     private var windowDur = 0.0
-    private var baselineLufs: Double? = null
+    var baselineLufs: Double? = null
+        private set
     private var observedS = 0.0
+    private var ungatedS = 0.0   // consecutive seconds with the short-term value above the gate
+    private var elevatedS = 0.0  // consecutive seconds above baseline + delta/2
     var lastShortTerm = -70.0
         private set
 
     override fun warmup() {
-        window.clear(); windowDur = 0.0; baselineLufs = null; observedS = 0.0; lastShortTerm = -70.0
+        window.clear(); windowDur = 0.0; baselineLufs = null; observedS = 0.0
+        ungatedS = 0.0; elevatedS = 0.0; lastShortTerm = -70.0
     }
 
     private val warm: Boolean get() = baselineLufs != null && observedS >= 4 * cfg.windowS
@@ -72,10 +78,21 @@ class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Det
         if (meanMs <= 0.0) { lastShortTerm = -70.0; return }
         lastShortTerm = -0.691 + 10.0 * log10(meanMs)
 
-        if (lastShortTerm <= SILENCE_GATE_LUFS) return
+        if (lastShortTerm <= SILENCE_GATE_LUFS) { ungatedS = 0.0; return }
+        ungatedS += block.duration
         val baseline = baselineLufs
-        if (baseline == null) { baselineLufs = lastShortTerm; return }
-        if (lastShortTerm - baseline > cfg.deltaLufs / 2) return  // freeze while elevated
+        if (baseline == null) {
+            // Only once the whole window is un-gated programme: a window still
+            // filling with the mic's start-up silence reads low and would freeze it there.
+            if (ungatedS >= cfg.windowS) baselineLufs = lastShortTerm
+            return
+        }
+        if (lastShortTerm - baseline > cfg.deltaLufs / 2) {
+            // Freeze while elevated (suspected ad) — unless it has outlasted any ad
+            // pod, which means the baseline itself is wrong and must follow.
+            elevatedS += block.duration
+            if (elevatedS < cfg.maxElevatedS) return
+        } else elevatedS = 0.0
         val alpha = min(1.0, block.duration / cfg.baselineS)
         baselineLufs = baseline + alpha * (lastShortTerm - baseline)
     }

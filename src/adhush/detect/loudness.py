@@ -6,6 +6,13 @@ high shelf). Absolute values track LUFS closely enough for deltas, which is
 all fusion consumes. The program baseline is a slow EMA that freezes while
 loudness is elevated, so a long hot ad pod cannot drag the baseline up — and
 a set with aggressive DRC simply yields small deltas rather than false ones.
+
+Two guards learned from a phone in a living room (2026-09-09): the baseline is
+not taken until a whole window of un-gated audio has been heard, because the
+first short-term values — a window still half full of the microphone's start-up
+silence — read several dB low and froze the baseline there for good; and an
+elevation that outlasts any ad pod (``max_elevated_s``) unfreezes the baseline,
+so a wrong one recovers instead of voting "ad" forever.
 """
 
 from __future__ import annotations
@@ -50,6 +57,8 @@ class LoudnessDetector(Detector):
         self._window_dur = 0.0
         self._baseline_lufs: float | None = None
         self._observed_s = 0.0
+        self._ungated_s = 0.0  # consecutive seconds with the short-term value above the gate
+        self._elevated_s = 0.0  # consecutive seconds spent above baseline + delta/2
         self._last_short_term = -70.0
 
     def warmup(self) -> None:
@@ -57,7 +66,13 @@ class LoudnessDetector(Detector):
         self._window_dur = 0.0
         self._baseline_lufs = None
         self._observed_s = 0.0
+        self._ungated_s = 0.0
+        self._elevated_s = 0.0
         self._last_short_term = -70.0
+
+    @property
+    def baseline_lufs(self) -> float | None:
+        return self._baseline_lufs
 
     @property
     def _warm(self) -> bool:
@@ -96,13 +111,24 @@ class LoudnessDetector(Detector):
         self._last_short_term = -0.691 + 10.0 * math.log10(mean_ms)
 
         if self._last_short_term <= _SILENCE_GATE_LUFS:
+            self._ungated_s = 0.0
             return
+        self._ungated_s += event.duration
         if self._baseline_lufs is None:
-            self._baseline_lufs = self._last_short_term
+            # Only once the whole window is un-gated program: a window still
+            # filling with start-up silence reads low and would freeze it there.
+            if self._ungated_s >= self._cfg.window_s:
+                self._baseline_lufs = self._last_short_term
             return
-        # Freeze the baseline while loudness is elevated (suspected ad).
+        # Freeze the baseline while loudness is elevated (suspected ad) — unless
+        # it has been elevated longer than any ad pod, which means the baseline
+        # itself is wrong and must be allowed to follow.
         if self._last_short_term - self._baseline_lufs > self._cfg.delta_lufs / 2:
-            return
+            self._elevated_s += event.duration
+            if self._elevated_s < self._cfg.max_elevated_s:
+                return
+        else:
+            self._elevated_s = 0.0
         alpha = min(1.0, event.duration / self._cfg.baseline_s)
         self._baseline_lufs += alpha * (self._last_short_term - self._baseline_lufs)
 

@@ -29,6 +29,7 @@ high_cpm = 40.0     # ...1.0 confidence here
 [detect.loudness]
 window_s = 1.5      # short window: quick unmute matters more than R128's 3 s
 delta_lufs = 2.5
+max_elevated_s = 180  # elevated longer than any ad pod: the baseline is wrong, let it follow
 
 [detect.black_frame]
 luma_threshold = 16

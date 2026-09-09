@@ -18,6 +18,24 @@ private class FakeController : MuteController {
 }
 
 class SilenceAndEngineTest {
+
+    private fun tone(i: Int, amp: Double, hz: Double = 440.0, n: Int = 4_800, rate: Int = 48_000): AudioBlock =
+        AudioBlock(i * n.toDouble() / rate, FloatArray(n) { k -> (amp * kotlin.math.sin(2 * Math.PI * hz * (i * n + k) / rate)).toFloat() }, rate)
+
+    @Test fun `loudness baseline ignores the mic start-up ramp and recovers from a stuck elevation`() {
+        val d = LoudnessDetector(LoudnessConfig(windowS = 1.5, baselineS = 20.0, maxElevatedS = 60.0)); d.warmup()
+        var i = 0
+        repeat(5) { d.observeAudio(AudioBlock(i * 0.1, FloatArray(4_800), 48_000)); i++ }   // 0.5 s of nothing
+        repeat(150) { d.observeAudio(tone(i, 0.1)); i++ }                                    // 15 s of programme
+        val settled = d.vote(i * 0.1)
+        assertEquals(0.0, settled.confidence, settled.reason)
+        assertTrue(kotlin.math.abs(d.baselineLufs!! - d.lastShortTerm) < 0.2, "baseline taken from the full window")
+        repeat(590) { d.observeAudio(tone(i, 0.35, 880.0)); i++ }                            // 59 s hot: frozen
+        assertEquals(1.0, d.vote(i * 0.1).confidence)
+        repeat(1200) { d.observeAudio(tone(i, 0.35, 880.0)); i++ }                           // two more minutes: follows
+        assertTrue(d.vote(i * 0.1).confidence < 0.05, d.vote(i * 0.1).reason)
+    }
+
     private val rate = 48_000
     private val rnd = Random(3)
 

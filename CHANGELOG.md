@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [Unreleased]
+### Fixed
+- Loudness detector (both cores): the baseline was taken from the first
+  short-term value above the gate, which on a phone is a window still half
+  full of the microphone's start-up silence — several dB low — and the
+  freeze-while-elevated rule then kept it there for good. The first room
+  survey showed the detector at full confidence 83% of the time. The
+  baseline now waits for a whole un-gated window, and an elevation longer
+  than `max_elevated_s` (180 s, longer than any ad pod) unfreezes it.
+- Room survey gains a `baseline_lufs` column so this is visible.
+
 ## [0.7.3] - 2026-09-09
 ### Added
 - Android **room survey**: a 10-minute recording of what the detectors

@@ -30,7 +30,7 @@ class SurveyTest {
         val tmp = File.createTempFile("survey", ".tsv"); tmp.deleteOnExit()
         survey.writeTsv(tmp)
         val lines = tmp.readLines()
-        assertEquals("ts_s\tdbfs\tflatness\tst_lufs\tfloor_dbfs\tsilence_conf\tloudness_conf\tducked", lines[0])
+        assertEquals("ts_s\tdbfs\tflatness\tst_lufs\tbaseline_lufs\tfloor_dbfs\tsilence_conf\tloudness_conf\tducked", lines[0])
         assertEquals(151, lines.size)
         assertTrue(lines[1].startsWith("0.00\t"), lines[1])
         assertTrue(lines[130].endsWith("\t0") || lines[130].endsWith("\t1"))

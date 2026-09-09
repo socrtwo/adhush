@@ -68,6 +68,9 @@ class LoudnessConfig:
     window_s: float = 1.5
     delta_lufs: float = 2.5
     baseline_s: float = 120.0
+    # Elevated loudness lasting longer than any ad pod means the baseline is
+    # wrong (it was taken during a quiet passage); after this long it may follow.
+    max_elevated_s: float = 180.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -349,6 +352,7 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
             window_s=float(loud.get("window_s", _LOUDNESS_DEFAULTS.window_s)),
             delta_lufs=float(loud.get("delta_lufs", _LOUDNESS_DEFAULTS.delta_lufs)),
             baseline_s=float(loud.get("baseline_s", _LOUDNESS_DEFAULTS.baseline_s)),
+            max_elevated_s=float(loud.get("max_elevated_s", _LOUDNESS_DEFAULTS.max_elevated_s)),
         ),
         logo_absence=LogoAbsenceConfig(
             roi=_parse_roi(logo.get("roi"), profile_roi),
