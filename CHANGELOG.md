@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
 ## [Unreleased]
+### Added
+- Android **room survey**: a 10-minute recording of what the detectors
+  measure (dBFS, flatness, short-term LUFS, silence floor, confidences,
+  ducked flag) — numbers, never audio — with a digest in the app and a
+  *Share survey* button that hands the TSV to any app via FileProvider.
+  `RoomSurvey` lives in the core so the digest is unit-tested.
+
 ### Verified
 - LC-46LE830U over IP from the Android app: login accepted, `VOLM?` and
   `MUTE?` answer, mute/unmute and ducking confirmed `OK`. Documented in

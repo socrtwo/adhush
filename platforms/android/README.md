@@ -80,6 +80,19 @@ Battery → Unrestricted) or Android may pause the service overnight.
   `quietMarginDb` (4 dB) and the fingerprint verify agreement (0.7) are
   starting guesses; see the design's testing section.
 
+## Room survey
+
+**Survey room (10 min)** listens for ten minutes (starting the service if it
+is not running) and records, per 100 ms block, what the detectors measure:
+level in dBFS, spectral flatness, short-term LUFS, the silence detector's
+running floor, both detectors' confidence, and whether the set was ducked at
+the time. Numbers only — no audio is ever stored. When it finishes, the app
+prints a digest (level percentiles, how far the programme sits above the
+floor, how often each detector would have fired, a one-line verdict) and
+**Share survey** hands the TSV to mail, Drive or messages. Run it during a
+normal show with the phone where it will live; the digest tells you whether
+`quietMarginDb` and the mic placement are right for this room.
+
 ## Thin client (still supported)
 
 The installable web app served by a Pi or PC core (`docs/release.md`) remains

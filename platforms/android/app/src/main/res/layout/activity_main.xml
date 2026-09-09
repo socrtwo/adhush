@@ -44,6 +44,10 @@
             <Button android:id="@+id/notAd" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="✗ Not an ad" />
             <Button android:id="@+id/isAd" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="✓ Is an ad" />
         </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/survey" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Survey room (10 min)" />
+            <Button android:id="@+id/share" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Share survey" />
+        </LinearLayout>
 
         <TextView android:id="@+id/log" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:paddingTop="14dp" android:textSize="12sp" android:fontFamily="monospace" />

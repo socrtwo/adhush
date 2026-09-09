@@ -21,6 +21,7 @@ import io.adhush.core.ControlError
 import io.adhush.core.Engine
 import io.adhush.core.FileFingerprintStore
 import io.adhush.core.MuteController
+import io.adhush.core.RoomSurvey
 import io.adhush.core.Override as CoreOverride
 import io.adhush.core.SharpController
 import io.adhush.core.SharpIpClient
@@ -45,6 +46,7 @@ class AdHushService : Service() {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var lastStatus: Status? = null
+    @Volatile private var survey: RoomSurvey? = null
     private val ticker = object : Runnable {
         override fun run() { tick(); main.postDelayed(this, POLL_MS) }
     }
@@ -63,7 +65,7 @@ class AdHushService : Service() {
         // must be answered with startForeground, or Android 8+ kills the app.
         startForegroundWithType(buildNotification(lastText))
         val action = intent?.action
-        if (engine == null && action != null) {  // a control action, but nothing is running
+        if (engine == null && action != null && action != ACTION_SURVEY) {  // a control action, but nothing is running
             if (action != ACTION_STOP) update("not running — press Start in the app")
             stopSelf()
             return START_NOT_STICKY
@@ -73,6 +75,11 @@ class AdHushService : Service() {
             ACTION_IS_AD -> { io.execute { engine?.confirmAd(now()) }; return START_STICKY }
             ACTION_RESTORE -> { io.execute { runCatching { controller?.restore() }; refresh() }; return START_STICKY }
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
+            ACTION_SURVEY -> {
+                if (engine == null) start()
+                if (engine != null && survey == null) { survey = RoomSurvey(SURVEY_S); update("surveying the room: 0:00 / ${clock(SURVEY_S)}") }
+                return START_STICKY
+            }
         }
         if (engine == null) start()
         return START_STICKY
@@ -103,15 +110,34 @@ class AdHushService : Service() {
                 main.post { update("TV unreachable: ${e.message}") }
             }
         }
-        val m = MicSource(this) { block -> eng.onAudio(block) }
+        val m = MicSource(this) { block ->
+            eng.onAudio(block)
+            survey?.let { if (it.feed(block, controller?.ducked == true)) finishSurvey(it) }
+        }
         try { m.start() } catch (e: Exception) { update("mic failed: ${e.message}"); stopSelf(); return }
         mic = m
         update("listening (${m.sourceName})")
         main.postDelayed(ticker, POLL_MS)
     }
 
+    /** Numbers only — the survey never stores audio. Written off the mic thread, then handed to the app. */
+    private fun finishSurvey(done: RoomSurvey) {
+        survey = null
+        io.execute {
+            val file = File(File(filesDir, SURVEY_DIR), "survey-" + java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US).format(java.util.Date()) + ".tsv")
+            val summary = try { done.writeTsv(file); done.summary() } catch (e: Exception) { "survey could not be saved: ${e.message}" }
+            main.post {
+                update("survey done — open the app for the digest")
+                sendBroadcast(Intent(BROADCAST_SURVEY).setPackage(packageName).putExtra("summary", summary).putExtra("file", file.absolutePath))
+            }
+        }
+    }
+
+    private fun clock(seconds: Double): String = "%d:%02d".format(java.util.Locale.US, (seconds / 60).toInt(), (seconds % 60).toInt())
+
     /** Every few seconds: follow the remote, and treat a dead mic while ducked as a reason to restore. */
     private fun tick() {
+        survey?.let { update("surveying the room: ${clock(it.elapsedS)} / ${clock(SURVEY_S)} · ${lastStatus?.let(::describe) ?: "listening"}") }
         val ctl = controller ?: return
         val m = mic ?: return
         io.execute {
@@ -203,7 +229,11 @@ class AdHushService : Service() {
         const val ACTION_IS_AD = "io.adhush.android.IS_AD"
         const val ACTION_RESTORE = "io.adhush.android.RESTORE"
         const val ACTION_STOP = "io.adhush.android.STOP"
+        const val ACTION_SURVEY = "io.adhush.android.SURVEY"
         const val BROADCAST_STATUS = "io.adhush.android.STATUS"
+        const val BROADCAST_SURVEY = "io.adhush.android.SURVEY_DONE"
+        const val SURVEY_DIR = "survey"
+        const val SURVEY_S = 600.0
         const val POLL_MS = 5_000L
         const val MIC_DEAD_MS = 8_000L
     }

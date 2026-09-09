@@ -24,9 +24,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var settings: Settings
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            findViewById<TextView>(R.id.status).text = intent?.getStringExtra("text") ?: ""
+            when (intent?.action) {
+                AdHushService.BROADCAST_STATUS -> findViewById<TextView>(R.id.status).text = intent.getStringExtra("text") ?: ""
+                AdHushService.BROADCAST_SURVEY -> {
+                    log("— survey saved; press Share survey to send the numbers (no audio is stored) —")
+                    (intent.getStringExtra("summary") ?: "").lines().reversed().forEach { log(it) }
+                }
+            }
         }
     }
+    private var pendingAction: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,15 +42,30 @@ class MainActivity : AppCompatActivity() {
         load()
         findViewById<Button>(R.id.save).setOnClickListener { save(); log("saved") }
         findViewById<Button>(R.id.test).setOnClickListener { save(); testTv() }
-        findViewById<Button>(R.id.start).setOnClickListener { save(); startWithPermissions() }
+        findViewById<Button>(R.id.start).setOnClickListener { save(); startWithPermissions(null) }
         findViewById<Button>(R.id.stop).setOnClickListener { serviceAction(AdHushService.ACTION_STOP) }
         findViewById<Button>(R.id.notAd).setOnClickListener { serviceAction(AdHushService.ACTION_NOT_AD) }
         findViewById<Button>(R.id.isAd).setOnClickListener { serviceAction(AdHushService.ACTION_IS_AD) }
+        findViewById<Button>(R.id.survey).setOnClickListener { save(); startWithPermissions(AdHushService.ACTION_SURVEY) }
+        findViewById<Button>(R.id.share).setOnClickListener { shareSurvey() }
+    }
+
+    /** The newest survey file, handed to whatever the user picks (mail, Drive, messages) through FileProvider. */
+    private fun shareSurvey() {
+        val dir = java.io.File(filesDir, AdHushService.SURVEY_DIR)
+        val file = dir.listFiles { f -> f.name.endsWith(".tsv") }?.maxByOrNull { it.lastModified() }
+        if (file == null) { log("no survey yet — press Survey room first"); return }
+        val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", file)
+        val send = Intent(Intent.ACTION_SEND).setType("text/tab-separated-values")
+            .putExtra(Intent.EXTRA_STREAM, uri).putExtra(Intent.EXTRA_SUBJECT, "AdHush room survey ${file.name}")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        startActivity(Intent.createChooser(send, "Share survey"))
     }
 
     override fun onResume() {
         super.onResume()
-        ContextCompat.registerReceiver(this, receiver, IntentFilter(AdHushService.BROADCAST_STATUS), ContextCompat.RECEIVER_NOT_EXPORTED)
+        val filter = IntentFilter(AdHushService.BROADCAST_STATUS).apply { addAction(AdHushService.BROADCAST_SURVEY) }
+        ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     override fun onPause() { unregisterReceiver(receiver); super.onPause() }
@@ -102,18 +124,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startWithPermissions() {
+    private fun startWithPermissions(action: String?) {
+        pendingAction = action
         val wanted = mutableListOf(Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33) wanted.add(Manifest.permission.POST_NOTIFICATIONS)
         val missing = wanted.filter { ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) { ActivityCompat.requestPermissions(this, missing.toTypedArray(), 1); return }
-        ContextCompat.startForegroundService(this, Intent(this, AdHushService::class.java))
-        log("started")
+        val intent = Intent(this, AdHushService::class.java)
+        pendingAction?.let { intent.setAction(it) }
+        ContextCompat.startForegroundService(this, intent)
+        log(if (pendingAction == AdHushService.ACTION_SURVEY) "survey started — 10 minutes of normal TV, phone where it will live" else "started")
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 1 && grantResults.all { it == android.content.pm.PackageManager.PERMISSION_GRANTED }) startWithPermissions()
+        if (requestCode == 1 && grantResults.all { it == android.content.pm.PackageManager.PERMISSION_GRANTED }) startWithPermissions(pendingAction)
         else log("microphone permission is required")
     }
 
