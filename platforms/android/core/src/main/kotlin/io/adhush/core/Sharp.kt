@@ -71,7 +71,7 @@ object Aquos {
         return ack
     }
 
-    private fun refusalIn(bytes: ByteArray): String? {
+    fun refusalIn(bytes: ByteArray): String? {
         val text = String(bytes, US_ASCII).trim()
         return if (LOGIN_REJECTED.any { it in text.lowercase() }) text else null
     }
@@ -143,17 +143,18 @@ class SocketTransport(
                 s.tcpNoDelay = true
                 connections++
                 trace?.invoke("connected to $host:$port (connection $connections)")
-                login?.let {
-                    try {
-                        Aquos.performLogin(s.getInputStream(), s.getOutputStream(), it.first, it.second, trace, terminator)
-                    } catch (e: IOException) {
-                        // The set hangs up on refused credentials, sometimes before its
-                        // words arrive: a dropped line mid-handshake means refused.
-                        throw Aquos.LoginRefused(it.first, "hung up during the login handshake (${e.message})")
-                    }
-                    terminatorSettled = true
+                val id = login?.first
+                try {
+                    login?.let { Aquos.performLogin(s.getInputStream(), s.getOutputStream(), it.first, it.second, trace, terminator) }
+                    settle(s, id)
+                } catch (e: IOException) {
+                    // The set hangs up on refused credentials, sometimes before its
+                    // words arrive: a dropped line during or right after the handshake
+                    // means refused.
+                    if (id == null) throw e
+                    throw Aquos.LoginRefused(id, "hung up during the login handshake (${e.message})")
                 }
-                settle(s)
+                if (id != null) terminatorSettled = true
                 return s
             } catch (e: Aquos.LoginRefused) {
                 runCatching { s.close() }
@@ -172,13 +173,16 @@ class SocketTransport(
      * taken for the first command's reply, and every reply after it would be
      * one message behind.
      */
-    private fun settle(s: Socket) {
+    private fun settle(s: Socket, loginId: String?) {
         s.soTimeout = settleMs
         try {
             while (true) {
                 val late = Aquos.readSome(s.getInputStream())
                 if (late.isEmpty()) break
                 trace?.invoke("after login: " + Aquos.escape(late))
+                // A refusal that arrives late (a slow set, or a prompt read that timed out
+                // and shifted the handshake by one message) is still a refusal.
+                if (loginId != null) Aquos.refusalIn(late)?.let { throw Aquos.LoginRefused(loginId, it) }
             }
         } finally { s.soTimeout = timeoutMs }
     }
