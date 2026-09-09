@@ -82,6 +82,7 @@ class SocketTransport(
     private val port: Int,
     private val timeoutMs: Int = 2000,
     private val login: Pair<String, String>? = null,
+    private val settleMs: Int = 300,
 ) : AquosTransport, AutoCloseable {
     @Volatile var trace: ((String) -> Unit)? = null
     private var sock: Socket? = null
@@ -127,10 +128,28 @@ class SocketTransport(
             connections++
             trace?.invoke("connected to $host:$port (connection $connections)")
             login?.let { Aquos.performLogin(s.getInputStream(), s.getOutputStream(), it.first, it.second, trace) }
+            settle(s)
         } catch (e: Exception) {
             runCatching { s.close() }; throw e
         }
         return s
+    }
+
+    /**
+     * Read until the line is quiet before the first command. A prompt or
+     * acknowledgement that arrives after its read timed out would otherwise be
+     * taken for the first command's reply, and every reply after it would be
+     * one message behind.
+     */
+    private fun settle(s: Socket) {
+        s.soTimeout = settleMs
+        try {
+            while (true) {
+                val late = Aquos.readSome(s.getInputStream())
+                if (late.isEmpty()) break
+                trace?.invoke("after login: " + Aquos.escape(late))
+            }
+        } finally { s.soTimeout = timeoutMs }
     }
 
     /** A late reply to an earlier command must not be read as this one's answer. */

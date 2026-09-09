@@ -16,6 +16,7 @@ private class FakeTv(
     private val volumeQueryAnswers: Boolean = true,
     private val hangUpAfterEach: Boolean = false,
     private val silentOnMute: Boolean = false,
+    private val promptDelayMs: Long = 0,
 ) : AutoCloseable {
     val server = ServerSocket(0)
     val port get() = server.localPort
@@ -28,15 +29,22 @@ private class FakeTv(
             while (true) {
                 val sock = server.accept()
                 connections++
-                sock.soTimeout = 2000
+                // Generous: a slow CI runner must not look like a client that went quiet.
+                sock.soTimeout = 10_000
+                try { serve(sock) } catch (_: Exception) {} finally { runCatching { sock.close() } }
+            }
+        } catch (_: Exception) {}
+    }
+    private fun serve(sock: java.net.Socket) {
                 val input = sock.getInputStream(); val out = sock.getOutputStream()
                 val buf = ByteArray(256)
                 if (login != null) {
+                    if (promptDelayMs > 0) Thread.sleep(promptDelayMs)
                     out.write("Login:".toByteArray()); out.flush()
                     val id = readLine(input)
                     out.write("Password:".toByteArray()); out.flush()
                     val pw = readLine(input)
-                    if (id != login.first || pw != login.second) { out.write("Login incorrect\r\n".toByteArray()); out.flush(); sock.close(); continue }
+                    if (id != login.first || pw != login.second) { out.write("Login incorrect\r\n".toByteArray()); out.flush(); return }
                     out.write("\r\n".toByteArray()); out.flush()
                 }
                 while (true) {
@@ -55,9 +63,6 @@ private class FakeTv(
                     if (reply.isNotEmpty()) { out.write(reply.toByteArray()); out.flush() }
                     if (hangUpAfterEach) break
                 }
-                sock.close()
-            }
-        } catch (_: Exception) {}
     }
     private fun readLine(input: java.io.InputStream): String {
         val sb = StringBuilder()
@@ -75,10 +80,13 @@ class SharpTest {
     }
 
     @Test fun `login handshake, discrete mute, and volume over a real socket`() = FakeTv(login = Pair("me", "pw")).use { tv ->
-        val client = SharpIpClient(SocketTransport("127.0.0.1", tv.port, 1500, Pair("me", "pw")))
-        client.muteOn(); assertTrue(tv.muted)
-        client.muteOff(); assertFalse(tv.muted)
-        client.setVolume(4); assertEquals(4, tv.volume)
+        val transport = SocketTransport("127.0.0.1", tv.port, 3000, Pair("me", "pw"))
+        val trace = ArrayList<String>()
+        transport.trace = { synchronized(trace) { trace.add(it) } }
+        val client = SharpIpClient(transport)
+        client.muteOn(); assertTrue(tv.muted, "after MUTE1: $trace")
+        client.muteOff(); assertFalse(tv.muted, "after MUTE2: $trace; set got ${tv.received}")
+        client.setVolume(4); assertEquals(4, tv.volume, "after VOLM4: $trace")
         assertEquals(4, client.queryVolume())
         assertEquals(false, client.queryMute())
         assertTrue(tv.received.contains("MUTE1   \r"))
@@ -86,7 +94,7 @@ class SharpTest {
     }
 
     @Test fun `a set that hangs up is reconnected transparently`() = FakeTv(hangUpAfterEach = true).use { tv ->
-        val transport = SocketTransport("127.0.0.1", tv.port, 1500)
+        val transport = SocketTransport("127.0.0.1", tv.port, 3000)
         val client = SharpIpClient(transport)
         client.muteOn(); assertTrue(tv.muted)
         Thread.sleep(50)   // let the fake finish closing before the next exchange
@@ -109,8 +117,18 @@ class SharpTest {
         assertEquals("\\x00", Aquos.escape(byteArrayOf(0)))
     }
 
+    @Test fun `a login prompt slower than the read timeout does not shift every later reply`() =
+        FakeTv(login = Pair("me", "pw"), promptDelayMs = 500).use { tv ->
+            // The prompt read times out at 200 ms; without settling, the late prompt and
+            // acknowledgement would be read as the replies to MUTE1 and MUTE2.
+            val client = SharpIpClient(SocketTransport("127.0.0.1", tv.port, 200, Pair("me", "pw"), settleMs = 300))
+            assertTrue(client.muteOn(), "MUTE1 confirmed with the set's own OK"); assertTrue(tv.muted)
+            assertTrue(client.muteOff()); assertFalse(tv.muted)
+            assertEquals(1, tv.connections)
+        }
+
     @Test fun `a refused login is an error, not a silent no-op`() = FakeTv(login = Pair("me", "pw")).use { tv ->
-        val client = SharpIpClient(SocketTransport("127.0.0.1", tv.port, 1500, Pair("me", "wrong")))
+        val client = SharpIpClient(SocketTransport("127.0.0.1", tv.port, 3000, Pair("me", "wrong")))
         assertFailsWith<ControlError> { client.muteOn() }
     }
 
@@ -121,7 +139,7 @@ class SharpTest {
     @Test fun `ducking persists the pre-duck volume, restores it, and the remote wins`() = FakeTv().use { tv ->
         tv.volume = 27
         val persist = MemoryDuckPersistence()
-        val ctl = SharpController(SharpIpClient(SocketTransport("127.0.0.1", tv.port, 1500)), persist, duckLevel = 4)
+        val ctl = SharpController(SharpIpClient(SocketTransport("127.0.0.1", tv.port, 3000)), persist, duckLevel = 4)
         ctl.duck()
         assertEquals(4, tv.volume); assertEquals(27, persist.load()); assertTrue(ctl.ducked)
         assertFalse(ctl.pollUserOverride(), "still at the duck level: no override")
@@ -135,13 +153,13 @@ class SharpTest {
     @Test fun `a crash while ducked is repaired on the next start`() = FakeTv().use { tv ->
         val persist = MemoryDuckPersistence(); persist.save(31)
         tv.volume = 4
-        val ctl = SharpController(SharpIpClient(SocketTransport("127.0.0.1", tv.port, 1500)), persist)
+        val ctl = SharpController(SharpIpClient(SocketTransport("127.0.0.1", tv.port, 3000)), persist)
         assertTrue(ctl.recoverOnStart())
         assertEquals(31, tv.volume); assertNull(persist.load())
     }
 
     @Test fun `when the set answers ERR to VOLM the configured normal volume is used`() = FakeTv(volumeQueryAnswers = false).use { tv ->
-        val ctl = SharpController(SharpIpClient(SocketTransport("127.0.0.1", tv.port, 1500)), MemoryDuckPersistence(), duckLevel = 3, normalVolume = 22)
+        val ctl = SharpController(SharpIpClient(SocketTransport("127.0.0.1", tv.port, 3000)), MemoryDuckPersistence(), duckLevel = 3, normalVolume = 22)
         ctl.duck(); assertEquals(3, tv.volume)
         ctl.restore(); assertEquals(22, tv.volume)
     }
