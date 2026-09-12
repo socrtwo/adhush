@@ -18,6 +18,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import io.adhush.core.Assembly
 import io.adhush.core.ControlError
+import io.adhush.core.DuckController
+import io.adhush.core.StepVolumeController
 import io.adhush.core.Engine
 import io.adhush.core.FileFingerprintStore
 import io.adhush.core.MuteController
@@ -40,8 +42,8 @@ import java.util.concurrent.Executors
 class AdHushService : Service() {
     private lateinit var settings: Settings
     private var engine: Engine? = null
-    private var controller: SharpController? = null
-    private var transport: SocketTransport? = null
+    private var controller: DuckController? = null
+    private var transport: AutoCloseable? = null
     private var mic: MicSource? = null
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -92,12 +94,20 @@ class AdHushService : Service() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             update("microphone permission missing"); stopSelf(); return
         }
-        val transport = SocketTransport(settings.host, settings.port, 2500, settings.login)
-        this.transport = transport
-        val ctl = SharpController(
-            SharpIpClient(transport), PrefsDuckPersistence(this),
-            duckLevel = settings.duckLevel, normalVolume = settings.normalVolume, useMuteInstead = settings.useMute,
-        )
+        val ctl: DuckController = when (settings.control) {
+            "serial" -> {
+                val t = SerialTransport(this); transport = t
+                SharpController(SharpIpClient(t), PrefsDuckPersistence(this), duckLevel = settings.duckLevel, normalVolume = settings.normalVolume, useMuteInstead = settings.useMute)
+            }
+            "ir" -> {
+                transport = null
+                StepVolumeController(IrKeySender(this, settings.irAddress, settings.irVolumeUp, settings.irVolumeDown), PrefsDuckPersistence(this), duckLevel = settings.duckLevel, normalVolume = settings.normalVolume)
+            }
+            else -> {
+                val t = SocketTransport(settings.host, settings.port, 2500, settings.login); transport = t
+                SharpController(SharpIpClient(t), PrefsDuckPersistence(this), duckLevel = settings.duckLevel, normalVolume = settings.normalVolume, useMuteInstead = settings.useMute)
+            }
+        }
         controller = ctl
         val store = FileFingerprintStore(File(filesDir, "ads.tsv"))
         val eng = Assembly.engine(NetworkedController(ctl), store)
@@ -117,7 +127,7 @@ class AdHushService : Service() {
         }
         try { m.start() } catch (e: Exception) { update("mic failed: ${e.message}"); stopSelf(); return }
         mic = m
-        update("listening (${m.sourceName})")
+        update("listening (${m.sourceName}) via ${settings.control}")
         main.postDelayed(ticker, POLL_MS)
     }
 
@@ -218,7 +228,7 @@ class AdHushService : Service() {
     }
 
     /** Runs the controller's network calls off the mic thread; failures surface in the notification, never in the engine. */
-    private inner class NetworkedController(private val inner: SharpController) : MuteController {
+    private inner class NetworkedController(private val inner: DuckController) : MuteController {
         override fun mute() = io.execute { try { inner.mute() } catch (e: ControlError) { main.post { update("mute failed: ${e.message}") } } }
         override fun unmute() = io.execute { try { inner.unmute() } catch (e: ControlError) { main.post { update("restore failed: ${e.message}") } } }
         override fun state(): Boolean? = inner.state()

@@ -80,6 +80,23 @@ Battery → Unrestricted) or Android may pause the service overnight.
   `quietMarginDb` (4 dB) and the fingerprint verify agreement (0.7) are
   starting guesses; see the design's testing section.
 
+## Which TV, which cable
+
+At the top of the settings, pick how *this* phone reaches *its* TV:
+
+- **Network** — the LC-46LE830U over IP Control (address, port, login).
+- **Serial cable** — the set's RS-232C socket through a USB-OTG serial cable
+  plugged into the phone. Same commands as the network, no login. Press
+  *Test TV*, allow USB access in the dialog, press it again: it queries the
+  volume, mutes and unmutes, ducks and restores.
+- **Infrared** — the phone's own blaster (the OnePlus has one; the Moto does
+  not). Point the phone's top edge at the set. Ducking is volume-down presses,
+  restoring is the same number of volume-up presses; nothing comes back from
+  the set, so keep *Normal volume* at what the TV actually shows. *Test TV*
+  presses down three and up three so you can watch the bar. If nothing
+  moves, the codes are wrong for this set: tell me the remote's model number
+  (printed on its back) and I will look up its code table.
+
 ## Teaching it the commercials
 
 The detectors need a quiet break boundary to catch an ad on their own, and a

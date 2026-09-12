@@ -10,7 +10,19 @@
         <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="stopped" android:textSize="18sp" android:paddingTop="6dp" android:paddingBottom="14dp" />
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="TV address (IP Control must be enabled on the set)" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="How this phone reaches the TV" />
+        <RadioGroup android:id="@+id/control" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <RadioButton android:id="@+id/controlIp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Network" />
+            <RadioButton android:id="@+id/controlSerial" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Serial cable" />
+            <RadioButton android:id="@+id/controlIr" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Infrared" />
+        </RadioGroup>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Infrared codes (Sharp: address 1, volume up 14, down 15 — hex)" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <EditText android:id="@+id/irAddress" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="address" android:inputType="number" />
+            <EditText android:id="@+id/irVolUp" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="vol up" />
+            <EditText android:id="@+id/irVolDown" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="vol down" />
+        </LinearLayout>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="TV address (Network: IP Control must be enabled on the set)" />
         <EditText android:id="@+id/host" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:hint="192.168.1.50" android:inputType="textUri" android:autofillHints="" />
         <EditText android:id="@+id/port" android:layout_width="match_parent" android:layout_height="wrap_content"

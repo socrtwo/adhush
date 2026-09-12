@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [Unreleased]
+### Added
+- Android: **three TV paths** in one APK (ADR 0010) — Network (as before),
+  **Serial cable** (RS-232C through a USB-OTG adapter; same Sharp commands,
+  no login, two-way), and **Infrared** (the phone's own blaster speaking
+  Sharp's 15-bit protocol; ducking by counted volume presses, persisted so a
+  crash still restores; mute deliberately unused). `Test TV` exercises
+  whichever path is selected. Sharp IR encoding and the step controller
+  live in the core with tests.
+
 ## [0.8.0] - 2026-09-12
 ### Added
 - Android **teach mode** (ADR 0009): *Is an ad* now holds the duck until

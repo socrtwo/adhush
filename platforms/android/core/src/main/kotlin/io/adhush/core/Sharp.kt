@@ -243,19 +243,19 @@ class SharpController(
     val duckLevel: Int = 4,
     var normalVolume: Int = 20,
     private val useMuteInstead: Boolean = false,
-) : MuteController {
-    var ducked = false
+) : DuckController {
+    override var ducked = false
         private set
 
     /** Call once at start-up: a saved pre-duck volume means we died ducked. */
-    fun recoverOnStart(): Boolean {
+    override fun recoverOnStart(): Boolean {
         val saved = persistence.load() ?: return false
         normalVolume = saved
         restore()
         return true
     }
 
-    fun duck() {
+    override fun duck() {
         if (!useMuteInstead) {
             client.queryVolume()?.let { if (it != duckLevel) normalVolume = it }
             persistence.save(normalVolume)
@@ -267,7 +267,7 @@ class SharpController(
         ducked = true
     }
 
-    fun restore() {
+    override fun restore() {
         val target = persistence.load() ?: normalVolume
         if (!useMuteInstead) client.setVolume(target) else client.muteOff()
         normalVolume = target
@@ -276,7 +276,7 @@ class SharpController(
     }
 
     /** While ducked: did the user touch the remote? Then adopt their level and stand down. */
-    fun pollUserOverride(): Boolean {
+    override fun pollUserOverride(): Boolean {
         if (!ducked || useMuteInstead) return false
         val now = client.queryVolume() ?: return false
         if (now == duckLevel) return false
@@ -287,7 +287,7 @@ class SharpController(
     }
 
     /** While at rest: follow the user's volume so a later restore lands on it. */
-    fun trackNormal() { if (!ducked) client.queryVolume()?.let { normalVolume = it } }
+    override fun trackNormal() { if (!ducked) client.queryVolume()?.let { normalVolume = it } }
 
     override fun mute() = duck()
     override fun unmute() = restore()

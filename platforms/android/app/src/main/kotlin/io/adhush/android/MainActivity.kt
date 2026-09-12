@@ -42,7 +42,7 @@ class MainActivity : AppCompatActivity() {
         settings = Settings(this)
         load()
         findViewById<Button>(R.id.save).setOnClickListener { save(); log("saved") }
-        findViewById<Button>(R.id.test).setOnClickListener { save(); testTv() }
+        findViewById<Button>(R.id.test).setOnClickListener { save(); when (settings.control) { "serial" -> testSerial(); "ir" -> testIr(); else -> testTv() } }
         findViewById<Button>(R.id.start).setOnClickListener { save(); startWithPermissions(null) }
         findViewById<Button>(R.id.stop).setOnClickListener { serviceAction(AdHushService.ACTION_STOP) }
         findViewById<Button>(R.id.notAd).setOnClickListener { serviceAction(AdHushService.ACTION_NOT_AD) }
@@ -80,6 +80,10 @@ class MainActivity : AppCompatActivity() {
         findViewById<EditText>(R.id.duck).setText(settings.duckLevel.toString())
         findViewById<EditText>(R.id.normal).setText(settings.normalVolume.toString())
         findViewById<CheckBox>(R.id.useMute).isChecked = settings.useMute
+        findViewById<android.widget.RadioGroup>(R.id.control).check(when (settings.control) { "serial" -> R.id.controlSerial; "ir" -> R.id.controlIr; else -> R.id.controlIp })
+        findViewById<EditText>(R.id.irAddress).setText(settings.irAddress.toString())
+        findViewById<EditText>(R.id.irVolUp).setText("%02X".format(settings.irVolumeUp))
+        findViewById<EditText>(R.id.irVolDown).setText("%02X".format(settings.irVolumeDown))
     }
 
     private fun save() {
@@ -90,6 +94,10 @@ class MainActivity : AppCompatActivity() {
         settings.duckLevel = (findViewById<EditText>(R.id.duck).text.toString().toIntOrNull() ?: 4).coerceIn(0, 60)
         settings.normalVolume = (findViewById<EditText>(R.id.normal).text.toString().toIntOrNull() ?: 20).coerceIn(0, 60)
         settings.useMute = findViewById<CheckBox>(R.id.useMute).isChecked
+        settings.control = when (findViewById<android.widget.RadioGroup>(R.id.control).checkedRadioButtonId) { R.id.controlSerial -> "serial"; R.id.controlIr -> "ir"; else -> "ip" }
+        settings.irAddress = findViewById<EditText>(R.id.irAddress).text.toString().trim().toIntOrNull()?.coerceIn(0, 31) ?: 1
+        settings.irVolumeUp = findViewById<EditText>(R.id.irVolUp).text.toString().trim().toIntOrNull(16)?.coerceIn(0, 255) ?: 0x14
+        settings.irVolumeDown = findViewById<EditText>(R.id.irVolDown).text.toString().trim().toIntOrNull(16)?.coerceIn(0, 255) ?: 0x15
     }
 
     /** Answers the design's open question on the real set: does VOLM? return the volume? */
@@ -126,6 +134,49 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Serial: the same command sequence as the network test, over the cable, after USB permission. */
+    private fun testSerial() {
+        val transport = SerialTransport(this, 2500)
+        val device = transport.device()
+        if (device == null) { log("no USB serial adapter found — plug the cable in (OTG) and try again"); return }
+        val usb = getSystemService(Context.USB_SERVICE) as android.hardware.usb.UsbManager
+        if (!usb.hasPermission(device)) {
+            val pi = android.app.PendingIntent.getBroadcast(this, 0, Intent(ACTION_USB).setPackage(packageName), android.app.PendingIntent.FLAG_MUTABLE)
+            usb.requestPermission(device, pi)
+            log("allow USB access in the dialog, then press Test TV again"); return
+        }
+        log("testing the serial cable …")
+        thread {
+            fun say(line: String) = runOnUiThread { log(line) }
+            transport.trace = { say("  $it") }
+            val client = SharpIpClient(transport)
+            fun confirmed(ok: Boolean) = if (ok) "OK" else "sent, no answer"
+            transport.use {
+                try {
+                    val vol = client.queryVolume(); say("VOLM? → " + (vol?.toString() ?: "no answer: Normal volume will be used"))
+                    val m1 = client.muteOn(); Thread.sleep(1500); val m2 = client.muteOff(); say("MUTE1 → ${confirmed(m1)}; MUTE2 → ${confirmed(m2)}")
+                    val back = vol ?: settings.normalVolume
+                    val d1 = client.setVolume(settings.duckLevel); Thread.sleep(1500); val d2 = client.setVolume(back)
+                    say("VOLM ${settings.duckLevel} → ${confirmed(d1)}; VOLM $back → ${confirmed(d2)}")
+                    say("done — if the sound dipped twice, the cable works")
+                } catch (e: ControlError) { say("FAILED: ${e.message}") }
+            }
+        }
+    }
+
+    /** Infrared: three presses down, three up — watch the set's volume bar. */
+    private fun testIr() {
+        val sender = IrKeySender(this, settings.irAddress, settings.irVolumeUp, settings.irVolumeDown)
+        if (!sender.available) { log("this phone has no infrared blaster"); return }
+        log("testing infrared: volume down ×3, then up ×3 — point the top edge of the phone at the TV")
+        thread {
+            try {
+                sender.press(io.adhush.core.TvKey.VOLUME_DOWN, 3); Thread.sleep(1500); sender.press(io.adhush.core.TvKey.VOLUME_UP, 3)
+                runOnUiThread { log("sent. Did the volume bar move down and back up? If not, the codes are wrong: see the README for alternatives") }
+            } catch (e: ControlError) { runOnUiThread { log("FAILED: ${e.message}") } }
+        }
+    }
+
     private fun startWithPermissions(action: String?) {
         pendingAction = action
         val wanted = mutableListOf(Manifest.permission.RECORD_AUDIO)
@@ -143,6 +194,8 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == 1 && grantResults.all { it == android.content.pm.PackageManager.PERMISSION_GRANTED }) startWithPermissions(pendingAction)
         else log("microphone permission is required")
     }
+
+    companion object { const val ACTION_USB = "io.adhush.android.USB_PERMISSION" }
 
     private fun serviceAction(action: String) {
         ContextCompat.startForegroundService(this, Intent(this, AdHushService::class.java).setAction(action))

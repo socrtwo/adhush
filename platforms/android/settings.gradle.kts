@@ -15,7 +15,10 @@ pluginManagement {
 dependencyResolutionManagement {
     repositories {
         mavenCentral()
-        if (System.getenv("ADHUSH_CORE_ONLY") != "1") google()
+        if (System.getenv("ADHUSH_CORE_ONLY") != "1") {
+            google()
+            maven { url = uri("https://jitpack.io") }   // usb-serial-for-android
+        }
     }
 }
 rootProject.name = "adhush-android"
