@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
-## [Unreleased]
+## [0.10.0] - 2026-09-12
 ### Added
 - Android **camera logo watching** (ADR 0011): the back camera feeds two
   luma frames a second; the lit screen is found automatically; a
