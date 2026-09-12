@@ -30,9 +30,16 @@ class Fusion(private val cfg: FusionConfig, weights: Map<String, Double>, enable
 
     fun weightFor(detector: String): Double = weights[detector] ?: DEFAULT_WEIGHT
 
+    /**
+     * Votes from every detector that is *active* this tick. A detector that
+     * cannot see (the camera with no screen in view) stays out of the list and
+     * so out of the normaliser: it neither adds evidence nor dilutes it.
+     */
     fun combine(votes: List<DetectorVote>, ts: Double): MuteDecision {
         val mass = votes.sumOf { weightFor(it.detector) * it.confidence }
-        val confidence = min(1.0, mass / norm)
+        val present = votes.sumOf { weightFor(it.detector) }
+        val n = if (present > 0.0) max(present / 2, MIN_MASS) else norm
+        val confidence = min(1.0, mass / n)
         if (mutedSide) {
             if (confidence <= cfg.unmuteConfidence) mutedSide = false
         } else if (confidence >= cfg.muteConfidence) {

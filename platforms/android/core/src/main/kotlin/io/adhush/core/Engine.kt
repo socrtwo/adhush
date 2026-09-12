@@ -131,11 +131,18 @@ class Engine(
 
     fun addListener(l: (Status) -> Unit) { listeners.add(l) }
 
+    /** A camera frame (luma). Detectors that watch the screen update; the vote happens on the next audio tick. */
+    @Synchronized fun onFrame(frame: Gray, ts: Double) { for (d in detectors) d.observeFrame(frame, ts) }
+
+    private val logo: LogoAbsenceDetector? get() = detectors.firstOrNull { it is LogoAbsenceDetector } as LogoAbsenceDetector?
+
     @Synchronized fun onAudio(block: AudioBlock) {
         for (d in detectors) d.observeAudio(block)
         fingerprint?.observeAudio(block)
         val ts = block.ts
-        val votes = detectors.map { it.vote(ts) } + (fingerprint?.vote(ts)?.let { listOf(it) } ?: emptyList())
+        // An inert logo detector (no screen in view) casts no vote and leaves the normaliser alone.
+        val voting = detectors.filter { (it as? LogoAbsenceDetector)?.active != false }
+        val votes = voting.map { it.vote(ts) } + (fingerprint?.vote(ts)?.let { listOf(it) } ?: emptyList())
         val decision = fusion.combine(votes, ts)
         lastDecision = decision
         if (override != Override.AUTO) return  // the user has taken the wheel
@@ -144,7 +151,9 @@ class Engine(
         val fpHold = match != null  // activeMatch() already dropped expired ones
         val promote = fpHold && (machine.state == AdState.PROGRAM || machine.state == AdState.SUSPECT_AD)
         // A user hold behaves like a fingerprint hold with no programme evidence: only the ceiling ends it.
-        val action = machine.update(decision, promote = promote, fpHold = fpHold || userHold, programEvidence = false) ?: return
+        // A fingerprint hold ends early when the logo is visibly back — presence is proof of programme.
+        val programEvidence = !userHold && (logo?.programPresent == true)
+        val action = machine.update(decision, promote = promote, fpHold = fpHold || userHold, programEvidence = programEvidence) ?: return
         val reasons = if (promote) listOf("fingerprint:promote ad=${match!!.adId} dur=${match.durationS.toInt()}") + decision.reasons else decision.reasons
         apply(action, ts, decision.confidence, reasons, if (promote) Source.FINGERPRINT else Source.FUSION, match)
     }
@@ -270,11 +279,16 @@ object Assembly {
         fusionCfg: FusionConfig = FusionConfig(),
         fpCfg: FingerprintConfig = FingerprintConfig(),
         weights: Map<String, Double> = emptyMap(),
+        logo: LogoAbsenceDetector? = null,
     ): Engine {
-        val detectors = listOf<Detector>(MicSilenceDetector(), LoudnessDetector())
+        val detectors = listOf<Detector>(MicSilenceDetector(), LoudnessDetector()) + (logo?.let { listOf<Detector>(it) } ?: emptyList())
         val matcher = AudioMatcher(store, fpCfg)
         val fp = AudioFingerprintDetector(fpCfg, matcher)
-        val fusion = Fusion(fusionCfg, weights, detectors.map { it.name } + fp.name)
+        // The logo carries three default weights: absence alone mutes, and presence vetoes an audio-only duck.
+        val w = if (logo != null && "logo_absence" !in weights) weights + ("logo_absence" to LOGO_WEIGHT) else weights
+        val fusion = Fusion(fusionCfg, w, detectors.map { it.name } + fp.name)
         return Engine(detectors, fusion, AdStateMachine(fusionCfg), controller, fp, AudioLearner(store, matcher, fpCfg), store)
     }
+
+    const val LOGO_WEIGHT = 3 * Fusion.DEFAULT_WEIGHT
 }

@@ -97,6 +97,18 @@ At the top of the settings, pick how *this* phone reaches *its* TV:
   moves, the codes are wrong for this set: tell me the remote's model number
   (printed on its back) and I will look up its code table.
 
+## Watching for the logo with the camera
+
+Tick **Use the back camera** and, with a show on and the whole TV in the
+camera's view, press **Set up camera (45 s)**. The app finds the screen,
+watches which edges never move — the network bug — and saves that corner as
+the thing to look for. When it is done the notification says where it found
+the logo; if it says none was found, check that a show (not an ad) was on and
+the screen was fully in view, then press again. From then on the bug
+disappearing ducks the set within about two seconds on its own, and the bug
+reappearing restores it at once. Camera set-up is per channel: press it again
+after switching channels. Details: ADR 0011.
+
 ## Teaching it the commercials
 
 The detectors need a quiet break boundary to catch an ad on their own, and a

@@ -19,6 +19,12 @@ import androidx.core.content.ContextCompat
 import io.adhush.core.Assembly
 import io.adhush.core.ControlError
 import io.adhush.core.DuckController
+import io.adhush.core.LogoAbsenceDetector
+import io.adhush.core.LogoFinder
+import io.adhush.core.LogoTemplate
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
 import io.adhush.core.StepVolumeController
 import io.adhush.core.Engine
 import io.adhush.core.FileFingerprintStore
@@ -39,8 +45,13 @@ import java.util.concurrent.Executors
  * docs/android-app-design.md live here: restore on every exit path, watch the
  * mic, let the remote win.
  */
-class AdHushService : Service() {
+class AdHushService : Service(), LifecycleOwner {
+    private val registry = LifecycleRegistry(this)
+    override val lifecycle: Lifecycle get() = registry
     private lateinit var settings: Settings
+    private var camera: CameraSource? = null
+    @Volatile private var finder: LogoFinder? = null
+    @Volatile private var finderStartedAt = 0L
     private var engine: Engine? = null
     private var controller: DuckController? = null
     private var transport: AutoCloseable? = null
@@ -57,6 +68,7 @@ class AdHushService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        registry.currentState = Lifecycle.State.RESUMED   // CameraX binds to this service's lifetime
         settings = Settings(this)
         createChannel()
         Thread.setDefaultUncaughtExceptionHandler { _, _ -> runCatching { controller?.restore() }; android.os.Process.killProcess(android.os.Process.myPid()) }
@@ -81,6 +93,12 @@ class AdHushService : Service() {
             ACTION_SURVEY -> {
                 if (engine == null) start()
                 if (engine != null && survey == null) { survey = RoomSurvey(SURVEY_S); update("surveying the room: 0:00 / ${clock(SURVEY_S)}") }
+                return START_STICKY
+            }
+            ACTION_CAMERA_SETUP -> {
+                if (engine == null) start()
+                if (camera == null) { update("camera is off — tick 'Use the camera' and Start again"); return START_STICKY }
+                if (finder == null) { finder = LogoFinder(); finderStartedAt = System.currentTimeMillis(); update("setting up the camera: keep a show on, 0 / ${SETUP_S} s") }
                 return START_STICKY
             }
         }
@@ -110,7 +128,9 @@ class AdHushService : Service() {
         }
         controller = ctl
         val store = FileFingerprintStore(File(filesDir, "ads.tsv"))
-        val eng = Assembly.engine(NetworkedController(ctl), store)
+        val cameraWanted = settings.camera && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        val logo = if (cameraWanted) LogoTemplate.load(File(filesDir, LOGO_FILE))?.let { LogoAbsenceDetector(template = it) } else null
+        val eng = Assembly.engine(NetworkedController(ctl), store, logo = logo)
         eng.addListener { s -> lastStatus = s; main.post { update(describe(s)) } }
         engine = eng
         io.execute {
@@ -127,7 +147,21 @@ class AdHushService : Service() {
         }
         try { m.start() } catch (e: Exception) { update("mic failed: ${e.message}"); stopSelf(); return }
         mic = m
-        update("listening (${m.sourceName}) via ${settings.control}")
+        if (cameraWanted) {
+            val cam = CameraSource(this, this) { gray ->
+                val ts = mic?.mediaTime ?: 0.0
+                eng.onFrame(gray, ts)
+                finder?.let { f ->
+                    f.feed(gray)
+                    val elapsed = (System.currentTimeMillis() - finderStartedAt) / 1000
+                    if (elapsed >= SETUP_S) finishSetup(f) else if (f.frames % 10 == 0) main.post { update("setting up the camera: keep a show on, $elapsed / ${SETUP_S} s · screen seen ${f.frames}/${f.frames + f.screenMisses}") }
+                }
+            }
+            camera = cam
+            cam.start { msg -> main.post { update(msg) } }
+        }
+        val eye = if (cameraWanted) (if (logo != null) " + camera (logo)" else " + camera (not set up)") else ""
+        update("listening (${m.sourceName}) via ${settings.control}$eye")
         main.postDelayed(ticker, POLL_MS)
     }
 
@@ -142,6 +176,33 @@ class AdHushService : Service() {
                 sendBroadcast(Intent(BROADCAST_SURVEY).setPackage(packageName).putExtra("summary", summary).putExtra("file", file.absolutePath))
             }
         }
+    }
+
+    /** The one button's result: save the template and restart with the logo detector in the loop. */
+    private fun finishSetup(f: LogoFinder) {
+        finder = null
+        val t = f.result()
+        main.post {
+            if (t == null) {
+                update("no logo found — was a show on, and is the whole screen in view? (screen seen ${f.frames}/${f.frames + f.screenMisses})")
+                sendBroadcast(Intent(BROADCAST_STATUS).setPackage(packageName).putExtra("text", lastText))
+                return@post
+            }
+            runCatching { t.save(File(filesDir, LOGO_FILE)) }
+            update("logo found ${t.roi.corner} (stability ${"%.2f".format(java.util.Locale.US, t.stability)}) — restarting with the camera watching")
+            restart()
+        }
+    }
+
+    /** Tear the engine, mic and camera down and start again with the current settings. */
+    private fun restart() {
+        camera?.stop(); camera = null
+        mic?.stop(); mic = null
+        main.removeCallbacks(ticker)
+        engine?.close(); engine = null
+        controller?.let { runCatching { it.close() } }; controller = null
+        (transport as? AutoCloseable)?.close(); transport = null
+        start()
     }
 
     private fun clock(seconds: Double): String = "%d:%02d".format(java.util.Locale.US, (seconds / 60).toInt(), (seconds % 60).toInt())
@@ -167,6 +228,7 @@ class AdHushService : Service() {
     private fun now(): Double = mic?.mediaTime ?: 0.0
 
     override fun onDestroy() {
+        camera?.stop(); camera = null
         main.removeCallbacks(ticker)
         mic?.stop(); mic = null
         val ctl = controller
@@ -174,6 +236,7 @@ class AdHushService : Service() {
         if (ctl != null) runCatching { ctl.close() }   // restore if ducked
         transport?.close(); transport = null
         io.shutdown()
+        registry.currentState = Lifecycle.State.DESTROYED
         super.onDestroy()
     }
 
@@ -218,7 +281,9 @@ class AdHushService : Service() {
     }
 
     private fun startForegroundWithType(n: Notification) {
-        if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        val cameraOk = settings.camera && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or (if (cameraOk && Build.VERSION.SDK_INT >= 30) ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0)
+        if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIF_ID, n, type)
         else startForeground(NOTIF_ID, n)
     }
 
@@ -243,6 +308,9 @@ class AdHushService : Service() {
         const val ACTION_RESTORE = "io.adhush.android.RESTORE"
         const val ACTION_STOP = "io.adhush.android.STOP"
         const val ACTION_SHOW_BACK = "io.adhush.android.SHOW_BACK"
+        const val ACTION_CAMERA_SETUP = "io.adhush.android.CAMERA_SETUP"
+        const val LOGO_FILE = "logo.tsv"
+        const val SETUP_S = 45L
         const val ACTION_SURVEY = "io.adhush.android.SURVEY"
         const val BROADCAST_STATUS = "io.adhush.android.STATUS"
         const val BROADCAST_SURVEY = "io.adhush.android.SURVEY_DONE"

@@ -18,6 +18,8 @@ interface Detector {
     val name: String
     fun warmup()
     fun observeAudio(block: AudioBlock)
+    /** Camera frames; audio-only detectors ignore them. */
+    fun observeFrame(frame: Gray, ts: Double) {}
     fun vote(ts: Double): DetectorVote
     fun vote(ts: Double, confidence: Double, reason: String): DetectorVote =
         DetectorVote(name, ts, confidence.coerceIn(0.0, 1.0), reason)

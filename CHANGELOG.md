@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [Unreleased]
+### Added
+- Android **camera logo watching** (ADR 0011): the back camera feeds two
+  luma frames a second; the lit screen is found automatically; a
+  **one-button set-up** watches 45 s of programme, finds the corner whose
+  edges never move and saves it as the logo template; the ported
+  logo-absence detector then ducks the set when the bug disappears and
+  restores when it returns. Presence of the logo vetoes audio-only ducks
+  and ends fingerprint holds early. Inert when no screen is in view.
+  Vision code and the finder are in the core with synthetic-room tests.
+
 ## [0.9.0] - 2026-09-12
 ### Added
 - Android: **three TV paths** in one APK (ADR 0010) — Network (as before),

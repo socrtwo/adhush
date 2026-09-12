@@ -50,6 +50,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.showBack).setOnClickListener { serviceAction(AdHushService.ACTION_SHOW_BACK) }
         findViewById<Button>(R.id.survey).setOnClickListener { save(); startWithPermissions(AdHushService.ACTION_SURVEY) }
         findViewById<Button>(R.id.share).setOnClickListener { shareSurvey() }
+        findViewById<Button>(R.id.cameraSetup).setOnClickListener { save(); settings.camera = true; findViewById<CheckBox>(R.id.camera).isChecked = true; startWithPermissions(AdHushService.ACTION_CAMERA_SETUP) }
     }
 
     /** The newest survey file, handed to whatever the user picks (mail, Drive, messages) through FileProvider. */
@@ -80,6 +81,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<EditText>(R.id.duck).setText(settings.duckLevel.toString())
         findViewById<EditText>(R.id.normal).setText(settings.normalVolume.toString())
         findViewById<CheckBox>(R.id.useMute).isChecked = settings.useMute
+        findViewById<CheckBox>(R.id.camera).isChecked = settings.camera
         findViewById<android.widget.RadioGroup>(R.id.control).check(when (settings.control) { "serial" -> R.id.controlSerial; "ir" -> R.id.controlIr; else -> R.id.controlIp })
         findViewById<EditText>(R.id.irAddress).setText(settings.irAddress.toString())
         findViewById<EditText>(R.id.irVolUp).setText("%02X".format(settings.irVolumeUp))
@@ -94,6 +96,7 @@ class MainActivity : AppCompatActivity() {
         settings.duckLevel = (findViewById<EditText>(R.id.duck).text.toString().toIntOrNull() ?: 4).coerceIn(0, 60)
         settings.normalVolume = (findViewById<EditText>(R.id.normal).text.toString().toIntOrNull() ?: 20).coerceIn(0, 60)
         settings.useMute = findViewById<CheckBox>(R.id.useMute).isChecked
+        settings.camera = findViewById<CheckBox>(R.id.camera).isChecked
         settings.control = when (findViewById<android.widget.RadioGroup>(R.id.control).checkedRadioButtonId) { R.id.controlSerial -> "serial"; R.id.controlIr -> "ir"; else -> "ip" }
         settings.irAddress = findViewById<EditText>(R.id.irAddress).text.toString().trim().toIntOrNull()?.coerceIn(0, 31) ?: 1
         settings.irVolumeUp = findViewById<EditText>(R.id.irVolUp).text.toString().trim().toIntOrNull(16)?.coerceIn(0, 255) ?: 0x14
@@ -181,12 +184,17 @@ class MainActivity : AppCompatActivity() {
         pendingAction = action
         val wanted = mutableListOf(Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33) wanted.add(Manifest.permission.POST_NOTIFICATIONS)
-        val missing = wanted.filter { ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+        val wantedAll = if (settings.camera) wanted + Manifest.permission.CAMERA else wanted
+        val missing = wantedAll.filter { ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) { ActivityCompat.requestPermissions(this, missing.toTypedArray(), 1); return }
         val intent = Intent(this, AdHushService::class.java)
         pendingAction?.let { intent.setAction(it) }
         ContextCompat.startForegroundService(this, intent)
-        log(if (pendingAction == AdHushService.ACTION_SURVEY) "survey started — 10 minutes of normal TV, phone where it will live" else "started")
+        log(when (pendingAction) {
+            AdHushService.ACTION_SURVEY -> "survey started — 10 minutes of normal TV, phone where it will live"
+            AdHushService.ACTION_CAMERA_SETUP -> "camera set-up started — keep a show on for 45 s with the whole screen in view"
+            else -> "started"
+        })
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

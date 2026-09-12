@@ -40,6 +40,8 @@
             android:text="Normal volume (used only if the TV will not answer VOLM?)" />
         <EditText android:id="@+id/normal" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:hint="20" android:inputType="number" android:autofillHints="" />
+        <CheckBox android:id="@+id/camera" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Use the back camera to watch for the network logo" />
+        <Button android:id="@+id/cameraSetup" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Set up camera (45 s, during a show)" />
         <CheckBox android:id="@+id/useMute" android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:text="Use MUTE instead of ducking (phone goes deaf while muted)" />
 

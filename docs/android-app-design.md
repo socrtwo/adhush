@@ -208,7 +208,9 @@ what a phone mic reproduces well. No change needed.
 
 ### 3. Three detectors instead of six
 
-No video means no `black_frame`, `logo_absence`, `scene_cut`, or video pHash.
+No video *at first* meant no `black_frame`, `logo_absence`, `scene_cut`, or
+video pHash. Since 0.10.0 the back camera feeds a ported `logo_absence` with
+one-button calibration (ADR 0011); the other video detectors remain absent.
 Accuracy will be materially below the passthrough box, which sees clean HDMI
 and votes on six signals. Set expectations in the app's own onboarding: this
 trades accuracy for needing nothing but a phone.
