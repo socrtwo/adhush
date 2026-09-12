@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.stop).setOnClickListener { serviceAction(AdHushService.ACTION_STOP) }
         findViewById<Button>(R.id.notAd).setOnClickListener { serviceAction(AdHushService.ACTION_NOT_AD) }
         findViewById<Button>(R.id.isAd).setOnClickListener { serviceAction(AdHushService.ACTION_IS_AD) }
+        findViewById<Button>(R.id.showBack).setOnClickListener { serviceAction(AdHushService.ACTION_SHOW_BACK) }
         findViewById<Button>(R.id.survey).setOnClickListener { save(); startWithPermissions(AdHushService.ACTION_SURVEY) }
         findViewById<Button>(R.id.share).setOnClickListener { shareSurvey() }
     }

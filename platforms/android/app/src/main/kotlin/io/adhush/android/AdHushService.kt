@@ -73,6 +73,7 @@ class AdHushService : Service() {
         when (action) {
             ACTION_NOT_AD -> { io.execute { engine?.rejectAd(now()) }; return START_STICKY }
             ACTION_IS_AD -> { io.execute { engine?.confirmAd(now()) }; return START_STICKY }
+            ACTION_SHOW_BACK -> { io.execute { engine?.showIsBack(now()); refresh() }; return START_STICKY }
             ACTION_RESTORE -> { io.execute { runCatching { controller?.restore() }; refresh() }; return START_STICKY }
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_SURVEY -> {
@@ -171,8 +172,9 @@ class AdHushService : Service() {
     // -- notification ---------------------------------------------------------
 
     private fun describe(s: Status): String {
+        if (s.teaching) return "TEACHING — ducked; press Show's back when the show returns · ${s.adsLearned} learned"
         val state = if (s.override != CoreOverride.AUTO) "override: ${s.override.wire}" else if (s.muted) "DUCKED — ad" else s.state.wire.uppercase()
-        return "$state · ${"%.2f".format(s.confidence)} · ${s.adsLearned} ads learned"
+        return "$state · ${"%.2f".format(s.confidence)} · ${s.adsLearned} learned"
     }
 
     private fun refresh() { lastStatus?.let { update(describe(it)) } }
@@ -198,9 +200,10 @@ class AdHushService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
-            .addAction(action(1, ACTION_NOT_AD, getString(R.string.action_not_ad)))
+            // Android shows at most three: the teaching pair and the correction. Stop lives in the app.
             .addAction(action(2, ACTION_IS_AD, getString(R.string.action_is_ad)))
-            .addAction(action(3, ACTION_STOP, getString(R.string.action_stop)))
+            .addAction(action(4, ACTION_SHOW_BACK, getString(R.string.action_show_back)))
+            .addAction(action(1, ACTION_NOT_AD, getString(R.string.action_not_ad)))
             .build()
     }
 
@@ -229,6 +232,7 @@ class AdHushService : Service() {
         const val ACTION_IS_AD = "io.adhush.android.IS_AD"
         const val ACTION_RESTORE = "io.adhush.android.RESTORE"
         const val ACTION_STOP = "io.adhush.android.STOP"
+        const val ACTION_SHOW_BACK = "io.adhush.android.SHOW_BACK"
         const val ACTION_SURVEY = "io.adhush.android.SURVEY"
         const val BROADCAST_STATUS = "io.adhush.android.STATUS"
         const val BROADCAST_SURVEY = "io.adhush.android.SURVEY_DONE"

@@ -3,6 +3,22 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [Unreleased]
+### Added
+- Android **teach mode** (ADR 0009): *Is an ad* now holds the duck until
+  *Show's back*, and the whole bracketed break is learned as one record of
+  *material*. Matching on material is rolling — the duck stays while the
+  live audio agrees with anything known, re-anchors when the next spot
+  starts, and releases 5 s after the last known spot — so taught spots are
+  recognised in any order, alone, or as cut-downs. *Not an ad* during
+  teaching cancels without learning; the 4-minute ceiling ends a forgotten
+  session and still learns it. Notification actions are now Is an ad /
+  Show's back / Not an ad (Stop lives in the app).
+
+### Fixed
+- *Is an ad* used to restore the volume after 400 ms, having learned
+  nothing, because nothing held the state machine in AD.
+
 ## [0.7.4] - 2026-09-09
 ### Fixed
 - Loudness detector (both cores): the baseline was taken from the first

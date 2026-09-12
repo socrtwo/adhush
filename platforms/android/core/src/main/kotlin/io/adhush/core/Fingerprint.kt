@@ -20,13 +20,28 @@ data class FingerprintConfig(
     val minKeyHits: Int = 3,
     /** Aligned blocks the verification must cover (6 × 0.5 s = 3 s). */
     val minVerifyBlocks: Int = 6,
+    /**
+     * Teach mode: a match on taught *material* holds the duck only while the live
+     * audio keeps agreeing with something known; this is how long a lapse may
+     * last (the gap between two spots, a noisy second) before the duck is released.
+     */
+    val materialGraceS: Double = 5.0,
+    /** A taught break shorter than this is a slip of the finger, not material. */
+    val minMaterialS: Double = 5.0,
+    /** The rolling hold judges only this much of the most recent audio, so it lets go soon after a spot ends. */
+    val materialRecentS: Double = 2.0,
 )
 
-data class AdRecord(val adId: Int, val durationS: Double, val sampleCount: Int)
+/** What a record is: a single spot with a known length, or a taught break of *material* matched piecewise. */
+enum class AdKind(val wire: String) { AD("ad"), MATERIAL("material");
+    companion object { fun of(wire: String) = entries.firstOrNull { it.wire == wire } ?: AD }
+}
+
+data class AdRecord(val adId: Int, val durationS: Double, val sampleCount: Int, val kind: AdKind = AdKind.AD)
 
 /** Same fields as store.py's tables; audio-only, so no video_hashes. */
 interface FingerprintStore {
-    fun addAd(durationS: Double, audio: List<Pair<Double, Int>>, nowTs: Double = 0.0): Int
+    fun addAd(durationS: Double, audio: List<Pair<Double, Int>>, nowTs: Double = 0.0, kind: AdKind = AdKind.AD): Int
     fun get(adId: Int): AdRecord?
     fun ads(): List<AdRecord>
     fun audioBlocks(adId: Int): List<Pair<Double, Int>>
@@ -42,20 +57,20 @@ interface FingerprintStore {
  * points it at a file in app-private storage.
  */
 class FileFingerprintStore(private val file: File? = null) : FingerprintStore {
-    private class Ad(val adId: Int, var durationS: Double, var sampleCount: Int, val createdTs: Double, var updatedTs: Double, val blocks: List<Pair<Double, Int>>)
+    private class Ad(val adId: Int, var durationS: Double, var sampleCount: Int, val createdTs: Double, var updatedTs: Double, val blocks: List<Pair<Double, Int>>, val kind: AdKind)
     private val ads = LinkedHashMap<Int, Ad>()
     private var nextId = 1
 
     init { file?.takeIf { it.isFile }?.let { load(it) } }
 
-    @Synchronized override fun addAd(durationS: Double, audio: List<Pair<Double, Int>>, nowTs: Double): Int {
+    @Synchronized override fun addAd(durationS: Double, audio: List<Pair<Double, Int>>, nowTs: Double, kind: AdKind): Int {
         val id = nextId++
-        ads[id] = Ad(id, durationS, 1, nowTs, nowTs, audio.toList())
+        ads[id] = Ad(id, durationS, 1, nowTs, nowTs, audio.toList(), kind)
         persist()
         return id
     }
-    @Synchronized override fun get(adId: Int): AdRecord? = ads[adId]?.let { AdRecord(it.adId, it.durationS, it.sampleCount) }
-    @Synchronized override fun ads(): List<AdRecord> = ads.values.map { AdRecord(it.adId, it.durationS, it.sampleCount) }
+    @Synchronized override fun get(adId: Int): AdRecord? = ads[adId]?.let { AdRecord(it.adId, it.durationS, it.sampleCount, it.kind) }
+    @Synchronized override fun ads(): List<AdRecord> = ads.values.map { AdRecord(it.adId, it.durationS, it.sampleCount, it.kind) }
     @Synchronized override fun audioBlocks(adId: Int): List<Pair<Double, Int>> = ads[adId]?.blocks?.sortedBy { it.first } ?: emptyList()
     @Synchronized override fun updateDuration(adId: Int, durationS: Double, sampleCount: Int) {
         ads[adId]?.let { it.durationS = durationS; it.sampleCount = sampleCount; persist() }
@@ -70,7 +85,7 @@ class FileFingerprintStore(private val file: File? = null) : FingerprintStore {
         tmp.bufferedWriter().use { w ->
             w.write("# adhush fingerprints v1\n")
             for (ad in ads.values) {
-                w.write("ad\t${ad.adId}\t${ad.durationS}\t${ad.sampleCount}\t${ad.createdTs}\t${ad.updatedTs}\n")
+                w.write("ad\t${ad.adId}\t${ad.durationS}\t${ad.sampleCount}\t${ad.createdTs}\t${ad.updatedTs}\t${ad.kind.wire}\n")
                 for ((off, bits) in ad.blocks) w.write("blk\t${ad.adId}\t$off\t$bits\n")
             }
         }
@@ -89,15 +104,22 @@ class FileFingerprintStore(private val file: File? = null) : FingerprintStore {
         }
         for (p in heads) {
             val id = p[1].toInt()
-            ads[id] = Ad(id, p[2].toDouble(), p[3].toInt(), p[4].toDouble(), p[5].toDouble(), blocks[id] ?: emptyList())
+            val kind = if (p.size > 6) AdKind.of(p[6]) else AdKind.AD   // files from before teach mode have no kind
+            ads[id] = Ad(id, p[2].toDouble(), p[3].toInt(), p[4].toDouble(), p[5].toDouble(), blocks[id] ?: emptyList(), kind)
             if (id >= nextId) nextId = id + 1
         }
     }
 }
 
-data class Match(val adId: Int, val estStartTs: Double, val durationS: Double, val confirmedTs: Double, val agreement: Double) {
-    val expectedEndTs: Double get() = estStartTs + durationS
-}
+/**
+ * A confirmed match. For a single spot the duck is expected to end at
+ * estStartTs + durationS; for taught material [expectedEndTs] is rolling — the
+ * detector pushes it forward while the live audio keeps agreeing.
+ */
+data class Match(
+    val adId: Int, val estStartTs: Double, val durationS: Double, val confirmedTs: Double, val agreement: Double,
+    val kind: AdKind = AdKind.AD, val expectedEndTs: Double = estStartTs + durationS,
+)
 
 /**
  * Audio-primary matching, the piece the Python core does not have (its matcher
@@ -136,7 +158,17 @@ class AudioMatcher(private val store: FingerprintStore, private val cfg: Fingerp
 
     fun effectiveDuration(adId: Int): Double {
         val record = store.get(adId) ?: return 0.0
+        if (record.kind == AdKind.MATERIAL) return record.durationS   // a break is not a slot
         return if (record.sampleCount >= cfg.snapMinSamples) record.durationS else snapToSlot(record.durationS, cfg.slotSnapS)
+    }
+
+    fun kindOf(adId: Int): AdKind = store.get(adId)?.kind ?: AdKind.AD
+
+    /** Does the most recent audio still agree with this record at this alignment? */
+    fun stillAgrees(adId: Int, estStartTs: Double, live: List<Pair<Double, Int>>): Pair<Boolean, Double> {
+        val recent = live.takeLast((cfg.materialRecentS / cfg.sampleIntervalS).toInt().coerceAtLeast(2))
+        val score = corroborate(adId, estStartTs, recent)
+        return Pair(score.first >= cfg.audioMinAgreement && score.second >= recent.size - 1, score.first)
     }
 
     /** Best (adId, estimated start) for a window of live blocks, verified, or null. */
@@ -185,7 +217,15 @@ class AudioMatcher(private val store: FingerprintStore, private val cfg: Fingerp
         if (adId == candidate) streak += 1 else { candidate = adId; streak = 1; estStart = est }
         if (streak < cfg.confirmHits) return null
         val score = corroborate(adId, estStart, live)
-        return Match(adId, estStart, effectiveDuration(adId), ts, score.first)
+        return match(adId, estStart, ts, score.first)
+    }
+
+    /** Build a Match for a verified (adId, estStart): duration-bounded for a spot, grace-bounded for material. */
+    fun match(adId: Int, estStart: Double, ts: Double, agreement: Double): Match {
+        val kind = kindOf(adId)
+        val dur = effectiveDuration(adId)
+        val end = if (kind == AdKind.MATERIAL) ts + cfg.materialGraceS else estStart + dur
+        return Match(adId, estStart, dur, ts, agreement, kind, end)
     }
 
     companion object { val DELTAS = intArrayOf(2, 4, 8) }
@@ -202,6 +242,21 @@ class AudioLearner(private val store: FingerprintStore, private val matcher: Aud
         if (known != null) { observeDuration(known.first, durationS); return known.first }
         val relative = inWindow.map { Pair(it.first - startTs, it.second) }
         val id = store.addAd(durationS, relative, startTs)
+        matcher.refresh()
+        return id
+    }
+
+    /**
+     * Teach mode: the whole break the user bracketed, every block of it, as one
+     * material record. Recognition later works on any stretch of it, so the
+     * spots may come back in any order, alone, or cut down.
+     */
+    fun learnMaterial(startTs: Double, endTs: Double, audioBlocks: List<Pair<Double, Int>>): Int? {
+        val durationS = endTs - startTs
+        if (durationS < cfg.minMaterialS) return null
+        val blocks = audioBlocks.filter { it.first in startTs..endTs }
+        if (blocks.size < cfg.minVerifyBlocks) return null
+        val id = store.addAd(durationS, blocks.map { Pair(it.first - startTs, it.second) }, startTs, AdKind.MATERIAL)
         matcher.refresh()
         return id
     }

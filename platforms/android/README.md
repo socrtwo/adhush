@@ -80,6 +80,30 @@ Battery → Unrestricted) or Android may pause the service overnight.
   `quietMarginDb` (4 dB) and the fingerprint verify agreement (0.7) are
   starting guesses; see the design's testing section.
 
+## Teaching it the commercials
+
+The detectors need a quiet break boundary to catch an ad on their own, and a
+quiet living room may never give them one. Teaching does not need it:
+
+1. Put the phone in front of the TV, about an arm's length away, and turn the
+   TV up to movie volume. Press **Start**; the top line says *listening*.
+2. The moment a commercial starts, press **✓ Is an ad**. The TV goes quiet:
+   the app is now recording the break (numbers, not audio — chroma
+   fingerprints).
+3. Let the whole break play. Don't change channels or talk over it.
+4. The second the show is back, press **▶ Show's back**. The sound returns and
+   everything in between is filed as commercial material.
+5. Do this for five or six breaks. Then just watch: a commercial it knows
+   ducks the set within a few seconds — in any order, on its own, or as a
+   15-second cut-down that shares audio with the 30 — and the volume comes
+   back a few seconds after the last known spot ends.
+6. Ducked your show by mistake? **✗ Not an ad** restores it and forgets what
+   caused it. Pressed *Is an ad* by accident? *Not an ad* cancels without
+   learning. Left it teaching? The 4-minute ceiling ends it and learns what
+   was heard.
+
+All three buttons are also on the notification. The fine print is in ADR 0009.
+
 ## Room survey
 
 **Survey room (10 min)** listens for ten minutes (starting the service if it

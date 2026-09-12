@@ -13,6 +13,7 @@ class AudioFingerprintDetector(private val cfg: FingerprintConfig, private val m
     private var pendingN = 0
     private var blockStart: Double? = null
     private var active: Match? = null
+    private var quietUntil = 0.0
     private val liveWindow: Int get() = (cfg.windowS / cfg.sampleIntervalS).toInt()
 
     override fun warmup() { buffer.clear(); pending.clear(); pendingN = 0; blockStart = null; active = null; matcher.reset() }
@@ -34,9 +35,34 @@ class AudioFingerprintDetector(private val cfg: FingerprintConfig, private val m
         blockStart = start
     }
 
+    /**
+     * After learning material that ends now, the live window still holds its
+     * tail: without this, the freshly learned break would be "recognised" at
+     * once and duck the set again.
+     */
+    fun holdOffAfterLearning(ts: Double) { quietUntil = ts + cfg.windowS + cfg.sampleIntervalS; active = null; matcher.reset() }
+
     private fun onSample(ts: Double) {
-        active?.let { if (ts < it.expectedEndTs) return; active = null; matcher.reset() }
+        if (ts < quietUntil) return
         val live = buffer.takeLast(liveWindow)
+        val a = active
+        if (a != null) {
+            if (ts >= a.expectedEndTs) { active = null; matcher.reset() }
+            else if (a.kind == AdKind.MATERIAL) {
+                // Rolling hold: keep the duck while the live audio agrees with the
+                // record at this alignment; when it stops (the next spot in a
+                // different order, or the show is back), try to re-anchor on any
+                // known material; otherwise let the grace run out.
+                val (agrees, agreement) = matcher.stillAgrees(a.adId, a.estStartTs, live)
+                if (agrees) { active = a.copy(expectedEndTs = ts + cfg.materialGraceS, agreement = agreement); return }
+                matcher.identify(live)?.let { (adId, est) ->
+                    // Only if the *recent* audio agrees too: the window's tail alone must not re-find the spot that just ended.
+                    val (recentAgrees, agreement) = matcher.stillAgrees(adId, est, live)
+                    if (recentAgrees) active = matcher.match(adId, est, ts, agreement)
+                }
+                return
+            } else return
+        }
         active = matcher.feed(ts, live)
     }
 
@@ -54,7 +80,8 @@ class AudioFingerprintDetector(private val cfg: FingerprintConfig, private val m
         return vote(ts, 1.0, "fp_hit ad=${m.adId} dur=${m.durationS.toInt()} end=${"%.1f".format(m.expectedEndTs)} agree=${"%.2f".format(m.agreement)}")
     }
 
-    companion object { const val BUFFER_S = 40.0 }
+    /** Long enough to hold a whole taught break (the state machine's 240 s ceiling) plus slack. */
+    companion object { const val BUFFER_S = 300.0 }
 }
 
 enum class Override(val wire: String) { AUTO("auto"), MUTE("mute"), UNMUTE("unmute") }
@@ -69,6 +96,8 @@ data class Status(
     val detectors: List<String>,
     val reasons: List<String>,
     val adsLearned: Int,
+    /** Teach mode: the user pressed "Is an ad" and has not yet pressed "Show's back". */
+    val teaching: Boolean = false,
 )
 
 /**
@@ -95,6 +124,8 @@ class Engine(
     private var adSource: Source? = null
     private var activeAdId: Int? = null
     private var controllerMuted = false
+    /** Teach mode: hold the duck until "Show's back" (or the ceiling), then learn the whole break. */
+    private var userHold = false
     val transitions = ArrayList<Transition>()
     private val listeners = ArrayList<(Status) -> Unit>()
 
@@ -112,7 +143,8 @@ class Engine(
         val match = fingerprint?.activeMatch(ts)
         val fpHold = match != null  // activeMatch() already dropped expired ones
         val promote = fpHold && (machine.state == AdState.PROGRAM || machine.state == AdState.SUSPECT_AD)
-        val action = machine.update(decision, promote = promote, fpHold = fpHold, programEvidence = false) ?: return
+        // A user hold behaves like a fingerprint hold with no programme evidence: only the ceiling ends it.
+        val action = machine.update(decision, promote = promote, fpHold = fpHold || userHold, programEvidence = false) ?: return
         val reasons = if (promote) listOf("fingerprint:promote ad=${match!!.adId} dur=${match.durationS.toInt()}") + decision.reasons else decision.reasons
         apply(action, ts, decision.confidence, reasons, if (promote) Source.FINGERPRINT else Source.FUSION, match)
     }
@@ -126,12 +158,13 @@ class Engine(
             Action.UNMUTE -> {
                 controller.unmute(); controllerMuted = false
                 val start = adStartTs; val src = adSource; val adId = activeAdId
-                adStartTs = null; adSource = null; activeAdId = null
+                adStartTs = null; adSource = null; activeAdId = null; userHold = false
                 if (start != null && learner != null && fingerprint != null) {
                     val duration = ts - start
                     when (src) {
-                        Source.FINGERPRINT -> adId?.let { learner.observeDuration(it, duration) }
-                        Source.FUSION, Source.USER -> learner.learnSegment(start, duration, fingerprint.audioBetween(start, start + 60.0), force = src == Source.USER)
+                        Source.FINGERPRINT -> adId?.let { if (matchKind(it) == AdKind.AD) learner.observeDuration(it, duration) }
+                        Source.FUSION -> learner.learnSegment(start, duration, fingerprint.audioBetween(start, start + 60.0))
+                        Source.USER -> learner.learnMaterial(start, ts, fingerprint.audioBetween(start, ts))?.let { fingerprint.holdOffAfterLearning(ts) }
                         null -> {}
                     }
                 }
@@ -142,14 +175,34 @@ class Engine(
         emit()
     }
 
-    /** "✓ Is an ad": mute now and learn this segment when it ends. */
+    private fun matchKind(adId: Int): AdKind = store?.get(adId)?.kind ?: AdKind.AD
+
+    /**
+     * "✓ Is an ad" — teach mode: duck now and stay ducked, whatever the detectors
+     * say, until "Show's back" or the ceiling; then learn everything heard in
+     * between as material.
+     */
     @Synchronized fun confirmAd(now: Double): Boolean {
-        if (machine.state == AdState.AD) { adSource = Source.USER; return true }
+        if (machine.state == AdState.AD) { adSource = Source.USER; userHold = true; emit(); return true }
         // Promote through the machine so dwell/ceiling bookkeeping stays consistent.
         val decision = lastDecision ?: MuteDecision(now, true, 1.0, listOf("user:confirm"))
         val action = machine.update(decision.copy(ts = now), promote = true) ?: return false
+        userHold = true
         apply(action, now, 1.0, listOf("user:confirm"), Source.USER, null)
         return true
+    }
+
+    /**
+     * "▶ Show's back": in teach mode, restore and learn the bracketed break. On an
+     * automatic duck that overran, just restore — nothing is learned or forgotten.
+     */
+    @Synchronized fun showIsBack(now: Double): Boolean {
+        if (userHold) {
+            val action = machine.cancelAd(now) ?: return false
+            apply(action, now, 0.0, listOf("user:show_back"), Source.USER, null)
+            return true
+        }
+        return standDown(now)
     }
 
     /** "✗ Not an ad": unmute now; a fingerprint that caused this is forgotten. */
@@ -158,7 +211,7 @@ class Engine(
         val action = machine.cancelAd(now)
         if (action == null) return false
         controller.unmute(); controllerMuted = false
-        adStartTs = null; adSource = null; activeAdId = null
+        adStartTs = null; adSource = null; activeAdId = null; userHold = false
         if (src == Source.FINGERPRINT && adId != null) learner?.forget(adId)
         fingerprint?.abortMatch()
         fusion.reset()
@@ -171,7 +224,7 @@ class Engine(
     @Synchronized fun standDown(now: Double): Boolean {
         val action = machine.cancelAd(now) ?: return false
         controllerMuted = false   // the controller already stood down on its own
-        adStartTs = null; adSource = null; activeAdId = null
+        adStartTs = null; adSource = null; activeAdId = null; userHold = false
         fingerprint?.abortMatch()
         fusion.reset()
         transitions.add(Transition(now, action, 0.0, listOf("user:remote")))
@@ -198,6 +251,7 @@ class Engine(
         muted = controllerMuted,
         override = override,
         confidence = lastDecision?.confidence ?: 0.0,
+        teaching = userHold,
         detectors = detectors.map { it.name } + (fingerprint?.let { listOf(it.name) } ?: emptyList()),
         reasons = lastDecision?.reasons ?: emptyList(),
         adsLearned = store?.count() ?: 0,
