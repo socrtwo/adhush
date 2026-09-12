@@ -33,6 +33,8 @@ mkdir -p "${INSTALL_DIR}"
 python3 -m venv "${INSTALL_DIR}/venv"
 "${INSTALL_DIR}/venv/bin/pip" install --upgrade pip
 "${INSTALL_DIR}/venv/bin/pip" install "${REPO_DIR}[pi]" pigpio
+# The build guides say plain `adhush ...`; make that true for every user.
+ln -sf "${INSTALL_DIR}/venv/bin/adhush" /usr/local/bin/adhush
 
 if [[ ! -f "${REPO_DIR}/config/adhush.toml" ]]; then
     echo "==> no config/adhush.toml yet; copy one of:"
@@ -64,6 +66,6 @@ systemctl daemon-reload
 echo
 echo "installed. next steps:"
 echo "  1. cp config/adhush*.example.toml config/adhush.toml   # and edit"
-echo "  2. ${INSTALL_DIR}/venv/bin/adhush probe"
-echo "  3. ${INSTALL_DIR}/venv/bin/adhush calibrate"
+echo "  2. adhush probe --active   # relay/TV mute test"
+echo "  3. adhush calibrate"
 echo "  4. sudo systemctl enable --now adhush"

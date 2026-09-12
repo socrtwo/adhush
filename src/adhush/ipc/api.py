@@ -8,6 +8,15 @@ Stdlib-only server for platform front ends (docs/adr/0002). Endpoints:
 - ``GET  /events``      → Server-Sent Events stream of transition/decision/
                           status events (decision events only while trace is
                           enabled)
+- ``GET  /`` and the web front end's few static files, served from
+  ``IpcConfig.web_root`` so a phone or another PC needs only the core's
+  address — no file copying. Static files skip the token (they are public
+  HTML); every API endpoint still requires it. Only a fixed allow-list of
+  file names is served, so there is no path to traverse.
+
+``shutdown`` is the one command that reaches outside the pipeline: the
+server hands it to the ``on_shutdown`` callback the CLI supplies (which sets
+the run loop's stop event), after the reply has been written.
 
 SSE rather than WebSocket on purpose: every listed feature is one-directional
 streaming plus request/response, ``EventSource`` works from any browser or
@@ -21,9 +30,12 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 import queue
 import threading
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 
 from adhush.config import IpcConfig
@@ -34,14 +46,56 @@ log = logging.getLogger(__name__)
 
 _MAX_BODY = 64 * 1024
 _SSE_QUEUE_SIZE = 256
+# The complete set of static files the front end consists of; nothing else on
+# disk is reachable through the server, whatever the request path says.
+_STATIC_FILES = frozenset(
+    {
+        "index.html",
+        "manifest.webmanifest",
+        "sw.js",
+        "icon-192.png",
+        "icon-512.png",
+        "apple-touch-icon.png",
+    }
+)
+_STATIC_TYPES = {".webmanifest": "application/manifest+json", ".js": "text/javascript"}
+# Let the HTTP reply flush before the stop event tears the server down.
+_SHUTDOWN_DELAY_S = 0.05
+
+
+def resolve_web_root(web_root: str) -> Path | None:
+    """Locate the front end: as given, else relative to a source checkout."""
+    candidates = [Path(web_root)]
+    if not Path(web_root).is_absolute():
+        candidates.append(Path(__file__).resolve().parents[3] / web_root)
+    for candidate in candidates:
+        if (candidate / "index.html").is_file():
+            return candidate
+    return None
+
+
+def static_target(path: str, web_root: Path | None) -> Path | None:
+    """Map a request path to a servable file, or None if it is not one of ours."""
+    name = "index.html" if path in ("/", "") else path.lstrip("/")
+    if web_root is None or name not in _STATIC_FILES:
+        return None
+    target = web_root / name
+    return target if target.is_file() else None
 
 
 class ApiServer:
     """Serves one Pipeline's IPC surface until close()."""
 
-    def __init__(self, pipeline: Pipeline, config: IpcConfig) -> None:
+    def __init__(
+        self,
+        pipeline: Pipeline,
+        config: IpcConfig,
+        on_shutdown: Callable[[], None] | None = None,
+    ) -> None:
         self._pipeline = pipeline
         self._config = config
+        self._on_shutdown = on_shutdown
+        self._web_root = resolve_web_root(config.web_root)
         self._subscribers: list[queue.Queue[str]] = []
         self._subscribers_lock = threading.Lock()
         pipeline.add_listener(self._on_event)
@@ -80,7 +134,24 @@ class ApiServer:
                 self.send_header("Content-Length", "0")
                 self.end_headers()
 
+            def _serve_static(self, target: Path) -> None:
+                payload = target.read_bytes()
+                content_type = _STATIC_TYPES.get(target.suffix) or (
+                    mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+                )
+                self.send_response(200)
+                self._cors()
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(payload)
+
             def do_GET(self) -> None:
+                target = static_target(self.path.split("?", 1)[0], server._web_root)
+                if target is not None:
+                    self._serve_static(target)
+                    return
                 if not self._authorized():
                     self._reply(401, '{"error": "unauthorized"}')
                     return
@@ -88,6 +159,16 @@ class ApiServer:
                     self._reply(200, encode_event("status", server._pipeline.status()))
                 elif self.path == "/events":
                     self._stream_events()
+                elif self.path == "/" and server._web_root is None:
+                    self._reply(
+                        404,
+                        json.dumps(
+                            {
+                                "error": "web front end not found",
+                                "hint": f"set [ipc] web_root (looked for {server._config.web_root})",
+                            }
+                        ),
+                    )
                 else:
                     self._reply(404, '{"error": "not found"}')
 
@@ -171,6 +252,11 @@ class ApiServer:
             return {"ok": self._pipeline.confirm_ad()}
         if command.type == "reject_ad":
             return {"ok": self._pipeline.reject_ad()}
+        if command.type == "shutdown":
+            if self._on_shutdown is None:
+                return {"ok": False, "error": "shutdown not available on this core"}
+            threading.Timer(_SHUTDOWN_DELAY_S, self._on_shutdown).start()
+            return {"ok": True, "shutdown": True}
         return {"ok": False, "error": f"unhandled command {command.type}"}
 
     def _subscribe(self) -> queue.Queue[str]:

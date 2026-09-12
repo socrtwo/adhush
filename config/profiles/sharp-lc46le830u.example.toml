@@ -1,4 +1,9 @@
-# Sharp AQUOS LC-46LE830U (2010). Verify port presence against your manual.
+# Sharp AQUOS LC-46LE830U (2010).
+#
+# Verified against the operation manual for the LC-40/46/52/60LE830U series
+# (page numbers below refer to that manual). This set is unusually cooperative:
+# it accepts the AQUOS command set over BOTH a serial port and the network, and
+# MUTE takes discrete on/off parameters rather than a toggle.
 
 inherits = "generic"
 
@@ -8,22 +13,53 @@ model = "LC-46LE830U"
 year = 2010
 
 [control]
-backends = ["rs232_sharp", "ir_lirc", "ir_pigpio", "cec", "local_audio"]
-discrete_mute = true        # via serial MUTE parameter; verify on your unit
-state_readback = true       # serial query form
+# Serial first: no dependency on Wi-Fi staying up or DHCP keeping the TV's
+# address. IP control is the same command set without the cable.
+backends = ["rs232_sharp", "network_ip", "cec", "ir_lirc", "ir_pigpio", "local_audio"]
+discrete_mute = true        # MUTE parameter 1 = on, 2 = off (p. 59)
+state_readback = true       # "?" returns the present value for some commands (p. 58)
 
-[rs232]
-baud = 9600
-databits = 8
-parity = "none"
-stopbits = 1
-# Command mnemonics are filled in during implementation from the AQUOS
-# RS-232C control specification for this generation. Do not guess codes here.
+# --- Serial control (p. 58) -------------------------------------------------
+# Physical layer, confirmed: the TV's RS-232C terminal is a 9-pin D-sub *male*
+# connector (specifications, p. 76), and the manual calls for a *cross-type*
+# (null modem) cable. So the cable end at the TV must be female and cross-
+# wired: a USB-to-serial null-modem cable with an FTDI chip does it in one
+# piece, or a straight FTDI adapter plus a female-to-female null-modem adapter.
+[rs232_sharp]
+# port = "/dev/ttyUSB0"     # COM3 etc. on Windows; set in your own adhush.toml
+baud = 9600                 # 9,600 bps, 8 data bits, no parity, 1 stop bit,
+timeout_s = 1.0             # no flow control (p. 58)
 
+# --- IP control (p. 58) -----------------------------------------------------
+# Enable on the set first: MENU > Initial Setup > Internet Setup >
+# Network Setup > IP Control Setup > Enable, then set the port there.
+# Command framing is identical to serial: four ASCII command characters, four
+# parameter characters left-aligned and space-padded, terminated by CR.
+# Put host, port, and any login_id / login_password in your own config/adhush.toml
+# -- never here. The TV drops an idle connection after 3 minutes, which is
+# harmless because each command opens its own.
+[network_ip]
+transport = "tcp"
+
+[network_ip.commands.mute_on]
+send = "MUTE1   \r"
+expect = "OK"
+
+[network_ip.commands.mute_off]
+send = "MUTE2   \r"
+expect = "OK"
+
+[network_ip.commands.state]
+send = "MUTE?   \r"
+expect_on = "1"
+expect_off = "2"
+
+# --- Infrared ---------------------------------------------------------------
 [ir]
 protocol = "sharp"
 carrier_hz = 38000
-# Populate via `adhush ir-test` learn-and-verify sweep.
+# Populate via `adhush ir-test` learn-and-verify sweep. The manual documents no
+# IR codes, so do not guess them here.
 
 [roi]
 logo = { x = 0.84, y = 0.80, w = 0.14, h = 0.14 }

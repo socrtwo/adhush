@@ -36,9 +36,25 @@ Pi-based inline HDMI unit with audio interception, no TV cooperation needed.
 `docs/hardware-passthrough-box.md`, and `scripts/install-pi.sh` for the
 systemd deployment.
 
+## Phase 6 — Android on-device app (core implemented and conformance-tested; app built in CI, not yet run on a phone)
+Mic capture plus a Kotlin port of the detector, fusion, and state-machine
+layers, commanding the TV over Wi-Fi with no hardware at all. Ducks with
+`VOLM` instead of muting so the microphone keeps hearing the set through the
+break. Design in `docs/android-app-design.md`; the decision to maintain a
+second on-device implementation is ADR 0007, with shared labelled fixtures as
+the conformance harness.
+
+## Phase 7 — always running, always visible (done, 0.6.0)
+`adhush service` installs the core at login on Linux/ChromeOS, macOS and
+Windows; `adhush overlay` is a stdlib always-on-top mini window with ✗ / ✓ / ■;
+the `shutdown` IPC command is the one way a UI stops the core (ADR 0008); the
+core serves the web front end, now an installable web app with a Document
+Picture-in-Picture mini window in Chromium browsers. `docs/release.md` has the
+per-platform matrix, including what mobile does and does not get yet.
+
 ## Beyond the roadmap
-Candidates, in no particular order: on-device mobile capture and in-browser
-WASM detectors (the Phase 4 remainder), an audio delay line for retroactive
+Candidates, in no particular order: in-browser WASM detectors (the rest of the
+Phase 4 remainder), an iOS on-device core following ADR 0007, an audio delay line for retroactive
 mutes on the passthrough box, `metrics.py` (Prometheus text endpoint), RC-6 /
 Kaseikyo IR encoders, an LG webOS websocket backend, and profile
 contributions per docs/device-support.md.

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent">
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="20dp">
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="AdHush" android:textSize="24sp" android:textStyle="bold" />
+        <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="stopped" android:textSize="18sp" android:paddingTop="6dp" android:paddingBottom="14dp" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="How this phone reaches the TV" />
+        <RadioGroup android:id="@+id/control" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <RadioButton android:id="@+id/controlIp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Network" />
+            <RadioButton android:id="@+id/controlSerial" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Serial cable" />
+            <RadioButton android:id="@+id/controlIr" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Infrared" />
+        </RadioGroup>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Infrared codes (Sharp: address 1, volume up 14, down 15 — hex)" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <EditText android:id="@+id/irAddress" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="address" android:inputType="number" />
+            <EditText android:id="@+id/irVolUp" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="vol up" />
+            <EditText android:id="@+id/irVolDown" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="vol down" />
+        </LinearLayout>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="TV address (Network: IP Control must be enabled on the set)" />
+        <EditText android:id="@+id/host" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="192.168.1.50" android:inputType="textUri" android:autofillHints="" />
+        <EditText android:id="@+id/port" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="10002" android:inputType="number" android:autofillHints="" />
+        <EditText android:id="@+id/login" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="login ID (blank if none)" android:inputType="text" android:autofillHints="username" />
+        <EditText android:id="@+id/password" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="password" android:inputType="textPassword" android:autofillHints="password" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="10dp"
+            android:text="Duck to volume (0–60; 3–5 is inaudible but still detectable)" />
+        <EditText android:id="@+id/duck" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="4" android:inputType="number" android:autofillHints="" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Normal volume (used only if the TV will not answer VOLM?)" />
+        <EditText android:id="@+id/normal" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="20" android:inputType="number" android:autofillHints="" />
+        <CheckBox android:id="@+id/camera" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Use the back camera to watch for the network logo" />
+        <Button android:id="@+id/cameraSetup" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Set up camera (45 s, during a show)" />
+        <CheckBox android:id="@+id/useMute" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Use MUTE instead of ducking (phone goes deaf while muted)" />
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:paddingTop="12dp">
+            <Button android:id="@+id/save" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Save" />
+            <Button android:id="@+id/test" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Test TV" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/start" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Start" />
+            <Button android:id="@+id/stop" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Stop" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/notAd" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="✗ Not an ad" />
+            <Button android:id="@+id/isAd" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="✓ Is an ad" />
+        </LinearLayout>
+        <Button android:id="@+id/showBack" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="▶ Show's back (ends teaching, learns the break)" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/survey" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Survey room (10 min)" />
+            <Button android:id="@+id/share" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Share survey" />
+        </LinearLayout>
+
+        <TextView android:id="@+id/log" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:paddingTop="14dp" android:textSize="12sp" android:fontFamily="monospace" />
+    </LinearLayout>
+</ScrollView>

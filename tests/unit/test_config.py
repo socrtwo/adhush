@@ -66,3 +66,16 @@ def test_unknown_control_backend_rejected(tmp_path: Path) -> None:
     (tmp_path / "adhush.toml").write_text('[control]\nbackend = "telepathy"\n')
     with pytest.raises(ConfigError, match="control backend"):
         load_config(tmp_path / "adhush.toml", PROFILES)
+
+
+def test_ui_and_web_root_sections(tmp_path: Path) -> None:
+    (tmp_path / "profiles").mkdir()
+    (tmp_path / "profiles" / "generic.toml").write_text("[identity]\nmake = \"g\"\n")
+    cfg = tmp_path / "adhush.toml"
+    cfg.write_text('[ipc]\nenabled = true\nweb_root = "/srv/adhush-web"\n[ui]\noverlay = false\n')
+    config = load_config(cfg)
+    assert config.ipc.web_root == "/srv/adhush-web"
+    assert config.ui.overlay is False
+    cfg.write_text("")
+    defaults = load_config(cfg)
+    assert defaults.ui.overlay is True and defaults.ipc.web_root == "platforms/web"

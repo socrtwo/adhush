@@ -1,5 +1,10 @@
 # Build the AdHush box — beginner's guide
 
+**An illustrated, print-ready version of this guide is in
+`docs/print/AdHush-beginner-guide-5V.pdf`** — same steps, a diagram for each one.
+Putting the Pi in a Retroflag NESPi 4 case? Read `docs/build-guide-nespi4.md`
+too: the case sits on the header pins this guide uses for relay power.
+
 This guide is written so a 12-year-old can follow it. No soldering, nothing
 dangerous: every part plugs together or screws down with a small screwdriver.
 Everything runs on low-voltage USB power — **never** open or wire anything
@@ -23,8 +28,8 @@ from instructions and type commands carefully, you can build this.
 | 3 | Powered HDMI splitter, 1 in → 2 out | Makes a copy of the TV picture | $15 |
 | 4 | HDMI audio extractor (HDMI in → HDMI out + headphone/RCA audio out) | Pulls the sound out into a normal audio cable | $15–20 |
 | 5 | USB 3.0 HDMI-to-USB capture stick (says "UVC", 1080p is fine) | Lets the Pi see the copied picture | $15–25 |
-| 6 | Relay module, 2-channel, 3.3 V logic, with screw terminals ("opto-isolated" is best) | The click-switch that cuts the sound | $7 |
-| 7 | 3 female-to-female jumper wires | Connect the Pi to the relay | $3 |
+| 6 | Relay module, 2-channel, **5 V**, with screw terminals ("opto-isolated" is best) | The click-switch that cuts the sound | $7 |
+| 7 | Jumper wire kit with a mini breadboard (you need 2 female-to-female and 3 male-to-female wires) | Connect the Pi to the relay, and feed one signal to both relay channels | $8–10 |
 | 8 | Two 3.5 mm audio cables (one will be cut in half) + one you keep whole as a spare | Carry the sound | $6 |
 | 9 | 2 short HDMI cables (plus the ones you already have) | Connect everything | $10 |
 | 10 | Small screwdriver, scissors or wire strippers | Tools | — |
@@ -36,8 +41,20 @@ or TV with HDMI, and your home Wi-Fi password. Speakers or a soundbar with a
 ## Step 1 — Set up the Pi (👨‍🔧 with an adult)
 
 1. On a computer, install **Raspberry Pi Imager** (from raspberrypi.com),
-   put in the microSD card, and write **Raspberry Pi OS** to it. In the
-   imager's settings gear, set a username/password and your Wi-Fi.
+   put in the microSD card, and write **Raspberry Pi OS (64-bit)** to it —
+   the plain, recommended one at the top of the list. In the imager's
+   settings gear, set a username/password and your Wi-Fi.
+
+   Three things about that choice, because the wrong pick wastes an evening:
+   - **64-bit**, not 32-bit. AdHush is all number-crunching, and 64-bit is
+     about 25% faster at it. More importantly, numpy has ready-made 64-bit
+     downloads; on 32-bit the Pi may have to *build* numpy, which takes
+     about an hour and can run out of memory on a 2 GB board.
+   - **Not** the one labelled **Legacy**. That one is older and comes with
+     Python 3.9. AdHush needs 3.11 or newer, so the install would stop with
+     an error on your very first command.
+   - **Desktop**, not **Lite**. Lite has no desktop, so step 3 below (the
+     Terminal window) has nowhere to happen.
 2. Put the card in the Pi, connect keyboard, mouse, and a monitor, and plug
    in the power. Wait for the desktop.
 3. Open the black **Terminal** window and type these lines, pressing Enter
@@ -67,6 +84,30 @@ Think of it as making a copy of the TV signal so the Pi can watch too:
 Turn on the TV: you should see your channels exactly like before. If the
 screen is black, try the splitter's other output, or a different HDMI cable.
 
+### Find your sound device
+
+The Pi can hear from more than one place (its own headphone jack, the
+capture stick, anything else USB). It needs to know which one is the stick.
+In the terminal, inside the `adhush` folder:
+
+```
+adhush doctor
+```
+
+Near the bottom it prints a list of **sound cards**. Find the one marked
+`<- USB, probably the stick` and read its card number. On most Pis it is
+**card 1**, and that is what the settings file already says, so you are done.
+
+If your number is different, open the settings file with
+`nano config/adhush.toml`, find the line that starts `audio_device =`, and
+change the `1` in `"alsa:hw:1,0"` to your number. Save with Ctrl+O, Enter,
+then Ctrl+X. Run `adhush doctor` again: the line
+`audio device alsa:hw:... present` should now say `ok`.
+
+(If the box ever goes deaf after a reboot, USB gadgets sometimes swap
+numbers. `adhush doctor` also prints a name form like
+`alsa:hw:CARD=MS2109,DEV=0`; paste that instead and it will stay put.)
+
 ## Step 3 — Build the sound path (scissors time, 👨‍🔧 check before power-on)
 
 The sound will now travel: extractor → **through the relay** → speakers.
@@ -75,7 +116,14 @@ The relay is the switch AdHush clicks.
 1. Take one 3.5 mm audio cable and **cut it in the middle**. Strip about
    2 cm of the outer cover from each cut end. Inside are small colored wires
    (usually red, white/green, and a bare or copper one — that bare one is
-   "ground").
+   "ground"). If the strands look shiny and painted, they are: scrape the
+   last 1 cm with sandpaper or the back of a knife until the copper shows, or
+   the screw terminals will not make contact.
+
+   **No-scissors option:** two "3.5 mm plug to screw terminal" adapters
+   (about $6 a pair) replace the cut cable. Plug one into the extractor and
+   one into the speakers, and run short wires between their screws and the
+   relay's screws. Same wiring, nothing to cut or scrape.
 2. Twist the **ground** wires from both halves together — ground is never
    switched. Wrap the joint in tape.
 3. Screw the **red** wire from one half into relay channel 1's **COM**
@@ -85,16 +133,28 @@ The relay is the switch AdHush clicks.
    BACK, not stuck off.)
 4. Do the same with the **white/green** wires on relay channel 2 (COM and NC).
 5. Jumper wires from the Pi to the relay board:
-   - Pi **pin 1 (3.3 V)** → relay **VCC**
+   - Pi **pin 2 (5 V)** → relay **VCC** — pin 4 is also 5 V, either works
    - Pi **pin 6 (GND)** → relay **GND**
-   - Pi **pin 16 (GPIO 23)** → relay **IN1** — and also to **IN2** if your
-     board doesn't gang the channels (a spare jumper split works).
+   - Pi **pin 16 (GPIO 23)** → relay **IN1 *and* IN2**. Both channels need
+     the same signal, because left and right must switch together, and one Pi
+     pin only holds one jumper socket. So go through the breadboard: a
+     male-to-female wire from pin 16 into any breadboard row, then two more
+     male-to-female wires from that same row out to IN1 and IN2. (A 1-channel
+     DPDT board, if you find one, switches both from a single IN pin.)
+   Pin 1 is the corner pin nearest the microSD slot; pin 2 is right beside it.
    Look up "Raspberry Pi GPIO pinout" for a picture; count carefully.
 6. Plug one half of the cut cable into the **extractor's audio out**, and
    the other half into your **speakers/soundbar**.
 
-👨‍🔧 Have an adult check: ground joined, audio on COM+NC (not NO), 3.3 V (not
-5 V) on VCC. Then power up. You should hear the TV through the speakers. Turn
+The relay's coil wants the full 5 V, which is why VCC goes to pin 2 — but its
+input pin only has to light an opto-coupler's internal LED, which conducts from
+about 2 V, so the Pi's 3.3 V signal drives it. That is what makes a shop-bought
+5 V board work from 3.3 V logic. (Earlier revisions of this guide asked for a
+3.3 V module; almost nobody stocks them.)
+
+👨‍🔧 Have an adult check: ground joined, audio on COM+NC (not NO), **5 V (pin 2,
+not pin 1)** on VCC, and the little JD-VCC jumper cap still in place if your
+board has one. Then power up. You should hear the TV through the speakers. Turn
 the TV's own speakers all the way down — the relay path is now the sound.
 
 ## Step 4 — Wake it up
@@ -102,11 +162,24 @@ the TV's own speakers all the way down — the relay path is now the sound.
 In the Pi's terminal, inside the `adhush` folder:
 
 ```
-adhush probe
+adhush probe --active
 ```
 
-It should say `relay_hdmi ... ok`. Then, while a normal show (not a
-commercial) is on, teach it what the channel's logo looks like:
+It should say `relay_hdmi ... ok`, then cut the sound for two seconds and bring
+it back — one click each way. That proves the whole wiring in one command.
+
+**If it works backwards** — silent at rest, sound during the test — your board
+mutes on a low signal instead of a high one. Some 5 V boards do. It is a
+one-line fix in `config/adhush.toml`, not a wiring mistake:
+
+```toml
+[control.relay_hdmi]
+gpio = 23
+active_high = false
+```
+
+Then, while a normal show (not a commercial) is on, teach it what the channel's
+logo looks like:
 
 ```
 adhush calibrate
@@ -140,9 +213,14 @@ that mistake) and **"✓ Is an ad"** (to teach it one it missed).
 |---|---|
 | No picture on TV | Reseat HDMI cables; splitter power; swap splitter outputs |
 | No sound at all | Cable halves swapped? Red/white on COM+**NC**? Grounds joined? |
-| Sound never mutes | `adhush probe`; is `pigpiod` running? (`sudo systemctl start pigpiod`) |
+| The box never hears anything / `doctor` says audio device FAIL | Wrong card number. Re-read the sound-card list in `adhush doctor` and fix `audio_device` (Step 2) |
+| Sound never mutes | `adhush probe --active`; is `pigpiod` running? (`sudo systemctl start pigpiod`) Is VCC really on pin 2 — a 5 V board will not pull in on 3.3 V |
+| Muted at rest, sound during the test | Set `active_high = false` (see Step 4) |
+| Relay buzzes or chatters | Not enough current: use the official Pi supply and keep the JD-VCC cap on. If it still buzzes, that board wants real 3.3 V logic or a level shifter |
+| Sound on one side only | Only one channel is wired, or one screw is loose |
 | Mutes the show by mistake | Press "✗ Not an ad" on the phone page — it learns |
 | `adhush run` errors | Read the message; `adhush doctor` lists what's missing |
+| `install-pi.sh` says the Python version is too old | The Legacy (Python 3.9) image got written. Re-flash with **Raspberry Pi OS (64-bit)**, per Step 1 |
 
 One honest note: some sources copy-protect their HDMI signal so the capture
 stick sees nothing. AdHush never tries to break that protection. If your

@@ -68,6 +68,9 @@ class LoudnessConfig:
     window_s: float = 1.5
     delta_lufs: float = 2.5
     baseline_s: float = 120.0
+    # Elevated loudness lasting longer than any ad pod means the baseline is
+    # wrong (it was taken during a quiet passage); after this long it may follow.
+    max_elevated_s: float = 180.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +166,16 @@ class IpcConfig:
     port: int = 8675
     # Optional shared secret; when set, requests need Authorization: Bearer <token>.
     token: str = ""
+    # Directory holding the web front end the server serves at "/". Relative
+    # paths resolve against the working directory, then a source checkout.
+    web_root: str = "platforms/web"
+
+
+@dataclass(frozen=True, slots=True)
+class UiConfig:
+    # Show the always-on-top mini window next to `adhush run` when a display
+    # exists. It is a thin IPC client, so it needs [ipc] enabled.
+    overlay: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,6 +202,7 @@ class Config:
     profile: Profile
     fingerprint: FingerprintConfig = field(default_factory=FingerprintConfig)
     ipc: IpcConfig = field(default_factory=IpcConfig)
+    ui: UiConfig = field(default_factory=UiConfig)
     log_level: str = "info"
 
 
@@ -263,6 +277,7 @@ _FUSION_DEFAULTS = FusionConfig()
 _CONTROL_DEFAULTS = ControlConfig()
 _FP_DEFAULTS = FingerprintConfig()
 _IPC_DEFAULTS = IpcConfig()
+_UI_DEFAULTS = UiConfig()
 _ROI_DEFAULTS = RoiConfig()
 
 
@@ -337,6 +352,7 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
             window_s=float(loud.get("window_s", _LOUDNESS_DEFAULTS.window_s)),
             delta_lufs=float(loud.get("delta_lufs", _LOUDNESS_DEFAULTS.delta_lufs)),
             baseline_s=float(loud.get("baseline_s", _LOUDNESS_DEFAULTS.baseline_s)),
+            max_elevated_s=float(loud.get("max_elevated_s", _LOUDNESS_DEFAULTS.max_elevated_s)),
         ),
         logo_absence=LogoAbsenceConfig(
             roi=_parse_roi(logo.get("roi"), profile_roi),
@@ -415,9 +431,13 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
         host=str(ipc_raw.get("host", _IPC_DEFAULTS.host)),
         port=int(ipc_raw.get("port", _IPC_DEFAULTS.port)),
         token=str(ipc_raw.get("token", "")),
+        web_root=str(ipc_raw.get("web_root", _IPC_DEFAULTS.web_root)),
     )
     if not 0 < ipc.port < 65536:
         raise ConfigError("ipc.port out of range")
+
+    ui_raw = data.get("ui", {})
+    ui = UiConfig(overlay=bool(ui_raw.get("overlay", _UI_DEFAULTS.overlay)))
 
     log_level = str(data.get("log", {}).get("level", "info"))
     return Config(
@@ -428,5 +448,6 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
         profile=profile,
         fingerprint=fingerprint,
         ipc=ipc,
+        ui=ui,
         log_level=log_level,
     )

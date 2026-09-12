@@ -1,7 +1,9 @@
 """USB HDMI-to-UVC dongle capture (V4L2/ffmpeg). Primary Pi 4 path.
 
 Video is read from the V4L2 device and audio from ALSA, each through its own
-ffmpeg subprocess streaming raw data over a pipe. Timestamps come from the
+ffmpeg subprocess streaming raw data over a pipe. The audio spec accepts the
+same ``fmt:device`` form as the microphone backend (``alsa:hw:1,0``), so one
+config vocabulary covers every capture path. Timestamps come from the
 monotonic clock at read time, normalized to the session start so downstream
 timing matches replay semantics.
 """
@@ -15,6 +17,7 @@ from collections.abc import Iterator
 import numpy as np
 
 from adhush.capture.base import CaptureCaps, CaptureError, CaptureSource
+from adhush.capture.microphone import audio_ffmpeg_args
 from adhush.config import CaptureConfig
 from adhush.events import AudioEvent, FrameEvent
 from adhush.util.timing import Clock, monotonic_clock
@@ -44,12 +47,7 @@ class HdmiUvcSource(CaptureSource):
             stdout=subprocess.PIPE,
         )
         self._audio_proc = subprocess.Popen(
-            [
-                "ffmpeg", "-v", "error",
-                "-f", "alsa",
-                "-i", cfg.audio_device,
-                "-f", "f32le", "-ac", "1", "-ar", str(cfg.audio_rate), "pipe:1",
-            ],
+            audio_ffmpeg_args(cfg, "linux"),  # V4L2 capture is Linux-only
             stdout=subprocess.PIPE,
         )
         self._t0 = self._clock()

@@ -40,6 +40,18 @@ adhush learn clip.mp4 --labels ads.json            # seed the ad fingerprint sto
 reports precision/recall separately for mute-onset and unmute-onset against a
 JSON label file (`[{"start_ts": 16.0, "duration_s": 30.0}, ...]`).
 
+## Keep it running, see it at a glance (0.6.0)
+
+```
+adhush run                    # with [ipc] enabled: serves the web app at :8675 and
+                              # opens the always-on-top mini window (✗ ✓ ■)
+adhush service install        # start at login on Linux/ChromeOS, macOS, Windows
+```
+
+Phones and tablets open `http://<core-host>:8675/` and add it to the home
+screen. Which platform gets what — and what mobile does *not* get yet — is in
+`docs/release.md`.
+
 ## Design goals
 
 1. **Detector plurality.** No single heuristic is reliable. Every detector is a
@@ -89,6 +101,15 @@ compensate with state verification where available.
 - **Camera + microphone** — device camera pointed at the screen, no cabling.
 - **Audio only** — microphone or line-in; a reduced but useful detector set.
 - **Screen capture** — for streaming apps on desktop, ChromeOS, and Web.
+
+## Android app (0.7.0)
+
+`platforms/android` is a phone-only build for the Sharp LC-46LE830U: the
+detector core ported to Kotlin, listening through the microphone, ducking the
+set's volume over its IP port during commercials and restoring it after. No
+Pi, no cables. CI builds a debug APK (`adhush-<ver>-android-debug.apk` on each
+release) to sideload; see `platforms/android/README.md` and
+`docs/android-app-design.md`. It has not yet been run on a phone.
 
 ## Platform roadmap
 

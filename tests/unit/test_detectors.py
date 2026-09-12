@@ -117,6 +117,47 @@ class TestLoudness:
         assert vote.confidence == 0.0
         assert vote.reason.startswith("warming ")
 
+    def test_baseline_ignores_the_startup_ramp(self) -> None:
+        # A microphone delivers a moment of silence before real audio; the
+        # short-term window is then half empty and reads low. The baseline
+        # must not be taken from that, or the program looks "hot" for good.
+        detector = LoudnessDetector(LoudnessConfig(window_s=1.5, baseline_s=30.0))
+        t = np.arange(800, dtype=np.float64) / RATE
+        silent = np.zeros(800, dtype=np.float32)
+        program = (0.1 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+        ts = 0.0
+        for _ in range(5):  # 0.5 s of nothing
+            detector.observe_audio(AudioEvent(ts=ts, samples=silent, sample_rate=RATE))
+            ts += 0.1
+        for _ in range(150):  # 15 s of steady program
+            detector.observe_audio(AudioEvent(ts=ts, samples=program, sample_rate=RATE))
+            ts += 0.1
+        vote = detector.vote(ts)
+        assert vote.confidence == 0.0, vote.reason
+        assert detector.baseline_lufs is not None
+        assert abs(detector.baseline_lufs - detector._last_short_term) < 0.2
+
+    def test_stuck_baseline_recovers_after_max_elevated(self) -> None:
+        # Elevated for longer than any ad pod: the baseline follows, the vote drops.
+        detector = LoudnessDetector(
+            LoudnessConfig(window_s=1.5, baseline_s=20.0, max_elevated_s=60.0)
+        )
+        t = np.arange(800, dtype=np.float64) / RATE
+        program = (0.1 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+        hot = (0.35 * np.sin(2 * np.pi * 880 * t)).astype(np.float32)
+        ts = 0.0
+        for _ in range(100):
+            detector.observe_audio(AudioEvent(ts=ts, samples=program, sample_rate=RATE))
+            ts += 0.1
+        for _ in range(590):  # 59 s hot: still frozen
+            detector.observe_audio(AudioEvent(ts=ts, samples=hot, sample_rate=RATE))
+            ts += 0.1
+        assert detector.vote(ts).confidence == 1.0
+        for _ in range(1200):  # two more minutes: the escape lets it follow
+            detector.observe_audio(AudioEvent(ts=ts, samples=hot, sample_rate=RATE))
+            ts += 0.1
+        assert detector.vote(ts).confidence < 0.05
+
     def test_baseline_freezes_during_elevation(self) -> None:
         # Feed long program, then a long hot stretch: the baseline must not
         # chase the hot level, so the delta (and vote) stays high throughout.

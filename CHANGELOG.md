@@ -3,7 +3,137 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
-## [Unreleased]
+## [0.10.0] - 2026-09-12
+### Added
+- Android **camera logo watching** (ADR 0011): the back camera feeds two
+  luma frames a second; the lit screen is found automatically; a
+  **one-button set-up** watches 45 s of programme, finds the corner whose
+  edges never move and saves it as the logo template; the ported
+  logo-absence detector then ducks the set when the bug disappears and
+  restores when it returns. Presence of the logo vetoes audio-only ducks
+  and ends fingerprint holds early. Inert when no screen is in view.
+  Vision code and the finder are in the core with synthetic-room tests.
+
+## [0.9.0] - 2026-09-12
+### Added
+- Android: **three TV paths** in one APK (ADR 0010) — Network (as before),
+  **Serial cable** (RS-232C through a USB-OTG adapter; same Sharp commands,
+  no login, two-way), and **Infrared** (the phone's own blaster speaking
+  Sharp's 15-bit protocol; ducking by counted volume presses, persisted so a
+  crash still restores; mute deliberately unused). `Test TV` exercises
+  whichever path is selected. Sharp IR encoding and the step controller
+  live in the core with tests.
+
+## [0.8.0] - 2026-09-12
+### Added
+- Android **teach mode** (ADR 0009): *Is an ad* now holds the duck until
+  *Show's back*, and the whole bracketed break is learned as one record of
+  *material*. Matching on material is rolling — the duck stays while the
+  live audio agrees with anything known, re-anchors when the next spot
+  starts, and releases 5 s after the last known spot — so taught spots are
+  recognised in any order, alone, or as cut-downs. *Not an ad* during
+  teaching cancels without learning; the 4-minute ceiling ends a forgotten
+  session and still learns it. Notification actions are now Is an ad /
+  Show's back / Not an ad (Stop lives in the app).
+
+### Fixed
+- *Is an ad* used to restore the volume after 400 ms, having learned
+  nothing, because nothing held the state machine in AD.
+
+## [0.7.4] - 2026-09-09
+### Fixed
+- Loudness detector (both cores): the baseline was taken from the first
+  short-term value above the gate, which on a phone is a window still half
+  full of the microphone's start-up silence — several dB low — and the
+  freeze-while-elevated rule then kept it there for good. The first room
+  survey showed the detector at full confidence 83% of the time. The
+  baseline now waits for a whole un-gated window, and an elevation longer
+  than `max_elevated_s` (180 s, longer than any ad pod) unfreezes it.
+- Room survey gains a `baseline_lufs` column so this is visible.
+
+## [0.7.3] - 2026-09-09
+### Added
+- Android **room survey**: a 10-minute recording of what the detectors
+  measure (dBFS, flatness, short-term LUFS, silence floor, confidences,
+  ducked flag) — numbers, never audio — with a digest in the app and a
+  *Share survey* button that hands the TSV to any app via FileProvider.
+  `RoomSurvey` lives in the core so the digest is unit-tested.
+
+### Verified
+- LC-46LE830U over IP from the Android app: login accepted, `VOLM?` and
+  `MUTE?` answer, mute/unmute and ducking confirmed `OK`. Documented in
+  `docs/device-support.md` and the Android README.
+
+## [0.7.2] - 2026-09-09
+### Fixed
+- Sharp IP login: fields are ended with **CR**, not CRLF — the LC-46LE830U
+  took the stray LF as the password and refused every login. The Android
+  client falls back to CRLF once if a set refuses CR; `network_ip` gains a
+  `login_terminator` option (default `"\r"`). "User Name or Password
+  mismatch" now counts as a refusal on both platforms, so the app says
+  *rejected login* instead of *unreachable*.
+
+## [0.7.1] - 2026-09-09
+### Changed
+- Android: the Sharp client keeps **one connection** open and reconnects when
+  the set drops it, instead of a connection per command — the first run
+  against an LC-46LE830U showed the set ignoring connections opened
+  back-to-back. A silent reply is now "unconfirmed", not a rejection; only
+  `ERR` rejects. *Test TV* logs every raw exchange, including the login
+  prompts, and tests ducking with the configured normal volume when the set
+  will not answer `VOLM?`.
+
+## [0.7.0] - 2026-09-08
+### Added
+- **Android on-device app** (`platforms/android`, ADR 0007): a pure-Kotlin
+  `core` — DSP (arbitrary-length FFT via Bluestein), the loudness detector
+  ported constant-for-constant, a microphone silence detector with an
+  adaptive room floor, fusion and the state machine ported verbatim, 12-bit
+  chroma fingerprints with an **audio-primary** pair-key matcher and learner,
+  a file-backed store, the Sharp AQUOS IP client with login handshake and a
+  **ducking** controller (`VOLM`, persisted pre-duck volume, remote-wins), and
+  the engine — plus a thin `app`: microphone foreground service, encrypted
+  settings, notification actions, a *Not an ad* Quick Settings tile, and a
+  *Test TV* button that settles whether the set answers `VOLM?`.
+- Conformance harness: `tools/gen_conformance.py` writes fixtures from the
+  Python core; the Kotlin tests reproduce the signal and match every block
+  (worst LUFS delta 5e-10) and replay fusion/state decisions tick for tick.
+- CI builds the debug APK on every change under `platforms/android` (verified:
+  the workflow assembles and uploads `adhush-android-debug`) and the
+  release workflow attaches it to each release.
+
+## [0.6.0] - 2026-09-08
+### Added
+- **Always-on-top mini window** (`adhush overlay`, `src/adhush/ui/overlay.py`,
+  ADR 0008): a small, borderless, translucent, draggable pill showing
+  PROGRAM / SUSPECT / MUTED with ✗ not-an-ad, ✓ is-an-ad and ■ stop. Standard
+  library only (tkinter + urllib), runs as its own process so it can never
+  stall detection, remembers where you put it. Started automatically by
+  `adhush run` when a display exists; `[ui] overlay` / `--no-overlay` turn it
+  off.
+- **Always running**: `adhush service install|uninstall|status` installs the
+  core as a start-at-login service on Linux/ChromeOS (systemd user unit),
+  macOS (launchd agent) and Windows (Task Scheduler logon task), in the
+  user's session so the overlay has a display.
+- **`shutdown` IPC command**: the one sanctioned way a UI stops the core.
+  Additive to protocol v1.
+- **The core serves the web front end** at `/` (`[ipc] web_root`), so any
+  phone, tablet or PC on the network needs only the core's address. Fixed
+  allow-list of files, no path traversal, static files public while the API
+  stays token-gated.
+- **Installable web app**: `platforms/web` gains a manifest, a service worker
+  and icons, so the front end installs to the home screen on Android, iOS,
+  ChromeOS and desktop browsers. A **Mini window** button opens a Document
+  Picture-in-Picture window (Chromium 116+): a real always-on-top floating
+  control on ChromeOS, Windows and macOS browsers; a popup fallback elsewhere.
+- Tag-triggered release workflow builds the wheel, sdist and a web-front-end
+  zip and publishes them as a GitHub Release.
+- `docs/release.md`: what each platform gets in this release, including what
+  it does not (no native Android/iOS binaries yet; see ADR 0007).
+### Changed
+- `adhush run` prints the served address rather than a file path.
+- Overrides win in the status display: a forced mute reads MUTED before the
+  state machine ticks.
 
 ## [0.5.0] - 2026-08-28
 ### Added
