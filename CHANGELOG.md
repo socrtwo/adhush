@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [Unreleased]
+### Changed
+- Android camera: a **setup screen** replaces the blind 45-second button —
+  the live picture with the screen and logo boxes drawn on it, a magnified
+  crop of the chosen box, a live match score, and drag-to-draw to override
+  the automatic choice. The first real run found the finder picking a
+  persistent news graphic rather than the bug, unverifiable without seeing
+  it.
+- Hand-held phones: the screen is re-found in every frame with edges refined
+  to the pixel (the coarse box was only good to 8 px), capture is 1280 × 720,
+  a blur guard makes a smeared frame inert rather than "absent", and absence
+  must last 2.5 s. Frames come out upright.
+
 ## [0.10.0] - 2026-09-12
 ### Added
 - Android **camera logo watching** (ADR 0011): the back camera feeds two

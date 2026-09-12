@@ -99,15 +99,20 @@ At the top of the settings, pick how *this* phone reaches *its* TV:
 
 ## Watching for the logo with the camera
 
-Tick **Use the back camera** and, with a show on and the whole TV in the
-camera's view, press **Set up camera (45 s)**. The app finds the screen,
-watches which edges never move — the network bug — and saves that corner as
-the thing to look for. When it is done the notification says where it found
-the logo; if it says none was found, check that a show (not an ad) was on and
-the screen was fully in view, then press again. From then on the bug
-disappearing ducks the set within about two seconds on its own, and the bug
-reappearing restores it at once. Camera set-up is per channel: press it again
-after switching channels. Details: ADR 0011.
+Press **Camera setup**. AdHush pauses and the screen shows what the back
+camera sees, with the TV outlined in green. Hold the phone upright with the
+whole TV in view (eight feet away is fine) and, with a show on, press
+**Watch 45 s**. When it finishes, a yellow box marks what it thinks is the
+logo and the strip underneath shows that box magnified: it should look like
+the channel's bug. If it grabbed the wrong thing — on a news channel the
+ticker frame or a banner is a common mistake — drag a box around the real
+logo with your finger. The status line shows a live match score: high while
+the logo is on screen, low during a commercial. When it reads PRESENT during
+a show, press **Save & start**. Set-up is per channel.
+
+Hand-held is expected: the TV is re-found in every frame, a smeared frame
+(the phone swung) counts as "can't see" rather than "logo gone", and the
+logo has to be missing for 2.5 s before the set is ducked.
 
 ## Teaching it the commercials
 

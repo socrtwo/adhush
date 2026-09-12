@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import io.adhush.core.Assembly
 import io.adhush.core.ControlError
 import io.adhush.core.DuckController
+import io.adhush.core.HANDHELD_LOGO_CONFIG
 import io.adhush.core.LogoAbsenceDetector
 import io.adhush.core.LogoFinder
 import io.adhush.core.LogoTemplate
@@ -129,7 +130,7 @@ class AdHushService : Service(), LifecycleOwner {
         controller = ctl
         val store = FileFingerprintStore(File(filesDir, "ads.tsv"))
         val cameraWanted = settings.camera && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-        val logo = if (cameraWanted) LogoTemplate.load(File(filesDir, LOGO_FILE))?.let { LogoAbsenceDetector(template = it) } else null
+        val logo = if (cameraWanted) LogoTemplate.load(File(filesDir, LOGO_FILE))?.let { LogoAbsenceDetector(HANDHELD_LOGO_CONFIG, it) } else null
         val eng = Assembly.engine(NetworkedController(ctl), store, logo = logo)
         eng.addListener { s -> lastStatus = s; main.post { update(describe(s)) } }
         engine = eng
@@ -148,7 +149,7 @@ class AdHushService : Service(), LifecycleOwner {
         try { m.start() } catch (e: Exception) { update("mic failed: ${e.message}"); stopSelf(); return }
         mic = m
         if (cameraWanted) {
-            val cam = CameraSource(this, this) { gray ->
+            val cam = CameraSource(this, this) { gray ->   // 2 fps, upright
                 val ts = mic?.mediaTime ?: 0.0
                 eng.onFrame(gray, ts)
                 finder?.let { f ->

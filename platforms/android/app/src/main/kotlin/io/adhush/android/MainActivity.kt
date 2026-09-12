@@ -50,7 +50,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.showBack).setOnClickListener { serviceAction(AdHushService.ACTION_SHOW_BACK) }
         findViewById<Button>(R.id.survey).setOnClickListener { save(); startWithPermissions(AdHushService.ACTION_SURVEY) }
         findViewById<Button>(R.id.share).setOnClickListener { shareSurvey() }
-        findViewById<Button>(R.id.cameraSetup).setOnClickListener { save(); settings.camera = true; findViewById<CheckBox>(R.id.camera).isChecked = true; startWithPermissions(AdHushService.ACTION_CAMERA_SETUP) }
+        findViewById<Button>(R.id.cameraSetup).setOnClickListener { save(); startActivity(Intent(this, CameraSetupActivity::class.java)) }
     }
 
     /** The newest survey file, handed to whatever the user picks (mail, Drive, messages) through FileProvider. */

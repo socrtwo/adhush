@@ -12,12 +12,14 @@ import io.adhush.core.Gray
 import java.util.concurrent.Executors
 
 /**
- * The back camera as a trickle of luma frames — two a second at 640 × 480 is
- * plenty to see whether a bug is on the screen, and a small fraction of what
- * recording video costs. Frames are stamped by the caller with media time so
- * the logo detector and the audio detectors share one clock.
+ * The back camera as a trickle of luma frames — two a second at 1280 × 720 is
+ * plenty to see whether a bug is on a screen eight feet away, and a small
+ * fraction of what recording video costs. Frames come out upright (rotated
+ * by the sensor's rotationDegrees) so the setup screen and the service see
+ * the same picture. Frames are stamped by the caller with media time so the
+ * logo detector and the audio detectors share one clock.
  */
-class CameraSource(private val context: Context, private val owner: LifecycleOwner, private val onFrame: (Gray) -> Unit) {
+class CameraSource(private val context: Context, private val owner: LifecycleOwner, private val intervalMs: Long = INTERVAL_MS, private val onFrame: (Gray) -> Unit) {
     private val executor = Executors.newSingleThreadExecutor()
     private var provider: ProcessCameraProvider? = null
     @Volatile private var lastAt = 0L
@@ -31,13 +33,13 @@ class CameraSource(private val context: Context, private val owner: LifecycleOwn
                 val p = future.get(); provider = p
                 @Suppress("DEPRECATION")
                 val analysis = ImageAnalysis.Builder()
-                    .setTargetResolution(Size(640, 480))
+                    .setTargetResolution(Size(1280, 720))   // an 8 ft living room needs the pixels
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
                 analysis.setAnalyzer(executor) { image ->
                     try {
                         val now = System.currentTimeMillis()
-                        if (now - lastAt >= INTERVAL_MS) { lastAt = now; frames++; onFrame(toGray(image)) }
+                        if (now - lastAt >= intervalMs) { lastAt = now; frames++; onFrame(toGray(image).rotate(image.imageInfo.rotationDegrees)) }
                     } finally { image.close() }
                 }
                 p.unbindAll()
