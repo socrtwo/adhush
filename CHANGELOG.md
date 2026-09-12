@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
-## [Unreleased]
+## [0.9.0] - 2026-09-12
 ### Added
 - Android: **three TV paths** in one APK (ADR 0010) — Network (as before),
   **Serial cable** (RS-232C through a USB-OTG adapter; same Sharp commands,
