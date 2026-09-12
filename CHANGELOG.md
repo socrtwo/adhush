@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
-## [Unreleased]
+## [0.8.0] - 2026-09-12
 ### Added
 - Android **teach mode** (ADR 0009): *Is an ad* now holds the duck until
   *Show's back*, and the whole bracketed break is learned as one record of
