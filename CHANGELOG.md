@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
-## [Unreleased]
+## [0.11.0] - 2026-09-13
 ### Changed
 - Android camera: a **setup screen** replaces the blind 45-second button —
   the live picture with the screen and logo boxes drawn on it, a magnified
