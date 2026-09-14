@@ -114,6 +114,19 @@ Hand-held is expected: the TV is re-found in every frame, a smeared frame
 (the phone swung) counts as "can't see" rather than "logo gone", and the
 logo has to be missing for 2.5 s before the set is ducked.
 
+## Hearing the commercials (speech)
+
+Press **Download speech model** once (40 MB, stays on the phone), tick
+**Use speech**, and Start. The app now turns what it hears into words and
+keeps the last three hours of them. Every ten minutes, and whenever you
+press **Learn scripts now**, it looks for runs of ten or more words that
+came back identically minutes apart — a commercial airing again — and saves
+them as scripts. The words of anything you bracket with *Is an ad* and
+*Show's back* are saved as a script at once. From then on, hearing a saved
+script ducks the set on its own and the volume returns a few seconds after
+the last matching words. Legal and sales boilerplate ("ask your doctor",
+"call now") ducks the set by itself. Details: ADR 0012.
+
 ## Teaching it the commercials
 
 The detectors need a quiet break boundary to catch an ad on their own, and a

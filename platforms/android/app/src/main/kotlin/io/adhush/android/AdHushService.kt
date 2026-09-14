@@ -23,6 +23,8 @@ import io.adhush.core.HANDHELD_LOGO_CONFIG
 import io.adhush.core.LogoAbsenceDetector
 import io.adhush.core.LogoFinder
 import io.adhush.core.LogoTemplate
+import io.adhush.core.FileScriptStore
+import io.adhush.core.TranscriptDetector
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -51,6 +53,9 @@ class AdHushService : Service(), LifecycleOwner {
     override val lifecycle: Lifecycle get() = registry
     private lateinit var settings: Settings
     private var camera: CameraSource? = null
+    private var speech: SpeechSource? = null
+    private var scripts: FileScriptStore? = null
+    private var lastRepeatLearnAt = 0L
     @Volatile private var finder: LogoFinder? = null
     @Volatile private var finderStartedAt = 0L
     private var engine: Engine? = null
@@ -96,6 +101,13 @@ class AdHushService : Service(), LifecycleOwner {
                 if (engine != null && survey == null) { survey = RoomSurvey(SURVEY_S); update("surveying the room: 0:00 / ${clock(SURVEY_S)}") }
                 return START_STICKY
             }
+            ACTION_LEARN_SCRIPTS -> {
+                io.execute {
+                    val n = engine?.learnScriptsFromTranscript() ?: 0
+                    main.post { update(if (engine == null) "not running" else "repetition learning: $n new script(s), ${scripts?.count() ?: 0} total") }
+                }
+                return START_STICKY
+            }
             ACTION_CAMERA_SETUP -> {
                 if (engine == null) start()
                 if (camera == null) { update("camera is off — tick 'Use the camera' and Start again"); return START_STICKY }
@@ -131,7 +143,10 @@ class AdHushService : Service(), LifecycleOwner {
         val store = FileFingerprintStore(File(filesDir, "ads.tsv"))
         val cameraWanted = settings.camera && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         val logo = if (cameraWanted) LogoTemplate.load(File(filesDir, LOGO_FILE))?.let { LogoAbsenceDetector(HANDHELD_LOGO_CONFIG, it) } else null
-        val eng = Assembly.engine(NetworkedController(ctl), store, logo = logo)
+        val speechWanted = settings.speech && SpeechSource.isInstalled(this)
+        val scriptStore = if (speechWanted) FileScriptStore(File(filesDir, SCRIPTS_FILE)).also { scripts = it } else null
+        val transcript = scriptStore?.let { TranscriptDetector(it) }
+        val eng = Assembly.engine(NetworkedController(ctl), store, logo = logo, transcript = transcript)
         eng.addListener { s -> lastStatus = s; main.post { update(describe(s)) } }
         engine = eng
         io.execute {
@@ -142,8 +157,11 @@ class AdHushService : Service(), LifecycleOwner {
                 main.post { update("TV unreachable: ${e.message}") }
             }
         }
+        val sp = if (speechWanted) runCatching { SpeechSource(SpeechSource.modelDir(this)) { words -> eng.onWords(words) } }.onFailure { main.post { update("speech engine failed: ${it.message}") } }.getOrNull() else null
+        speech = sp
         val m = MicSource(this) { block ->
             eng.onAudio(block)
+            sp?.feed(block)
             survey?.let { if (it.feed(block, controller?.ducked == true)) finishSurvey(it) }
         }
         try { m.start() } catch (e: Exception) { update("mic failed: ${e.message}"); stopSelf(); return }
@@ -162,7 +180,9 @@ class AdHushService : Service(), LifecycleOwner {
             cam.start { msg -> main.post { update(msg) } }
         }
         val eye = if (cameraWanted) (if (logo != null) " + camera (logo)" else " + camera (not set up)") else ""
-        update("listening (${m.sourceName}) via ${settings.control}$eye")
+        val ear = if (speechWanted) " + speech (${scriptStore?.count() ?: 0} scripts)" else if (settings.speech) " + speech (model not downloaded)" else ""
+        update("listening (${m.sourceName}) via ${settings.control}$eye$ear")
+        lastRepeatLearnAt = System.currentTimeMillis()
         main.postDelayed(ticker, POLL_MS)
     }
 
@@ -197,6 +217,7 @@ class AdHushService : Service(), LifecycleOwner {
 
     /** Tear the engine, mic and camera down and start again with the current settings. */
     private fun restart() {
+        speech?.close(); speech = null
         camera?.stop(); camera = null
         mic?.stop(); mic = null
         main.removeCallbacks(ticker)
@@ -210,6 +231,11 @@ class AdHushService : Service(), LifecycleOwner {
 
     /** Every few seconds: follow the remote, and treat a dead mic while ducked as a reason to restore. */
     private fun tick() {
+        // Every ten minutes, look for commercials that repeated in what was heard.
+        if (speech != null && System.currentTimeMillis() - lastRepeatLearnAt > REPEAT_LEARN_MS) {
+            lastRepeatLearnAt = System.currentTimeMillis()
+            io.execute { val n = engine?.learnScriptsFromTranscript() ?: 0; if (n > 0) main.post { update("learned $n new script(s) from repetition · ${scripts?.count()} total") } }
+        }
         survey?.let { update("surveying the room: ${clock(it.elapsedS)} / ${clock(SURVEY_S)} · ${lastStatus?.let(::describe) ?: "listening"}") }
         val ctl = controller ?: return
         val m = mic ?: return
@@ -229,6 +255,7 @@ class AdHushService : Service(), LifecycleOwner {
     private fun now(): Double = mic?.mediaTime ?: 0.0
 
     override fun onDestroy() {
+        speech?.close(); speech = null
         camera?.stop(); camera = null
         main.removeCallbacks(ticker)
         mic?.stop(); mic = null
@@ -310,6 +337,9 @@ class AdHushService : Service(), LifecycleOwner {
         const val ACTION_STOP = "io.adhush.android.STOP"
         const val ACTION_SHOW_BACK = "io.adhush.android.SHOW_BACK"
         const val ACTION_CAMERA_SETUP = "io.adhush.android.CAMERA_SETUP"
+        const val ACTION_LEARN_SCRIPTS = "io.adhush.android.LEARN_SCRIPTS"
+        const val SCRIPTS_FILE = "scripts.tsv"
+        const val REPEAT_LEARN_MS = 10 * 60 * 1000L
         const val LOGO_FILE = "logo.tsv"
         const val SETUP_S = 45L
         const val ACTION_SURVEY = "io.adhush.android.SURVEY"

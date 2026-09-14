@@ -31,6 +31,8 @@ class Settings(context: Context) {
     var control: String get() = prefs.getString("control", "ip") ?: "ip"; set(v) = prefs.edit().putString("control", v).apply()
     /** Watch the screen with the back camera for the network bug (ADR 0011). */
     var camera: Boolean get() = prefs.getBoolean("camera", false); set(v) = prefs.edit().putBoolean("camera", v).apply()
+    /** Recognise speech and learn commercials from their words (ADR 0012). */
+    var speech: Boolean get() = prefs.getBoolean("speech", false); set(v) = prefs.edit().putBoolean("speech", v).apply()
     var irAddress: Int get() = prefs.getInt("ir_address", 1); set(v) = prefs.edit().putInt("ir_address", v).apply()
     var irVolumeUp: Int get() = prefs.getInt("ir_vol_up", 0x14); set(v) = prefs.edit().putInt("ir_vol_up", v).apply()
     var irVolumeDown: Int get() = prefs.getInt("ir_vol_down", 0x15); set(v) = prefs.edit().putInt("ir_vol_down", v).apply()

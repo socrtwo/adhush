@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [Unreleased]
+### Added
+- Android **transcript detector**, the fifth way (ADR 0012): offline speech
+  recognition (Vosk, small English model downloaded once), commercials
+  found by **repetition** in the last three hours of words (a run of ten or
+  more words heard again minutes apart), teach-mode windows saved as
+  scripts, live matching that tolerates misheard words with a rolling
+  grace, and legal/sales boilerplate that ducks on its own. `Learn scripts
+  now` button and a ten-minute automatic pass.
+
 ## [0.11.0] - 2026-09-13
 ### Changed
 - Android camera: a **setup screen** replaces the blind 45-second button —

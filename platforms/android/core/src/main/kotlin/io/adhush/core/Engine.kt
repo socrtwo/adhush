@@ -134,6 +134,14 @@ class Engine(
     /** A camera frame (luma). Detectors that watch the screen update; the vote happens on the next audio tick. */
     @Synchronized fun onFrame(frame: Gray, ts: Double) { for (d in detectors) d.observeFrame(frame, ts) }
 
+    private val transcript: TranscriptDetector? get() = detectors.firstOrNull { it is TranscriptDetector } as TranscriptDetector?
+
+    /** Recognised words from the phone's speech engine; the transcript detector votes on the next audio tick. */
+    @Synchronized fun onWords(words: List<Word>) { val t = transcript ?: return; for (w in words) t.observeWord(w) }
+
+    /** Repetition learning over the recent transcript; how many new scripts were found. */
+    @Synchronized fun learnScriptsFromTranscript(): Int = transcript?.learnFromHistory() ?: 0
+
     private val logo: LogoAbsenceDetector? get() = detectors.firstOrNull { it is LogoAbsenceDetector } as LogoAbsenceDetector?
 
     @Synchronized fun onAudio(block: AudioBlock) {
@@ -173,7 +181,10 @@ class Engine(
                     when (src) {
                         Source.FINGERPRINT -> adId?.let { if (matchKind(it) == AdKind.AD) learner.observeDuration(it, duration) }
                         Source.FUSION -> learner.learnSegment(start, duration, fingerprint.audioBetween(start, start + 60.0))
-                        Source.USER -> learner.learnMaterial(start, ts, fingerprint.audioBetween(start, ts))?.let { fingerprint.holdOffAfterLearning(ts) }
+                        Source.USER -> {
+                            learner.learnMaterial(start, ts, fingerprint.audioBetween(start, ts))?.let { fingerprint.holdOffAfterLearning(ts) }
+                            transcript?.learnWindow(start, ts)   // the words of the break are a script too
+                        }
                         null -> {}
                     }
                 }
@@ -280,12 +291,14 @@ object Assembly {
         fpCfg: FingerprintConfig = FingerprintConfig(),
         weights: Map<String, Double> = emptyMap(),
         logo: LogoAbsenceDetector? = null,
+        transcript: TranscriptDetector? = null,
     ): Engine {
-        val detectors = listOf<Detector>(MicSilenceDetector(), LoudnessDetector()) + (logo?.let { listOf<Detector>(it) } ?: emptyList())
+        val detectors = listOf<Detector>(MicSilenceDetector(), LoudnessDetector()) + listOfNotNull<Detector>(logo, transcript)
         val matcher = AudioMatcher(store, fpCfg)
         val fp = AudioFingerprintDetector(fpCfg, matcher)
         // The logo carries three default weights: absence alone mutes, and presence vetoes an audio-only duck.
-        val w = if (logo != null && "logo_absence" !in weights) weights + ("logo_absence" to LOGO_WEIGHT) else weights
+        var w = if (logo != null && "logo_absence" !in weights) weights + ("logo_absence" to LOGO_WEIGHT) else weights
+        if (transcript != null && "transcript" !in w) w = w + ("transcript" to LOGO_WEIGHT)   // a known script mutes alone, like a missing logo
         val fusion = Fusion(fusionCfg, w, detectors.map { it.name } + fp.name)
         return Engine(detectors, fusion, AdStateMachine(fusionCfg), controller, fp, AudioLearner(store, matcher, fpCfg), store)
     }

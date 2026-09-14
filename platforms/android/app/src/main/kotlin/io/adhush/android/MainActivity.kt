@@ -51,6 +51,21 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.survey).setOnClickListener { save(); startWithPermissions(AdHushService.ACTION_SURVEY) }
         findViewById<Button>(R.id.share).setOnClickListener { shareSurvey() }
         findViewById<Button>(R.id.cameraSetup).setOnClickListener { save(); startActivity(Intent(this, CameraSetupActivity::class.java)) }
+        findViewById<Button>(R.id.speechModel).setOnClickListener { downloadSpeechModel() }
+        findViewById<Button>(R.id.learnScripts).setOnClickListener { serviceAction(AdHushService.ACTION_LEARN_SCRIPTS) }
+    }
+
+    /** One-time 40 MB download of the offline recogniser's English model, into app-private storage. */
+    private fun downloadSpeechModel() {
+        if (SpeechSource.isInstalled(this)) { log("speech model is already installed"); return }
+        log("downloading the speech model (40 MB) …")
+        thread {
+            try {
+                var last = -1
+                SpeechSource.install(this) { p -> if (p / 10 != last / 10) { last = p; runOnUiThread { log("speech model: $p%") } } }
+                runOnUiThread { log("speech model installed — tick 'Use speech' and Start"); findViewById<Button>(R.id.speechModel).text = "Speech model: installed" }
+            } catch (e: Exception) { runOnUiThread { log("download failed: ${e.message}") } }
+        }
     }
 
     /** The newest survey file, handed to whatever the user picks (mail, Drive, messages) through FileProvider. */
@@ -82,6 +97,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<EditText>(R.id.normal).setText(settings.normalVolume.toString())
         findViewById<CheckBox>(R.id.useMute).isChecked = settings.useMute
         findViewById<CheckBox>(R.id.camera).isChecked = settings.camera
+        findViewById<CheckBox>(R.id.speech).isChecked = settings.speech
+        findViewById<Button>(R.id.speechModel).text = if (SpeechSource.isInstalled(this)) "Speech model: installed" else "Download speech model (40 MB)"
         findViewById<android.widget.RadioGroup>(R.id.control).check(when (settings.control) { "serial" -> R.id.controlSerial; "ir" -> R.id.controlIr; else -> R.id.controlIp })
         findViewById<EditText>(R.id.irAddress).setText(settings.irAddress.toString())
         findViewById<EditText>(R.id.irVolUp).setText("%02X".format(settings.irVolumeUp))
@@ -97,6 +114,7 @@ class MainActivity : AppCompatActivity() {
         settings.normalVolume = (findViewById<EditText>(R.id.normal).text.toString().toIntOrNull() ?: 20).coerceIn(0, 60)
         settings.useMute = findViewById<CheckBox>(R.id.useMute).isChecked
         settings.camera = findViewById<CheckBox>(R.id.camera).isChecked
+        settings.speech = findViewById<CheckBox>(R.id.speech).isChecked
         settings.control = when (findViewById<android.widget.RadioGroup>(R.id.control).checkedRadioButtonId) { R.id.controlSerial -> "serial"; R.id.controlIr -> "ir"; else -> "ip" }
         settings.irAddress = findViewById<EditText>(R.id.irAddress).text.toString().trim().toIntOrNull()?.coerceIn(0, 31) ?: 1
         settings.irVolumeUp = findViewById<EditText>(R.id.irVolUp).text.toString().trim().toIntOrNull(16)?.coerceIn(0, 255) ?: 0x14
