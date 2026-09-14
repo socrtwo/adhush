@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
-## [Unreleased]
+## [0.12.0] - 2026-09-14
 ### Added
 - Android **transcript detector**, the fifth way (ADR 0012): offline speech
   recognition (Vosk, small English model downloaded once), commercials
