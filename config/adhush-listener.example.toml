@@ -1,0 +1,75 @@
+# The TV listener: a Raspberry Pi with a USB webcam and microphone on a shelf
+# facing the TV, turning a Sharp AQUOS down over Wi-Fi during commercials.
+# No HDMI hardware, no relay, no soldering (docs/build-guide-tv-listener.md).
+# Copy to config/adhush.toml and edit the [control.network_ip] section.
+
+[capture]
+backend = "camera"
+device = "/dev/video0"       # the webcam; `adhush doctor` lists what it found
+width = 1280
+height = 720
+fps = 10                     # a bug on a screen does not need 30 frames a second
+audio_device = "alsa:plughw:1,0"   # the webcam's or USB microphone's card number, from `adhush doctor`
+autocrop = true              # find the TV in the picture; half a TV is dropped, never "logo gone"
+
+[device]
+profile = "sharp-lc46le830u"
+
+[detect]
+# The listener's four ways (docs/build-guide-tv-listener.md, "The methods"):
+enabled = ["silence", "loudness", "logo_absence", "fingerprint"]
+
+[detect.logo_absence]
+absence_frames = 25          # 2.5 s at 10 fps: the bug must be gone this long
+template = "data/logos/logo.npz"   # written by `adhush calibrate`
+present_threshold = 0.4
+search_px = 6                # slide the box a little: a webcam's screen edge is never exact
+require_sighting = true      # the bug must be seen once before it can be missed
+stale_s = 2.0                # no whole screen for this long = the camera has no say
+
+[detect.loudness]
+window_s = 1.5
+delta_lufs = 2.5
+max_elevated_s = 180
+
+[detect.silence]
+dbfs_threshold = -50.0       # the room survey on the phone read a -56 dBFS floor with the fans on
+min_run_ms = 400
+
+[fingerprint]
+enabled = true
+store = "data/fingerprints/ads.sqlite"
+learn = true
+
+[fusion]
+mute_confidence = 0.72
+unmute_confidence = 0.45
+mute_dwell_ms = 900
+unmute_dwell_ms = 400
+max_mute_s = 240
+not_ad_quiet_s = 60          # after "Not an ad", a minute in which nothing may duck
+
+[control]
+backend = "network_ip"
+verify_with_audio = true
+
+[control.network_ip]
+host = "192.168.1.12"        # the TV's address (MENU > Initial Setup > Internet Setup)
+port = 10002
+login_id = "admin"           # the IP Control login you set on the TV, or blank
+login_password = ""          # never commit a real password; config/adhush.toml is git-ignored
+duck_level = 4               # turn the set down to this during a commercial (3-5 is inaudible)
+normal_volume = 19           # used only if the set will not say its own volume
+duck_state_file = "data/preduck-volume.txt"   # so a crash never leaves the set quiet
+
+[ipc]
+enabled = true
+host = "0.0.0.0"             # the phone page needs the Pi reachable on the Wi-Fi
+port = 8675
+token = ""
+
+[ui]
+overlay = false              # no screen on the shelf
+
+[log]
+level = "info"

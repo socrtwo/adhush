@@ -23,7 +23,7 @@ from adhush.detect.base import Detector
 from adhush.detect.fingerprint import FingerprintDetector
 from adhush.detect.fusion import Fusion
 from adhush.detect.logo_absence import LogoAbsenceDetector
-from adhush.events import AdSegment, AudioEvent, FrameEvent
+from adhush.events import AdSegment, AudioEvent, FrameEvent, MuteDecision
 from adhush.fingerprint.learner import Learner
 from adhush.fingerprint.matcher import Match, Matcher
 from adhush.state import Action, AdState, AdStateMachine
@@ -84,6 +84,10 @@ class Pipeline:
         self._confirm_current = False
         self._reject_current = False
         self._last_ts = 0.0
+        # Teach mode: "Is an ad" outside AD ducks now and holds until "Show's back".
+        self._user_hold = False
+        # After "Not an ad": nothing may mute until this media time.
+        self._quiet_until = -1.0
 
     def warmup(self) -> None:
         for detector in self._detectors:
@@ -114,20 +118,39 @@ class Pipeline:
     def _decide(self, ts: float) -> None:
         with self._lock:
             self._last_ts = ts
-            votes = [d.vote(ts) for d in self._detectors]
-            decision = self._fusion.combine(votes, ts)
+            # An inert detector (the camera with no whole screen in view, a logo
+            # never yet sighted) casts no vote and leaves the normalizer alone.
+            votes = [d.vote(ts) for d in self._detectors if d.voting]
+            quiet = ts < self._quiet_until
+            if quiet:
+                # The quiet period after "Not an ad": evidence is shown, nothing acts on it.
+                self._fusion.reset()
+                decision = MuteDecision(
+                    ts=ts, mute=False, confidence=0.0, reasons=("user:not_ad_quiet",)
+                )
+            else:
+                decision = self._fusion.combine(votes, ts)
             if self._trace:
                 self._emit("decision", decision)
 
-            match = self._fp.active_match(ts) if self._fp is not None else None
+            match = None if quiet else (
+                self._fp.active_match(ts) if self._fp is not None else None
+            )
             fp_hold = match is not None and ts < match.expected_end_ts
             promote = fp_hold and self._machine.state in (
                 AdState.PROGRAM, AdState.SUSPECT_AD,
             )
-            program_evidence = any(d.program_present for d in self._logos)
+            # A user hold behaves like a fingerprint hold with no program
+            # evidence: only "Show's back" or the ceiling ends it.
+            program_evidence = not self._user_hold and any(
+                d.program_present for d in self._logos
+            )
 
             action = self._machine.update(
-                decision, promote=promote, fp_hold=fp_hold, program_evidence=program_evidence
+                decision,
+                promote=promote,
+                fp_hold=fp_hold or self._user_hold,
+                program_evidence=program_evidence,
             )
             if action is None:
                 return
@@ -184,6 +207,7 @@ class Pipeline:
         match, self._mute_match, self._ad_start_est = self._mute_match, None, None
         confirm, self._confirm_current = self._confirm_current, False
         reject, self._reject_current = self._reject_current, False
+        self._user_hold = False
         if self._learner is None or self._fp is None or start is None or reject:
             return
         duration = ts - start
@@ -228,6 +252,9 @@ class Pipeline:
                 "state": self._machine.state.value,
                 "muted": self._machine.muted,
                 "override": self._override,
+                "teaching": self._user_hold,
+                "quiet_s": max(0.0, self._quiet_until - self._last_ts),
+                "camera": self._logos[0].describe(self._last_ts) if self._logos else None,
                 "trace": self._trace,
                 "detectors": [d.name for d in self._detectors],
                 "transitions": len(self.transitions),
@@ -266,20 +293,70 @@ class Pipeline:
             self._emit("status", self.status())
 
     def confirm_ad(self) -> bool:
-        """User confirms the current mute really is an ad; learn it even if
-        its duration falls outside the usual sanity bounds."""
+        """"✓ Is an ad". Already muted: confirm it, so it is learned even if its
+        duration falls outside the usual sanity bounds. Not muted: teach mode —
+        mute now and hold, whatever the detectors say, until "Show's back" or
+        the ceiling; then learn everything heard in between (ADR 0009)."""
         with self._lock:
-            if self._machine.state is not AdState.AD:
-                return False
             self._confirm_current = True
+            if self._machine.state is AdState.AD:
+                return True
+            decision = MuteDecision(
+                ts=self._last_ts, mute=True, confidence=1.0, reasons=("user:confirm",)
+            )
+            action = self._machine.update(decision, promote=True)
+            if action is None:
+                self._confirm_current = False
+                return False
+            self._user_hold = True
+            self._mute_match = None
+            self._ad_start_est = self._last_ts
+            self._record(
+                Transition(
+                    ts=self._last_ts, action=action, confidence=1.0, reasons=("user:confirm",)
+                )
+            )
+            return True
+
+    def show_back(self) -> bool:
+        """"▶ Show's back". In teach mode: restore and learn the bracketed
+        break. On an automatic mute that overran: just restore, learning and
+        forgetting nothing. Either way the detectors are told it is program."""
+        with self._lock:
+            teaching = self._user_hold
+            if not teaching:
+                self._reject_current = True  # stand down: no learning
+            action = self._machine.cancel_ad(self._last_ts)
+            if action is None:
+                self._reject_current = False
+                return False
+            self._record(
+                Transition(
+                    ts=self._last_ts,
+                    action=action,
+                    confidence=0.0,
+                    reasons=("user:show_back" if teaching else "user:stand_down",),
+                )
+            )
+            self._finish_ad(self._last_ts)
+            for detector in self._detectors:
+                detector.user_says_program(self._last_ts)
+            if self._fp is not None:
+                self._fp.abort_match()
+            self._fusion.reset()
             return True
 
     def reject_ad(self) -> bool:
-        """User says the current mute is wrong: unmute now, skip learning,
-        and forget the fingerprint that caused a false match."""
+        """"✗ Not an ad": unmute now, skip learning, forget the fingerprint
+        that caused a false match, tell every detector it was wrong, and open
+        the quiet period in which nothing may mute again."""
         with self._lock:
             match = self._mute_match
             self._reject_current = True
+            for detector in self._detectors:
+                detector.user_says_program(self._last_ts)
+            self._quiet_until = self._last_ts + self._machine.not_ad_quiet_s
+            self._fusion.reset()
             action = self._machine.cancel_ad(self._last_ts)
             if action is not None:
                 self._record(
@@ -291,9 +368,11 @@ class Pipeline:
                     )
                 )
                 self._finish_ad(self._last_ts)
+            else:
+                self._reject_current = False
+            if self._fp is not None:
+                self._fp.abort_match()
             if match is not None:
-                if self._fp is not None:
-                    self._fp.abort_match()
                 if self._learner is not None:
                     self._learner.forget(match.ad_id)
                 if self._matcher is not None:

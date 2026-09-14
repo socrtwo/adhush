@@ -4,7 +4,7 @@ Versioned JSON messages. Server-to-client *events* carry ``{"v", "type",
 "data"}``; client-to-server *commands* carry ``{"v", "type", ...fields}``.
 Event types: ``status``, ``transition``, ``decision`` (only while trace is
 enabled). Command types: ``get_status``, ``override`` (mode: auto|mute|
-unmute), ``confirm_ad``, ``reject_ad``, ``set_trace`` (enabled: bool), and
+unmute), ``confirm_ad``, ``show_back``, ``reject_ad``, ``set_trace`` (enabled: bool), and
 ``shutdown`` (stop the core; the transport unmutes first — see engine).
 Adding a command type keeps VERSION at 1: old clients never send it, and
 old servers reject it with a clean protocol error.
@@ -23,7 +23,7 @@ VERSION = 1
 
 EVENT_TYPES = ("status", "transition", "decision")
 COMMAND_TYPES = (
-    "get_status", "override", "confirm_ad", "reject_ad", "set_trace", "shutdown"
+    "get_status", "override", "confirm_ad", "show_back", "reject_ad", "set_trace", "shutdown"
 )
 OVERRIDE_MODES = ("auto", "mute", "unmute")
 

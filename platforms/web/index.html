@@ -63,6 +63,7 @@
     <span class="label" id="pill-label">…</span>
     <button title="Not an ad" onclick="command({type:'reject_ad'})">✗</button>
     <button title="Is an ad" onclick="command({type:'confirm_ad'})">✓</button>
+    <button title="Show's back" onclick="command({type:'show_back'})">▶</button>
     <button title="Stop AdHush" class="danger" onclick="stopCore()">■</button>
   </div>
 
@@ -77,6 +78,7 @@
     </div>
     <div class="row">
       <button onclick="command({type:'confirm_ad'})">✓ Is an ad</button>
+      <button onclick="command({type:'show_back'})">▶ Show's back</button>
       <button onclick="command({type:'reject_ad'})">✗ Not an ad</button>
     </div>
     <div class="row">
@@ -119,6 +121,7 @@ function styleFor(status) {
   if (!status) return ['OFFLINE', 'var(--dim)', ''];
   if (status.override === 'mute') return ['MUTED', 'var(--bad)', 'muted'];
   if (status.override === 'unmute') return ['PROGRAM', 'var(--ok)', 'program'];
+  if (status.teaching) return ['TEACHING', 'var(--warn)', 'suspect'];
   if (status.muted) return ['MUTED', 'var(--bad)', 'muted'];
   if (status.state === 'suspect_ad') return ['SUSPECT', 'var(--warn)', 'suspect'];
   if (status.state === 'ad') return ['MUTED', 'var(--bad)', 'muted'];
@@ -129,7 +132,10 @@ function render(status) {
   const el = document.getElementById('state');
   el.textContent = label; el.className = cls;
   document.getElementById('detail').textContent = status
-    ? 'override: ' + status.override + ' · detectors: ' + status.detectors.join(', ') : '';
+    ? 'override: ' + status.override + ' · detectors: ' + status.detectors.join(', ')
+      + (status.camera ? ' · camera: ' + status.camera : '')
+      + (status.quiet_s > 0 ? ' · you said not an ad: ' + Math.round(status.quiet_s) + ' s of quiet' : '')
+    : '';
   for (const mode of ['auto', 'mute', 'unmute'])
     document.getElementById('b-' + mode).className = status && status.override === mode ? 'active' : '';
   // every pill: the page's own, and the one living in the PiP window

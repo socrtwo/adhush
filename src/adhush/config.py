@@ -88,6 +88,16 @@ class LogoAbsenceConfig:
     template: str = "data/logos/logo.npz"
     # Edge-correlation score below which the logo counts as absent.
     present_threshold: float = 0.4
+    # How far the ROI may sit from where calibration put it, in pixels of a
+    # 320-wide screen: the box is slid over this window and the best match
+    # counts, so a camera box found a few pixels off is not "logo gone".
+    # 0 = the fixed box only (HDMI capture is pixel-exact and needs none).
+    search_px: int = 0
+    # Only after the logo has been *seen* can it be missed: absence votes wait
+    # for one clear sighting, and "Not an ad" demands a fresh one.
+    require_sighting: bool = False
+    # No frame for this long (the camera dropped a partial screen) = inert.
+    stale_s: float = 2.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +131,9 @@ class FusionConfig:
     # combined confidence must stay on the program side this long before the
     # learned-duration mute is abandoned.
     fp_unmute_dwell_ms: int = 3000
+    # After "Not an ad", no automatic mute for this long: the user's word
+    # outranks the detectors for a while.
+    not_ad_quiet_s: float = 60.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -361,6 +374,11 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
             present_threshold=float(
                 logo.get("present_threshold", _LOGO_DEFAULTS.present_threshold)
             ),
+            search_px=int(logo.get("search_px", _LOGO_DEFAULTS.search_px)),
+            require_sighting=bool(
+                logo.get("require_sighting", _LOGO_DEFAULTS.require_sighting)
+            ),
+            stale_s=float(logo.get("stale_s", _LOGO_DEFAULTS.stale_s)),
         ),
         scene_cut=SceneCutConfig(
             diff_threshold=float(scene.get("diff_threshold", _SCENE_DEFAULTS.diff_threshold)),
@@ -382,6 +400,7 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
         fp_unmute_dwell_ms=int(
             fus.get("fp_unmute_dwell_ms", _FUSION_DEFAULTS.fp_unmute_dwell_ms)
         ),
+        not_ad_quiet_s=float(fus.get("not_ad_quiet_s", _FUSION_DEFAULTS.not_ad_quiet_s)),
     )
     if not 0.0 < fusion.unmute_confidence < fusion.mute_confidence < 1.0:
         raise ConfigError(
@@ -389,6 +408,8 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
         )
     if fusion.max_mute_s <= 0:
         raise ConfigError("fusion.max_mute_s must be positive")
+    if fusion.not_ad_quiet_s < 0 or detect.logo_absence.search_px < 0:
+        raise ConfigError("fusion.not_ad_quiet_s and logo_absence.search_px must be >= 0")
 
     ctl = data.get("control", {})
     backend = str(ctl.get("backend", _CONTROL_DEFAULTS.backend))

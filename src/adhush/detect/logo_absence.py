@@ -11,6 +11,14 @@ returning drops the vote to 0 immediately (presence is proof of program).
 
 Uncalibrated, the detector is inert: it votes 0.0 with reason ``uncalibrated``
 so fusion sees no evidence either way.
+
+Three rules learned from the phone (ADR 0013, ADR 0014) apply when configured:
+with ``require_sighting`` the bug must be *seen* once before its absence
+counts, and "Not an ad" demands a fresh sighting; with ``search_px`` the ROI
+is slid over a small window and the best correlation counts, so a camera's
+screen box found a few pixels off does not read as "logo gone"; and with no
+frame for ``stale_s`` (the camera dropped a partial screen) the detector is
+inert rather than absent. Inert means ``voting`` is False: no vote at all.
 """
 
 from __future__ import annotations
@@ -80,11 +88,54 @@ class LogoAbsenceDetector(Detector):
         if template is not None:
             self._centered_template = template - float(template.mean())
         self._absent_run = 0
-        self._score = 1.0
+        self._score = 0.0 if config.require_sighting else 1.0
+        self._sighted = not config.require_sighting
+        self._last_frame_ts: float | None = None
+        self._last_offset = (0, 0)
 
     @property
     def calibrated(self) -> bool:
         return self._template is not None
+
+    @property
+    def sighted(self) -> bool:
+        """The logo has been seen present since the last reset or correction."""
+        return self._sighted
+
+    @property
+    def last_offset(self) -> tuple[int, int]:
+        """Where the best match sat relative to the configured ROI, in frame pixels."""
+        return self._last_offset
+
+    def stale(self, ts: float) -> bool:
+        """No frame for ``stale_s``: the camera is not showing a whole screen."""
+        return self._last_frame_ts is not None and ts - self._last_frame_ts > self._cfg.stale_s
+
+    @property
+    def voting(self) -> bool:
+        return self.calibrated and self._sighted and not self._stale_now
+
+    def describe(self, ts: float | None = None) -> str:
+        """One short line for a status display: what the camera can and cannot see."""
+        if not self.calibrated:
+            return "not calibrated"
+        if ts is not None and self.stale(ts):
+            return "whole TV not in view"
+        if not self._sighted:
+            return "looking for the bug"
+        if self._absent_run > 0:
+            return "bug gone"
+        return "bug seen"
+
+    def user_says_program(self, ts: float) -> None:
+        """"Not an ad": the logo was not gone. Forget the absence; with
+        ``require_sighting``, demand a fresh sighting before saying so again."""
+        self._absent_run = 0
+        if self._cfg.require_sighting:
+            self._sighted = False
+            self._score = 0.0
+        else:
+            self._score = self._cfg.present_threshold
 
     @property
     def program_present(self) -> bool:
@@ -99,7 +150,13 @@ class LogoAbsenceDetector(Detector):
 
     def warmup(self) -> None:
         self._absent_run = 0
-        self._score = 1.0
+        self._score = 0.0 if self._cfg.require_sighting else 1.0
+        self._sighted = not self._cfg.require_sighting
+        self._last_frame_ts = None
+        self._stale_now = False
+        self._last_offset = (0, 0)
+
+    _stale_now = False
 
     def _similarity(self, roi: npt.NDArray[np.uint8]) -> float:
         """Pearson correlation between the ROI's edge map and the template.
@@ -121,22 +178,57 @@ class LogoAbsenceDetector(Detector):
             return 0.0
         return float(np.dot(a.ravel(), b.ravel()) / denom)
 
+    def _best_similarity(self, event: FrameEvent) -> float:
+        """Correlation at the configured ROI, or the best over the search window."""
+        cfg = self._cfg
+        roi = extract_roi(event.frame, cfg.roi.x, cfg.roi.y, cfg.roi.w, cfg.roi.h)
+        best = self._similarity(roi)
+        self._last_offset = (0, 0)
+        if cfg.search_px <= 0:
+            return best
+        # The window is given in pixels of a 320-wide screen; scale to this frame.
+        h, w = event.frame.shape[:2]
+        rx = max(1, round(cfg.search_px * w / 320))
+        ry = max(1, round(cfg.search_px * h / 180))
+        step_x, step_y = max(1, rx // 6), max(1, ry // 6)
+        # The same box arithmetic as extract_roi, so the slid crops match the template's size.
+        x0, y0 = int(cfg.roi.x * w), int(cfg.roi.y * h)
+        bw = min(w, int((cfg.roi.x + cfg.roi.w) * w)) - x0
+        bh = min(h, int((cfg.roi.y + cfg.roi.h) * h)) - y0
+        for dy in range(-ry, ry + 1, step_y):
+            for dx in range(-rx, rx + 1, step_x):
+                if dx == 0 and dy == 0:
+                    continue
+                xa, ya = x0 + dx, y0 + dy
+                if xa < 0 or ya < 0 or xa + bw > w or ya + bh > h:
+                    continue
+                score = self._similarity(event.frame[ya : ya + bh, xa : xa + bw])
+                if score > best:
+                    best, self._last_offset = score, (dx, dy)
+        return best
+
     def observe_frame(self, event: FrameEvent) -> None:
         if not self.calibrated:
             return
-        roi = extract_roi(
-            event.frame, self._cfg.roi.x, self._cfg.roi.y, self._cfg.roi.w, self._cfg.roi.h
-        )
-        raw = self._similarity(roi)
+        self._last_frame_ts = event.ts
+        self._stale_now = False
+        raw = self._best_similarity(event)
         self._score += _SCORE_ALPHA * (raw - self._score)
-        if self._score < self._cfg.present_threshold:
-            self._absent_run += 1
-        else:
+        if self._score >= self._cfg.present_threshold:
             self._absent_run = 0
+            if raw >= self._cfg.present_threshold:
+                self._sighted = True
+        elif self._sighted:
+            self._absent_run += 1
 
     def vote(self, ts: float) -> DetectorVote:
         if not self.calibrated:
             return self._vote(ts, 0.0, "uncalibrated")
+        self._stale_now = self.stale(ts)
+        if self._stale_now:
+            return self._vote(ts, 0.0, "no_screen")
+        if not self._sighted:
+            return self._vote(ts, 0.0, "logo_not_yet_seen")
         if self._absent_run == 0:
             return self._vote(ts, 0.0, f"logo_present score={self._score:.2f}")
         confidence = min(1.0, self._absent_run / self._cfg.absence_frames)

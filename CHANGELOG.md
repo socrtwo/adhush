@@ -3,6 +3,33 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.15.0] - 2026-09-14
+### Added
+- **The Pi listener** (ADR 0014): the Python core learns what the phone
+  learned. A Raspberry Pi with a webcam and a microphone on a shelf, turning
+  a Sharp down over Wi-Fi: `config/adhush-listener.example.toml` and a
+  beginner's guide, `docs/build-guide-tv-listener.md`.
+- `network_ip`: one persistent connection (login once, late replies drained,
+  reconnect and resend on a hang-up), a set that closes before the login
+  prompt reported as **busy** rather than a wrong password, and **ducking**
+  (`duck_level`, `normal_volume`, `duck_state_file`) through the profile's
+  new `volume_set` / `volume_query` commands; a run that died ducked is
+  repaired at the next start. The Sharp LC-46LE830U profile carries the VOLM
+  commands.
+- Logo detector: `require_sighting` (the bug must be seen before it can be
+  missed; "Not an ad" demands a fresh sighting), `search_px` (the box slides
+  and the best match counts), `stale_s` (no frame = inert). Camera capture
+  drops frames that show only part of a screen ("whole TV or nothing").
+- Detectors can be **inert** (`voting`), and fusion normalises over the
+  detectors present this tick; detectors are told when the user says it was
+  the show (`user_says_program`).
+- **Teach mode** in the core: `confirm_ad` outside a mute ducks now and
+  holds; the new `show_back` command restores and learns the bracketed
+  break. `[fusion] not_ad_quiet_s`: after "Not an ad" nothing may mute for a
+  minute. Status carries `teaching`, `quiet_s` and `camera`; the web page has
+  **▶ Show's back** and shows both.
+- Android: version number only (no code changes since 0.14.1).
+
 ## [0.14.1] - 2026-09-14
 ### Fixed
 - Android: the bottom tab bar covered the last part of every page (the

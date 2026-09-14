@@ -137,6 +137,10 @@ class AdStateMachine:
         return Action.UNMUTE
 
     @property
+    def not_ad_quiet_s(self) -> float:
+        return self._cfg.not_ad_quiet_s
+
+    @property
     def muted(self) -> bool:
         return self.state is AdState.AD
 

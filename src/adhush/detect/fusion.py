@@ -1,12 +1,15 @@
 """Weighted evidence fusion across detectors; per-profile weights; produces MuteDecision.
 
-Combined confidence is the weighted vote mass over a constant normalizer:
+Combined confidence is the weighted vote mass over a normalizer:
 
-    min(1, sum(weight_i * confidence_i) / max(enabled_mass / 2, 0.30))
+    min(1, sum(weight_i * confidence_i) / max(present_mass / 2, 0.30))
 
-The normalizer is deliberately independent of who is currently voting, so the
-score is monotone in every vote — a fading boundary signal can only add
-evidence, never dilute a sustained one. Its floor terms encode the posture
+``present_mass`` is the weight of the detectors that voted this tick. A
+detector that cannot see (the camera with no whole screen in view) stays
+out of the vote list and so out of the normalizer: it neither adds evidence
+nor dilutes it. With every detector voting the normalizer is the constant
+``enabled_mass / 2``, so the score is monotone in every vote — a fading
+boundary signal can only add evidence, never dilute a sustained one. Its floor terms encode the posture
 from docs/detection-strategies.md: no single detector may trigger a mute
 alone. A lone default-weight (0.15) detector at full confidence normalizes to
 at most 0.5, below any sane mute threshold, while two corroborating detectors
@@ -49,8 +52,11 @@ class Fusion:
         return self._weights.get(detector, _DEFAULT_WEIGHT)
 
     def combine(self, votes: list[DetectorVote], ts: float) -> MuteDecision:
+        """Fuse the votes of every detector that is *voting* this tick."""
         mass = sum(self.weight_for(v.detector) * v.confidence for v in votes)
-        confidence = min(1.0, mass / self._norm)
+        present = sum(self.weight_for(v.detector) for v in votes)
+        norm = max(present / 2, _MIN_MASS) if present > 0.0 else self._norm
+        confidence = min(1.0, mass / norm)
 
         if self._muted_side:
             if confidence <= self._cfg.unmute_confidence:

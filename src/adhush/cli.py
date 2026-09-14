@@ -67,6 +67,13 @@ def _build_pipeline(
     ctl = controller if controller is not None else build_controller(
         config.control, config.profile
     )
+    recover = getattr(ctl, "recover_on_start", None)
+    if recover is not None:
+        try:
+            if recover():
+                print("restored the volume: the last run ended while ducked")
+        except ControlError as exc:
+            print(f"tv unreachable at start: {exc}")
     return Pipeline(
         detectors,
         fusion,

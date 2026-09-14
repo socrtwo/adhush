@@ -162,11 +162,12 @@ class TestApiServer:
 
 
 class TestPipelineIpcSurface:
-    def test_confirm_only_in_ad(self) -> None:
-        pipeline, _, machine = _pipeline()
-        assert not pipeline.confirm_ad()
-        machine.update(MuteDecision(ts=1.0, mute=False, confidence=0.0), promote=True)
-        assert pipeline.confirm_ad()
+    def test_confirm_outside_ad_is_teach_mode(self) -> None:
+        pipeline, controller, machine = _pipeline()
+        assert pipeline.confirm_ad()   # not muted: "Is an ad" mutes now and holds
+        assert machine.state is AdState.AD and pipeline.status()["teaching"] is True
+        assert [a for _, a in controller.actions] == ["mute"]
+        assert pipeline.confirm_ad()   # already muted: just confirms
 
     def test_reject_unmutes_and_records(self) -> None:
         pipeline, controller, machine = _pipeline()

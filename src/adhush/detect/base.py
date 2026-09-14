@@ -25,6 +25,18 @@ class Detector(ABC):
     needs_video: ClassVar[bool] = False
     needs_audio: ClassVar[bool] = False
 
+    @property
+    def voting(self) -> bool:
+        """False while the detector cannot see what it needs (a camera with no
+        whole screen in view, a logo never yet sighted). An inert detector
+        casts no vote and stays out of the fusion normalizer: it neither adds
+        evidence nor dilutes it. Audio detectors are always voting."""
+        return True
+
+    def user_says_program(self, ts: float) -> None:
+        """"Not an ad" / "Show's back": whatever this detector was sure of a
+        moment ago was the program. Detectors that hold a belief drop it."""
+
     def warmup(self) -> None:
         """Reset rolling state before a capture session starts."""
 

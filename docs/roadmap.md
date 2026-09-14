@@ -52,6 +52,13 @@ core serves the web front end, now an installable web app with a Document
 Picture-in-Picture mini window in Chromium browsers. `docs/release.md` has the
 per-platform matrix, including what mobile does and does not get yet.
 
+## Phase 8 — the Pi learns from the phone (done, 0.15.0)
+The living-room lessons from the Android app ported as rules (ADR 0014):
+inert votes, the user's word reaching the detectors, a logo that must be
+sighted before it can be missed, whole screen or nothing, teach mode with
+"Show's back", a quiet period after "Not an ad", and a persistent, ducking
+`network_ip`. `docs/build-guide-tv-listener.md` is the shelf build.
+
 ## Beyond the roadmap
 Candidates, in no particular order: in-browser WASM detectors (the rest of the
 Phase 4 remainder), an iOS on-device core following ADR 0007, an audio delay line for retroactive

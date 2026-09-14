@@ -124,6 +124,8 @@ circuit, and capture-dongle notes.
 ## Building the passthrough box
 
 - `docs/hardware-passthrough-box.md` — topology, parts, fail-unmuted wiring.
+- `docs/build-guide-tv-listener.md` — the no-hardware version: a Pi with a
+  webcam and microphone on a shelf, turning a Sharp down over Wi-Fi (0.15.0)
 - `docs/build-guide-beginner.md` — step-by-step build a 12-year-old can
   follow: no soldering, low voltage only, ~$120–160 in parts.
 - `docs/build-guide-microcontrollers.md` — using an Arduino, ESP32/ESP8266,

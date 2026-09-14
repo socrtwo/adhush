@@ -250,6 +250,8 @@ class ApiServer:
             return {"ok": True, "trace": command.enabled}
         if command.type == "confirm_ad":
             return {"ok": self._pipeline.confirm_ad()}
+        if command.type == "show_back":
+            return {"ok": self._pipeline.show_back()}
         if command.type == "reject_ad":
             return {"ok": self._pipeline.reject_ad()}
         if command.type == "shutdown":
