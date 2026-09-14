@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity() {
             val i = intent ?: return
             when (i.action) {
                 AdHushService.BROADCAST_STATUS -> showStatus(i.getStringExtra("text") ?: "", i.getBooleanExtra("running", AdHushService.running != null), i.getBooleanExtra("ducked", false), i.getBooleanExtra("teaching", false))
+                AdHushService.BROADCAST_TEST -> testLine(i.getStringExtra("line") ?: "")
                 AdHushService.BROADCAST_SURVEY -> {
                     log("— survey saved; press Share survey to send the numbers (no audio is stored) —")
                     (i.getStringExtra("summary") ?: "").lines().reversed().forEach { log(it) }
@@ -178,7 +179,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        val filter = IntentFilter(AdHushService.BROADCAST_STATUS).apply { addAction(AdHushService.BROADCAST_SURVEY) }
+        val filter = IntentFilter(AdHushService.BROADCAST_STATUS).apply { addAction(AdHushService.BROADCAST_SURVEY); addAction(AdHushService.BROADCAST_TEST) }
         ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         refreshLog()
         findViewById<Button>(R.id.speechModel).text = if (SpeechSource.isInstalled(this)) "Speech model: installed" else "Download speech model (40 MB)"
@@ -260,6 +261,8 @@ class MainActivity : AppCompatActivity() {
         save()
         findViewById<TextView>(R.id.testResult).text = ""
         findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.nav).selectedItemId = R.id.nav_home
+        // The Sharp allows one control connection: while the service holds it, the test must go through the service.
+        if (AdHushService.running != null) { testLine("AdHush is running — testing through its own connection"); serviceAction(AdHushService.ACTION_TEST); return }
         when (settings.control) { "serial" -> testSerial(); "ir" -> testIr(); else -> testTv() }
     }
 
@@ -371,7 +374,10 @@ class MainActivity : AppCompatActivity() {
 
     companion object { const val ACTION_USB = "io.adhush.android.USB_PERMISSION" }
 
+    /** Control actions need a running service; the notification and tile go through the same door. */
     private fun serviceAction(action: String) {
+        val control = action in listOf(AdHushService.ACTION_NOT_AD, AdHushService.ACTION_IS_AD, AdHushService.ACTION_SHOW_BACK, AdHushService.ACTION_LEARN_SCRIPTS, AdHushService.ACTION_TEST)
+        if (control && AdHushService.running == null) { log("not running — press Start first"); return }
         ContextCompat.startForegroundService(this, Intent(this, AdHushService::class.java).setAction(action))
     }
 

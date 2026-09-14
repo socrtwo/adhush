@@ -87,8 +87,14 @@ class AdHushService : Service(), LifecycleOwner {
         // Every start — including control actions delivered by startForegroundService —
         // must be answered with startForeground, or Android 8+ kills the app.
         if (lastText == "stopped") lastText = "starting…"
-        startForegroundWithType(buildNotification(lastText))
         val action = intent?.action
+        // A control action (Is an ad from the tile or a button) before the app has ever been
+        // granted the microphone: Android refuses a microphone-type foreground service and
+        // the refusal is a crash on the main thread. Say so in the log and stop instead.
+        try { startForegroundWithType(buildNotification(lastText)) } catch (e: SecurityException) {
+            AppLog.w("service", "cannot run in the foreground yet (${e.message?.substringBefore(':')}) — open the app, allow the microphone, press Start")
+            stopSelf(); return START_NOT_STICKY
+        }
         if (engine == null && action != null && action != ACTION_SURVEY) {  // a control action, but nothing is running
             if (action != ACTION_STOP) update("not running — press Start in the app")
             stopSelf()
@@ -105,6 +111,7 @@ class AdHushService : Service(), LifecycleOwner {
                 if (engine != null && survey == null) { survey = RoomSurvey(SURVEY_S); update("surveying the room: 0:00 / ${clock(SURVEY_S)}") }
                 return START_STICKY
             }
+            ACTION_TEST -> { io.execute { runTest() }; return START_STICKY }
             ACTION_LEARN_SCRIPTS -> {
                 io.execute {
                     val n = engine?.learnScriptsFromTranscript() ?: 0
@@ -219,6 +226,46 @@ class AdHushService : Service(), LifecycleOwner {
         update("listening (${m.sourceName}) via ${settings.control}$eye$cc$ear")
         lastRepeatLearnAt = System.currentTimeMillis()
         main.postDelayed(ticker, POLL_MS)
+    }
+
+    /**
+     * Test mode while running: the same exchange the app's Test TV does, but
+     * over the connection the service already holds. The Sharp allows one
+     * control connection at a time, so a second one from the app would be
+     * hung up before the login prompt. Runs on `io`, serialised with the
+     * engine's own commands; every line goes to the app's Test card.
+     */
+    private fun runTest() {
+        fun say(line: String) { AppLog.i("test", line); sendBroadcast(Intent(BROADCAST_TEST).setPackage(packageName).putExtra("line", line)) }
+        val ctl = controller ?: run { say("not running"); return }
+        val t = transport
+        try {
+            when {
+                ctl is StepVolumeController -> {
+                    say("testing infrared through the running service: volume down ×3, then up ×3")
+                    ctl.mute(); Thread.sleep(1500); ctl.unmute()
+                    say("sent. Did the volume bar move down and back up?")
+                }
+                t is io.adhush.core.AquosTransport -> {
+                    say("testing through the running connection (${settings.control}) …")
+                    val setTrace: ((String) -> Unit)? -> Unit = { f -> when (t) { is SocketTransport -> t.trace = f; is SerialTransport -> t.trace = f; else -> {} } }
+                    setTrace { line -> say("  $line") }
+                    try {
+                        val client = SharpIpClient(t)
+                        fun confirmed(ok: Boolean) = if (ok) "OK" else "sent, the set said nothing — did it happen?"
+                        val vol = client.queryVolume(); say("VOLM? → " + (vol?.toString() ?: "no answer: the app will use your Normal volume"))
+                        val mute = client.queryMute(); say("MUTE? → " + (mute?.let { if (it) "muted" else "not muted" } ?: "no answer"))
+                        val m1 = client.muteOn(); Thread.sleep(1500); val m2 = client.muteOff(); say("MUTE1 → ${confirmed(m1)}; MUTE2 → ${confirmed(m2)}")
+                        val back = vol ?: settings.normalVolume
+                        val d1 = client.setVolume(settings.duckLevel); Thread.sleep(1500); val d2 = client.setVolume(back)
+                        say("VOLM ${settings.duckLevel} → ${confirmed(d1)}; VOLM $back → ${confirmed(d2)} (ducking is what the app does)")
+                        say("✓ done — if the sound dipped twice, the TV path works")
+                    } finally { setTrace(null) }
+                }
+                else -> say("nothing to test on this connection")
+            }
+        } catch (e: ControlError) { say("✗ FAILED: ${e.message}") }
+        catch (e: Exception) { AppLog.e("test", "test failed", e); say("✗ FAILED: ${e.message}") }
     }
 
     /** Numbers only — the survey never stores audio. Written off the mic thread, then handed to the app. */
@@ -397,6 +444,8 @@ class AdHushService : Service(), LifecycleOwner {
         const val ACTION_SHOW_BACK = "io.adhush.android.SHOW_BACK"
         const val ACTION_CAMERA_SETUP = "io.adhush.android.CAMERA_SETUP"
         const val ACTION_LEARN_SCRIPTS = "io.adhush.android.LEARN_SCRIPTS"
+        const val ACTION_TEST = "io.adhush.android.TEST"
+        const val BROADCAST_TEST = "io.adhush.android.TEST_LINE"
         const val SCRIPTS_FILE = "scripts.tsv"
         const val REPEAT_LEARN_MS = 10 * 60 * 1000L
         const val LOGO_FILE = "logo.tsv"

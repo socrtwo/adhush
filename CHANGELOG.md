@@ -10,6 +10,17 @@ Format follows Keep a Changelog; versioning follows SemVer.
   ignores `paddingBottom` when `padding` is also set on the same view, so
   the room left under each page was never applied. Each page now pads its
   sides explicitly and scrolls clear of the bar.
+- Android: **Test TV while AdHush is running** failed with "hung up during
+  the login handshake". The Sharp allows one control connection at a time
+  and the running service holds it, so the test's second connection was
+  closed before the login prompt. The test now runs through the service's
+  own connection while it is running, and a set that hangs up before
+  asking for a login is reported as busy rather than as a wrong password.
+- Android: pressing **Is an ad** (button or tile) before the microphone had
+  ever been allowed crashed the app: Android refuses a microphone-type
+  foreground service without the permission. The service now logs and
+  stops instead, and the app's control buttons say "not running" when
+  nothing is running.
 
 ## [0.14.0] - 2026-09-14
 ### Fixed

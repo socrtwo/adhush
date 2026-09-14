@@ -59,7 +59,12 @@ object Aquos {
         input: InputStream, output: OutputStream, loginId: String, password: String,
         trace: ((String) -> Unit)? = null, terminator: ByteArray = CR,
     ): ByteArray {
-        trace?.invoke("login prompt: " + escape(readSome(input)))
+        // A set that closes the line before it has even asked who is calling is
+        // not refusing the credentials: the Sharp allows one control connection
+        // at a time, and someone else — usually AdHush's own running service —
+        // holds it. Say so instead of blaming the password.
+        val prompt = try { readSome(input) } catch (e: EOFException) { throw ControlError(BUSY_MESSAGE, e) }
+        trace?.invoke("login prompt: " + escape(prompt))
         output.write(loginId.toByteArray(US_ASCII) + terminator); output.flush()
         val pwPrompt = readSome(input)
         trace?.invoke("password prompt: " + escape(pwPrompt))
@@ -70,6 +75,8 @@ object Aquos {
         refusalIn(ack)?.let { throw LoginRefused(loginId, it) }
         return ack
     }
+
+    const val BUSY_MESSAGE = "the set hung up before asking for a login: it allows one control connection at a time — AdHush's own service, another phone, or another app is probably connected. Stop AdHush and try again."
 
     fun refusalIn(bytes: ByteArray): String? {
         val text = String(bytes, US_ASCII).trim()
