@@ -16,6 +16,7 @@ import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import io.adhush.core.AdState
 import io.adhush.core.Assembly
 import io.adhush.core.ControlError
 import io.adhush.core.DuckController
@@ -316,7 +317,7 @@ class AdHushService : Service(), LifecycleOwner {
 
     private fun describe(s: Status): String {
         if (s.teaching) return "TEACHING — ducked; press Show's back when the show returns · ${s.adsLearned} learned"
-        val state = if (s.override != CoreOverride.AUTO) "override: ${s.override.wire}" else if (s.muted) "DUCKED — ad" else if (s.quietS > 0.0) "SHOW (you said not an ad; ${s.quietS.toInt()} s of quiet)" else if (s.state == io.adhush.core.AdState.PROGRAM) "SHOW" else s.state.wire.uppercase()
+        val state = if (s.override != CoreOverride.AUTO) "override: ${s.override.wire}" else if (s.muted) "DUCKED — ad" else if (s.quietS > 0.0) "SHOW (you said not an ad; ${s.quietS.toInt()} s of quiet)" else if (s.state == AdState.PROGRAM) "SHOW" else s.state.wire.uppercase()
         val cam = s.camera?.let { " · camera: $it" } ?: ""
         return "$state · ${"%.2f".format(s.confidence)}$cam · ${s.adsLearned} learned"
     }
