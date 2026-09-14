@@ -5,15 +5,22 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.ColorStateList
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.CompoundButton
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.chip.Chip
 import io.adhush.core.Aquos
 import io.adhush.core.ControlError
 import io.adhush.core.SharpIpClient
@@ -26,7 +33,7 @@ class MainActivity : AppCompatActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val i = intent ?: return
             when (i.action) {
-                AdHushService.BROADCAST_STATUS -> showStatus(i.getStringExtra("text") ?: "")
+                AdHushService.BROADCAST_STATUS -> showStatus(i.getStringExtra("text") ?: "", i.getBooleanExtra("running", AdHushService.running != null), i.getBooleanExtra("ducked", false), i.getBooleanExtra("teaching", false))
                 AdHushService.BROADCAST_SURVEY -> {
                     log("— survey saved; press Share survey to send the numbers (no audio is stored) —")
                     (i.getStringExtra("summary") ?: "").lines().reversed().forEach { log(it) }
@@ -37,38 +44,123 @@ class MainActivity : AppCompatActivity() {
     private var pendingAction: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         settings = Settings(this)
         AppLog.init(this)
         load()
-        val pages = mapOf(R.id.nav_home to R.id.pageHome, R.id.nav_tv to R.id.pageTv, R.id.nav_senses to R.id.pageSenses, R.id.nav_log to R.id.pageLog)
+        val pages = mapOf(R.id.nav_home to R.id.pageHome, R.id.nav_tv to R.id.pageTv, R.id.nav_senses to R.id.pageSenses, R.id.nav_help to R.id.pageHelp, R.id.nav_log to R.id.pageLog)
         val nav = findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.nav)
         nav.setOnItemSelectedListener { item ->
-            for ((menuId, pageId) in pages) findViewById<android.view.View>(pageId).visibility = if (menuId == item.itemId) android.view.View.VISIBLE else android.view.View.GONE
+            for ((menuId, pageId) in pages) findViewById<View>(pageId).visibility = if (menuId == item.itemId) View.VISIBLE else View.GONE
             if (item.itemId != R.id.nav_home) save()            // leaving a page keeps what was typed
             if (item.itemId == R.id.nav_log) refreshLog()
             true
         }
+        buildHelp()
         findViewById<Button>(R.id.shareLog).setOnClickListener { shareLog() }
         findViewById<Button>(R.id.clearLog).setOnClickListener { AppLog.clear(); refreshLog(); log("log cleared") }
         findViewById<Button>(R.id.save).setOnClickListener { save(); log("saved") }
-        findViewById<Button>(R.id.test).setOnClickListener { save(); when (settings.control) { "serial" -> testSerial(); "ir" -> testIr(); else -> testTv() } }
-        findViewById<Button>(R.id.start).setOnClickListener { save(); startWithPermissions(null) }
+        findViewById<Button>(R.id.test).setOnClickListener { runTest() }
+        findViewById<Button>(R.id.testHome).setOnClickListener { runTest() }
+        findViewById<Button>(R.id.start).setOnClickListener { save(); if (checkBeforeStart()) startWithPermissions(null) }
         findViewById<Button>(R.id.stop).setOnClickListener { serviceAction(AdHushService.ACTION_STOP) }
         findViewById<Button>(R.id.notAd).setOnClickListener { serviceAction(AdHushService.ACTION_NOT_AD) }
         findViewById<Button>(R.id.isAd).setOnClickListener { serviceAction(AdHushService.ACTION_IS_AD) }
         findViewById<Button>(R.id.showBack).setOnClickListener { serviceAction(AdHushService.ACTION_SHOW_BACK) }
-        findViewById<Button>(R.id.survey).setOnClickListener { save(); startWithPermissions(AdHushService.ACTION_SURVEY) }
+        findViewById<Button>(R.id.survey).setOnClickListener { save(); if (checkBeforeStart()) startWithPermissions(AdHushService.ACTION_SURVEY) }
         findViewById<Button>(R.id.share).setOnClickListener { shareSurvey() }
         findViewById<Button>(R.id.cameraSetup).setOnClickListener { save(); startActivity(Intent(this, CameraSetupActivity::class.java)) }
         findViewById<Button>(R.id.speechModel).setOnClickListener { downloadSpeechModel() }
         findViewById<Button>(R.id.learnScripts).setOnClickListener { serviceAction(AdHushService.ACTION_LEARN_SCRIPTS) }
+        // The ⓘ buttons: one explanation each.
+        val info = mapOf(
+            R.id.infoMethods to Help.METHODS, R.id.infoSilence to Help.SILENCE, R.id.infoLoudness to Help.LOUDNESS, R.id.infoFingerprints to Help.FINGERPRINTS,
+            R.id.infoCamera to Help.CAMERA, R.id.infoSpeech to Help.SPEECH, R.id.infoCaptions to Help.CAPTIONS,
+            R.id.infoTeach to Help.TEACH, R.id.infoTest to Help.TEST, R.id.infoTv to Help.DUCK,
+        )
+        for ((id, topic) in info) findViewById<View>(id).setOnClickListener { Help.show(this, topic) }
+        for (id in listOf(R.id.silence, R.id.loudness, R.id.fingerprints, R.id.camera, R.id.speech, R.id.captions))
+            findViewById<CompoundButton>(id).setOnCheckedChangeListener { _, _ -> methodsNote() }
+        showStatus(AdHushService.lastText, AdHushService.running != null, false, false)
     }
 
-    private fun showStatus(text: String) {
+    /** The Help page: every explanation, in full, one card each. */
+    private fun buildHelp() {
+        val list = findViewById<LinearLayout>(R.id.helpList)
+        list.removeAllViews()
+        for (t in Help.ALL) {
+            val card = MaterialCardView(this).apply { radius = 24f; strokeWidth = 1; setContentPadding(40, 32, 40, 32) }
+            val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            col.addView(TextView(this).apply { text = t.title; setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleMedium) })
+            col.addView(TextView(this).apply { text = t.body; setPadding(0, 12, 0, 0); setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium) })
+            card.addView(col)
+            list.addView(card, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 32 })
+        }
+    }
+
+    /** Refuse to start with nothing to go on or nowhere to send commands; say why on the Home page. */
+    private fun checkBeforeStart(): Boolean {
+        if (settings.methodsOn == 0) { log("nothing to go on: switch on at least one method under Methods"); showStatus("no method is on — see Methods", false, false, false); return false }
+        if (settings.control == "ip" && settings.host.isBlank()) { log("no TV address: type it on the TV page and press Save"); showStatus("no TV address — see the TV page", false, false, false); return false }
+        return true
+    }
+
+    private fun methodsNote() {
+        val n = listOf(R.id.silence, R.id.loudness, R.id.fingerprints, R.id.camera, R.id.speech, R.id.captions).count { findViewById<CompoundButton>(it).isChecked }
+        findViewById<TextView>(R.id.methodsNote).text = if (n == 0) "⚠ Nothing is switched on. The app cannot work with no method — turn on at least one."
+            else "$n of 6 methods on. At least one must be on. A coloured dot means that method is running right now."
+    }
+
+    /** The status line, the card's colour, the chips and the buttons all follow the service. */
+    private fun showStatus(text: String, running: Boolean, ducked: Boolean, teaching: Boolean) {
         findViewById<TextView>(R.id.status).text = text
         findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).subtitle = text.substringBefore(" · ").take(40)
+        val ducking = ducked || text.startsWith("DUCKED") || text.startsWith("TEACHING")
+        val colour = when { !running -> R.color.adhush_stopped_container; teaching || text.startsWith("TEACHING") -> R.color.adhush_teaching_container; ducking -> R.color.adhush_ducked_container; else -> R.color.adhush_program_container }
+        findViewById<MaterialCardView>(R.id.statusCard).setCardBackgroundColor(ContextCompat.getColor(this, colour))
+        val start = findViewById<MaterialButton>(R.id.start); val stop = findViewById<MaterialButton>(R.id.stop)
+        start.text = if (running) "● Running" else "▶ Start"
+        start.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, if (running) R.color.adhush_program else R.color.adhush_primary))
+        stop.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, if (running) R.color.adhush_ducked else R.color.adhush_secondary_container))
+        stop.setTextColor(ContextCompat.getColor(this, if (running) android.R.color.white else R.color.adhush_on_secondary_container))
+        val r = AdHushService.running
+        val on = mapOf(
+            "silence" to (r?.silence == true), "loudness" to (r?.loudness == true), "fingerprints" to (r?.fingerprints == true),
+            "camera" to (r?.logo == true), "speech" to (r?.speech == true), "captions" to (r?.captions == true),
+        )
+        val colours = mapOf("silence" to R.color.method_silence, "loudness" to R.color.method_loudness, "fingerprints" to R.color.method_fingerprints, "camera" to R.color.method_camera, "speech" to R.color.method_speech, "captions" to R.color.method_captions)
+        val chips = mapOf("silence" to R.id.chipSilence, "loudness" to R.id.chipLoudness, "fingerprints" to R.id.chipFingerprints, "camera" to R.id.chipCamera, "speech" to R.id.chipSpeech, "captions" to R.id.chipCaptions)
+        val dots = mapOf("silence" to R.id.dotSilence, "loudness" to R.id.dotLoudness, "fingerprints" to R.id.dotFingerprints, "camera" to R.id.dotCamera, "speech" to R.id.dotSpeech, "captions" to R.id.dotCaptions)
+        for ((k, chipId) in chips) {
+            val active = running && on[k] == true
+            val c = ContextCompat.getColor(this, if (active) colours[k]!! else R.color.method_off)
+            findViewById<Chip>(chipId).apply { chipBackgroundColor = ColorStateList.valueOf(if (active) c else ContextCompat.getColor(this@MainActivity, R.color.adhush_stopped_container)); setTextColor(if (active) android.graphics.Color.WHITE else c); alpha = if (active) 1f else 0.7f }
+            findViewById<TextView>(dots[k]!!).setTextColor(c)
+        }
+        // Buttons of a running method are tinted with its colour.
+        tint(R.id.cameraSetup, running && on["camera"] == true, R.color.method_camera)
+        tint(R.id.speechModel, running && on["speech"] == true, R.color.method_speech)
+        tint(R.id.learnScripts, running && (on["speech"] == true || on["captions"] == true), R.color.method_speech)
+        tint(R.id.survey, running && on["loudness"] == true, R.color.method_loudness)
+        findViewById<TextView>(R.id.dotTeach).setTextColor(ContextCompat.getColor(this, if (teaching || text.startsWith("TEACHING")) R.color.adhush_teaching else if (running) R.color.adhush_program else R.color.method_off))
+        findViewById<TextView>(R.id.dotTest).setTextColor(ContextCompat.getColor(this, if (running) R.color.adhush_program else R.color.method_off))
+        findViewById<TextView>(R.id.dotTv).setTextColor(ContextCompat.getColor(this, if (running) R.color.adhush_program else R.color.method_off))
+        findViewById<TextView>(R.id.dotMethods).setTextColor(ContextCompat.getColor(this, if (running) R.color.adhush_program else R.color.method_off))
+        val notSetUp = when {
+            r?.logoNotSetUp == true -> "camera is on but the bug is not set up yet — press Camera setup"
+            r?.speechNoModel == true -> "speech is on but the model is not downloaded — press Download speech model"
+            else -> null
+        }
+        notSetUp?.let { if (it != lastWarning) { lastWarning = it; log("⚠ $it") } }
+    }
+    private var lastWarning = ""
+
+    private fun tint(id: Int, active: Boolean, colour: Int) {
+        val b = findViewById<MaterialButton>(id)
+        b.strokeColor = ColorStateList.valueOf(ContextCompat.getColor(this, if (active) colour else R.color.method_off))
+        b.strokeWidth = if (active) 4 else 0
     }
 
     private fun refreshLog() { findViewById<TextView>(R.id.log).text = AppLog.tail(150).ifEmpty { "(the log is empty)" } }
@@ -89,6 +181,8 @@ class MainActivity : AppCompatActivity() {
         val filter = IntentFilter(AdHushService.BROADCAST_STATUS).apply { addAction(AdHushService.BROADCAST_SURVEY) }
         ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         refreshLog()
+        findViewById<Button>(R.id.speechModel).text = if (SpeechSource.isInstalled(this)) "Speech model: installed" else "Download speech model (40 MB)"
+        showStatus(AdHushService.lastText, AdHushService.running != null, false, false)
     }
 
     /** One-time 40 MB download of the offline recogniser's English model, into app-private storage. */
@@ -99,7 +193,7 @@ class MainActivity : AppCompatActivity() {
             try {
                 var last = -1
                 SpeechSource.install(this) { p -> if (p / 10 != last / 10) { last = p; runOnUiThread { log("speech model: $p%") } } }
-                runOnUiThread { log("speech model installed — tick 'Use speech' and Start"); findViewById<Button>(R.id.speechModel).text = "Speech model: installed" }
+                runOnUiThread { log("speech model installed — switch on Spoken words and Start"); findViewById<Button>(R.id.speechModel).text = "Speech model: installed" }
             } catch (e: Exception) { AppLog.e("speech", "model download failed", e); runOnUiThread { log("download failed: ${e.message}") } }
         }
     }
@@ -126,13 +220,18 @@ class MainActivity : AppCompatActivity() {
         findViewById<EditText>(R.id.duck).setText(settings.duckLevel.toString())
         findViewById<EditText>(R.id.normal).setText(settings.normalVolume.toString())
         findViewById<CompoundButton>(R.id.useMute).isChecked = settings.useMute
+        findViewById<CompoundButton>(R.id.silence).isChecked = settings.silence
+        findViewById<CompoundButton>(R.id.loudness).isChecked = settings.loudness
+        findViewById<CompoundButton>(R.id.fingerprints).isChecked = settings.fingerprints
         findViewById<CompoundButton>(R.id.camera).isChecked = settings.camera
         findViewById<CompoundButton>(R.id.speech).isChecked = settings.speech
+        findViewById<CompoundButton>(R.id.captions).isChecked = settings.captions
         findViewById<Button>(R.id.speechModel).text = if (SpeechSource.isInstalled(this)) "Speech model: installed" else "Download speech model (40 MB)"
         findViewById<android.widget.RadioGroup>(R.id.control).check(when (settings.control) { "serial" -> R.id.controlSerial; "ir" -> R.id.controlIr; else -> R.id.controlIp })
         findViewById<EditText>(R.id.irAddress).setText(settings.irAddress.toString())
         findViewById<EditText>(R.id.irVolUp).setText("%02X".format(settings.irVolumeUp))
         findViewById<EditText>(R.id.irVolDown).setText("%02X".format(settings.irVolumeDown))
+        methodsNote()
     }
 
     private fun save() {
@@ -143,15 +242,34 @@ class MainActivity : AppCompatActivity() {
         settings.duckLevel = (findViewById<EditText>(R.id.duck).text.toString().toIntOrNull() ?: 4).coerceIn(0, 60)
         settings.normalVolume = (findViewById<EditText>(R.id.normal).text.toString().toIntOrNull() ?: 20).coerceIn(0, 60)
         settings.useMute = findViewById<CompoundButton>(R.id.useMute).isChecked
+        settings.silence = findViewById<CompoundButton>(R.id.silence).isChecked
+        settings.loudness = findViewById<CompoundButton>(R.id.loudness).isChecked
+        settings.fingerprints = findViewById<CompoundButton>(R.id.fingerprints).isChecked
         settings.camera = findViewById<CompoundButton>(R.id.camera).isChecked
         settings.speech = findViewById<CompoundButton>(R.id.speech).isChecked
+        settings.captions = findViewById<CompoundButton>(R.id.captions).isChecked
         settings.control = when (findViewById<android.widget.RadioGroup>(R.id.control).checkedRadioButtonId) { R.id.controlSerial -> "serial"; R.id.controlIr -> "ir"; else -> "ip" }
         settings.irAddress = findViewById<EditText>(R.id.irAddress).text.toString().trim().toIntOrNull()?.coerceIn(0, 31) ?: 1
         settings.irVolumeUp = findViewById<EditText>(R.id.irVolUp).text.toString().trim().toIntOrNull(16)?.coerceIn(0, 255) ?: 0x14
         settings.irVolumeDown = findViewById<EditText>(R.id.irVolDown).text.toString().trim().toIntOrNull(16)?.coerceIn(0, 255) ?: 0x15
+        if (settings.host.isBlank() && settings.control == "ip") log("⚠ the TV address is blank")
     }
 
-    /** Answers the design's open question on the real set: does VOLM? return the volume? */
+    /** Test mode: the same exchange as a real duck, over whichever connection is chosen, printed line by line. */
+    private fun runTest() {
+        save()
+        findViewById<TextView>(R.id.testResult).text = ""
+        findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.nav).selectedItemId = R.id.nav_home
+        when (settings.control) { "serial" -> testSerial(); "ir" -> testIr(); else -> testTv() }
+    }
+
+    /** A test line goes to the Home card, the Log page and the log file. */
+    private fun testLine(line: String) {
+        log(line)
+        val v = findViewById<TextView>(R.id.testResult)
+        v.text = (v.text.toString() + "\n" + line).trim().lines().takeLast(14).joinToString("\n")
+    }
+
     /**
      * One connection for the whole test, like the service uses. Every raw
      * exchange is logged (escaped bytes), so a screenshot of this log says
@@ -159,9 +277,10 @@ class MainActivity : AppCompatActivity() {
      * ignored per-command connections and says nothing to some commands.
      */
     private fun testTv() {
-        log("testing ${settings.host}:${settings.port} …")
+        if (settings.host.isBlank()) { testLine("no TV address — type it on the TV page first"); return }
+        testLine("testing ${settings.host}:${settings.port} …")
         thread {
-            fun say(line: String) = runOnUiThread { log(line) }
+            fun say(line: String) = runOnUiThread { testLine(line) }
             val transport = SocketTransport(settings.host, settings.port, 2500, settings.login)
             transport.trace = { say("  $it") }
             val client = SharpIpClient(transport)
@@ -177,9 +296,9 @@ class MainActivity : AppCompatActivity() {
                     val back = vol ?: settings.normalVolume
                     val d1 = client.setVolume(settings.duckLevel); Thread.sleep(1500); val d2 = client.setVolume(back)
                     say("VOLM ${settings.duckLevel} → ${confirmed(d1)}; VOLM $back → ${confirmed(d2)} (ducking is what the app does)")
-                    say("done — if the sound dipped twice, the TV path works")
+                    say("✓ done — if the sound dipped twice, the TV path works")
                 } catch (e: ControlError) {
-                    say("FAILED: ${e.message}")
+                    say("✗ FAILED: ${e.message}")
                 }
             }
         }
@@ -189,16 +308,16 @@ class MainActivity : AppCompatActivity() {
     private fun testSerial() {
         val transport = SerialTransport(this, 2500)
         val device = transport.device()
-        if (device == null) { log("no USB serial adapter found — plug the cable in (OTG) and try again"); return }
+        if (device == null) { testLine("no USB serial adapter found — plug the cable in (OTG) and try again"); return }
         val usb = getSystemService(Context.USB_SERVICE) as android.hardware.usb.UsbManager
         if (!usb.hasPermission(device)) {
             val pi = android.app.PendingIntent.getBroadcast(this, 0, Intent(ACTION_USB).setPackage(packageName), android.app.PendingIntent.FLAG_MUTABLE)
             usb.requestPermission(device, pi)
-            log("allow USB access in the dialog, then press Test TV again"); return
+            testLine("allow USB access in the dialog, then press Test TV again"); return
         }
-        log("testing the serial cable …")
+        testLine("testing the serial cable …")
         thread {
-            fun say(line: String) = runOnUiThread { log(line) }
+            fun say(line: String) = runOnUiThread { testLine(line) }
             transport.trace = { say("  $it") }
             val client = SharpIpClient(transport)
             fun confirmed(ok: Boolean) = if (ok) "OK" else "sent, no answer"
@@ -209,8 +328,8 @@ class MainActivity : AppCompatActivity() {
                     val back = vol ?: settings.normalVolume
                     val d1 = client.setVolume(settings.duckLevel); Thread.sleep(1500); val d2 = client.setVolume(back)
                     say("VOLM ${settings.duckLevel} → ${confirmed(d1)}; VOLM $back → ${confirmed(d2)}")
-                    say("done — if the sound dipped twice, the cable works")
-                } catch (e: ControlError) { say("FAILED: ${e.message}") }
+                    say("✓ done — if the sound dipped twice, the cable works")
+                } catch (e: ControlError) { say("✗ FAILED: ${e.message}") }
             }
         }
     }
@@ -218,13 +337,13 @@ class MainActivity : AppCompatActivity() {
     /** Infrared: three presses down, three up — watch the set's volume bar. */
     private fun testIr() {
         val sender = IrKeySender(this, settings.irAddress, settings.irVolumeUp, settings.irVolumeDown)
-        if (!sender.available) { log("this phone has no infrared blaster"); return }
-        log("testing infrared: volume down ×3, then up ×3 — point the top edge of the phone at the TV")
+        if (!sender.available) { testLine("this phone has no infrared blaster"); return }
+        testLine("testing infrared: volume down ×3, then up ×3 — point the top edge of the phone at the TV")
         thread {
             try {
                 sender.press(io.adhush.core.TvKey.VOLUME_DOWN, 3); Thread.sleep(1500); sender.press(io.adhush.core.TvKey.VOLUME_UP, 3)
-                runOnUiThread { log("sent. Did the volume bar move down and back up? If not, the codes are wrong: see the README for alternatives") }
-            } catch (e: ControlError) { runOnUiThread { log("FAILED: ${e.message}") } }
+                runOnUiThread { testLine("sent. Did the volume bar move down and back up? If not, the codes are wrong: see the README for alternatives") }
+            } catch (e: ControlError) { runOnUiThread { testLine("✗ FAILED: ${e.message}") } }
         }
     }
 
@@ -232,7 +351,7 @@ class MainActivity : AppCompatActivity() {
         pendingAction = action
         val wanted = mutableListOf(Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33) wanted.add(Manifest.permission.POST_NOTIFICATIONS)
-        val wantedAll = if (settings.camera) wanted + Manifest.permission.CAMERA else wanted
+        val wantedAll = if (settings.camera || settings.captions) wanted + Manifest.permission.CAMERA else wanted
         val missing = wantedAll.filter { ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) { ActivityCompat.requestPermissions(this, missing.toTypedArray(), 1); return }
         val intent = Intent(this, AdHushService::class.java)
@@ -240,7 +359,6 @@ class MainActivity : AppCompatActivity() {
         ContextCompat.startForegroundService(this, intent)
         log(when (pendingAction) {
             AdHushService.ACTION_SURVEY -> "survey started — 10 minutes of normal TV, phone where it will live"
-            AdHushService.ACTION_CAMERA_SETUP -> "camera set-up started — keep a show on for 45 s with the whole screen in view"
             else -> "started"
         })
     }

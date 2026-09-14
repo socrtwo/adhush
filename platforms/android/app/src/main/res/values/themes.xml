@@ -1,4 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.AdHush" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/adhush_primary</item>
@@ -9,5 +8,12 @@
         <item name="colorSecondaryContainer">@color/adhush_secondary_container</item>
         <item name="colorOnSecondaryContainer">@color/adhush_on_secondary_container</item>
         <item name="android:statusBarColor">@color/adhush_primary</item>
+    </style>
+    <!-- The splash: a deep blue field with the app's mark, then the real theme. -->
+    <style name="Theme.AdHush.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/adhush_splash</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="windowSplashScreenAnimationDuration">600</item>
+        <item name="postSplashScreenTheme">@style/Theme.AdHush</item>
     </style>
 </resources>

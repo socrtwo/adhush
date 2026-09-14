@@ -20,6 +20,19 @@ interface Detector {
     fun observeAudio(block: AudioBlock)
     /** Camera frames; audio-only detectors ignore them. */
     fun observeFrame(frame: Gray, ts: Double) {}
+    /**
+     * False when the detector cannot see or hear what it needs right now (a
+     * camera with no whole screen in view). An inert detector casts no vote
+     * and stays out of the fusion normaliser: it neither adds evidence nor
+     * dilutes it. Audio detectors are always voting.
+     */
+    val voting: Boolean get() = true
+    /**
+     * The user said "Not an ad" or "Show's back": whatever this detector was
+     * sure of a moment ago was the programme. Detectors that hold a belief
+     * (a missing logo, a matched script) drop it and start over.
+     */
+    fun userSaysProgramme(ts: Double) {}
     fun vote(ts: Double): DetectorVote
     fun vote(ts: Double, confidence: Double, reason: String): DetectorVote =
         DetectorVote(name, ts, confidence.coerceIn(0.0, 1.0), reason)

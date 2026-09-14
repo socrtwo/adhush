@@ -8,4 +8,6 @@
     <string name="action_show_back">Show\'s back</string>
     <string name="action_restore">Restore volume</string>
     <string name="action_stop">Stop</string>
+    <string name="setup_hint">Green box = the TV. Yellow box = the bug (the channel logo in the corner). Pinch to zoom the camera. Drag a box to choose the bug yourself.</string>
+    <string name="help_title">Help</string>
 </resources>

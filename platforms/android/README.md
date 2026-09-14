@@ -82,14 +82,49 @@ Battery → Unrestricted) or Android may pause the service overnight.
 
 ## The screens
 
-Four tabs along the bottom. **Home** is the status and the Start/Stop pair
-plus the three teaching buttons. **TV** is how this phone reaches its set,
-the address and login, and the volumes. **Senses** switches the camera and
-speech on, sets them up, and runs the room survey. **Log** shows the app's
-own log and has **Share error log**: every status line, every caught error
-and every crash with its stack trace goes into a rolling file in the app's
-private storage, and that button hands it to mail, Drive or messages. If
-the app ever closes on its own, share that file.
+Five tabs along the bottom. **Home** is the status card (green while the
+show is on, red while ducked, orange while teaching, grey when stopped), a
+chip per method that lights in its colour while that method runs, the
+Start/Stop pair (Start reads "Running" in green, Stop turns red), the three
+teaching buttons, and **Test mode** — Test TV with its result printed on the
+card. **TV** is how this phone reaches its set, the address and login, and
+the volumes. **Methods** is the six ways of spotting a commercial, each a
+switch with a ⓘ explanation and a coloured dot while it runs; at least one
+must be on or the app refuses to start. **Help** is every explanation in
+full. **Log** shows the app's own log and has **Share error log**: every
+status line, every caught error and every crash with its stack trace goes
+into a rolling file in the app's private storage, and that button hands it
+to mail, Drive or messages. If the app ever closes on its own, share that
+file.
+
+## Words used in the app
+
+- **Bug** — the small channel logo that sits in a corner of the picture
+  during a show (broadcasters' word for it). It is taken off the screen
+  during commercials; that is what the camera watches for.
+- **Script** — the words of one commercial, written down. Commercials say
+  the same words every airing; the app finds runs of words that repeat and
+  saves them as scripts, from speech or from the on-screen captions.
+- **Ducking** — turning the TV down to a whisper instead of muting, so the
+  phone can still hear when the show is back.
+- **Material / remembered break** — the audio fingerprint (numbers, not a
+  recording) of a break you bracketed with *Is an ad* and *Show's back*.
+
+## The six methods
+
+| # | Method | What it uses | Can duck alone? |
+|---|---|---|---|
+| 1 | Quiet gaps | microphone: the short silence between show and ad | no — needs a second opinion |
+| 2 | Loudness jumps | microphone: the sound jumping up and staying up | no — needs a second opinion |
+| 3 | Remembered breaks | microphone: fingerprints of taught breaks | yes |
+| 4 | Channel bug | camera: the logo corner, whole TV in view | yes |
+| 5 | Spoken words | microphone + offline speech recogniser: scripts | yes |
+| 6 | On-screen captions | camera: the caption band read as text: scripts | yes |
+
+**Not an ad** now does three things: restores the volume, tells every
+method it was wrong (the camera must see the bug again before it may call
+it gone; a matched script is dropped), and opens a one-minute quiet period
+in which nothing may duck. The status line shows the countdown.
 
 ## Which TV, which cable
 
@@ -108,22 +143,51 @@ At the top of the settings, pick how *this* phone reaches *its* TV:
   moves, the codes are wrong for this set: tell me the remote's model number
   (printed on its back) and I will look up its code table.
 
-## Watching for the logo with the camera
+## Watching for the bug with the camera
 
 Press **Camera setup**. AdHush pauses and the screen shows what the back
-camera sees, with the TV outlined in green. Hold the phone upright with the
-whole TV in view (eight feet away is fine) and, with a show on, press
-**Watch 45 s**. When it finishes, a yellow box marks what it thinks is the
-logo and the strip underneath shows that box magnified: it should look like
-the channel's bug. If it grabbed the wrong thing — on a news channel the
-ticker frame or a banner is a common mistake — drag a box around the real
-logo with your finger. The status line shows a live match score: high while
-the logo is on screen, low during a commercial. When it reads PRESENT during
-a show, press **Save & start**. Set-up is per channel.
+camera sees, in colour, with the TV outlined in green. **Pinch the picture
+(or move the slider) to zoom the camera in** until the bug is big but the
+whole TV still fits — the outline turns red with a warning when the TV runs
+off the edge. Hold the phone upright and, with a show on, press **Watch
+45 s**. When it finishes, a yellow box marks what it thinks is the bug and
+the strip underneath shows that box magnified, in colour: it should look
+like the channel's logo. If it grabbed the wrong thing — on a news channel
+the ticker frame or a banner is a common mistake — drag a box around the
+real logo with your finger. The status line shows a live match score and
+SEEN / GONE / not seen yet. When it reads SEEN during a show, press **Save &
+start**; the zoom is saved with the template and the service uses the same.
+Set-up is per channel.
 
-Hand-held is expected: the TV is re-found in every frame, a smeared frame
-(the phone swung) counts as "can't see" rather than "logo gone", and the
-logo has to be missing for 2.5 s before the set is ducked.
+Hand-held is expected: the TV is re-found in every frame and the yellow box
+follows the bug (it is slid over a small window and the best match counts);
+a smeared frame counts as "can't see"; a TV that is only partly in the
+picture is "whole TV not in view" — inert, never a duck; the bug must have
+been seen once since Start before its absence counts; and it has to be
+missing for 2.5 s before the set is ducked. The status line says what the
+camera can see at any moment.
+
+## Reading the captions with the camera
+
+Turn closed captions on in the TV's own menu, switch on **On-screen
+captions** under Methods, and Start (the camera permission is needed). The
+lower third of the found screen is cut out of each frame, enlarged, and
+read by the phone's on-device text recogniser once a second; new words go
+into the same three-hour transcript, repetition learning and script
+matching as speech does. Because the words are read rather than heard, the
+room's fans do not garble them. It needs the whole TV in view and captions
+tall enough to read — zoom in on the setup screen and look at what the
+camera sees; at eight feet, 1.5–2× zoom is about right on a 46-inch set.
+
+Nothing can send the captions down a cable: the Sharp's RS-232C and IP
+control ports carry commands and their one-word replies (volume, power,
+input), never picture, sound or caption data, and infrared is one-way into
+the set. The captions exist as data only inside the broadcast the TV or
+cable box decodes; from there they are drawn into the picture and gone.
+Android's own Live Caption and Live Transcribe transcribe *audio* on the
+phone (Live Caption only for media playing on the phone itself), which is
+what method 5 does offline. Reading them off the screen is the only way in
+from outside, and is what this method does. Details: ADR 0013.
 
 ## Hearing the commercials (speech)
 

@@ -199,8 +199,9 @@ class TranscriptDetector(
     private val store: ScriptStore,
     private val cfg: TranscriptConfig = TranscriptConfig(),
     private val boilerplate: List<List<String>> = BOILERPLATE,
+    /** "transcript" when the words come from the microphone; "captions" when they are read off the screen. */
+    override val name: String = "transcript",
 ) : Detector {
-    override val name = "transcript"
     private val matcher = TranscriptMatcher(store, cfg)
     private val learner = RepeatLearner(store, cfg)
     private val history = ArrayDeque<Word>()
@@ -214,6 +215,9 @@ class TranscriptDetector(
 
     override fun warmup() { matcher.reset(); holdUntil = -1.0; heldScript = null }
     override fun observeAudio(block: AudioBlock) {}
+
+    /** "Not an ad": whatever script or phrase held the duck was the programme after all. Drop the hold. */
+    @Synchronized override fun userSaysProgramme(ts: Double) { matcher.reset(); holdUntil = -1.0; heldScript = null; lastReason = "quiet" }
 
     val transcript: List<Word> get() = history.toList()
 

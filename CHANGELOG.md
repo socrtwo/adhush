@@ -3,6 +3,54 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.14.0] - 2026-09-14
+### Fixed
+- Android: the set ducked again seconds after every **Not an ad** during a
+  show. The camera's logo detector called the bug "gone" without ever having
+  seen it (a template that did not match the live picture), and its vote is
+  strong enough to duck alone. Now the bug must be **sighted** once before
+  its absence counts; **Not an ad** and **Show's back** tell every detector it
+  was wrong (the camera then needs a fresh sighting, a matched script is
+  dropped) and open a **one-minute quiet period** in which nothing may duck.
+- Android camera: the logo box is **slid over a small window** and the best
+  match counts, so a screen edge found a few pixels off in a hand no longer
+  reads as "logo gone" (the likely cause of the mismatch above).
+- Android camera: a TV that runs off the edge of the picture, or a lit shape
+  that is not TV-shaped, is **"whole TV not in view"** — inert, never a duck.
+- Android: a blank TV address was tried as ":10002" every five seconds; the
+  app now refuses to start (and says so) until one is typed. The encrypted
+  settings falling back to plain ones is now logged.
+- Android speech: stopping while the microphone was still feeding the
+  recogniser threw `RejectedExecutionException` on the mic thread (two
+  crashes in the log). The feed is guarded and the mic is stopped first.
+
+### Added
+- Android **Methods** page: all six ways to spot a commercial are switches —
+  quiet gaps, loudness jumps, remembered breaks, channel bug (camera), spoken
+  words (speech), **on-screen captions** (new, ADR 0013). At least one must be
+  on; the app refuses to start otherwise. A coloured dot on each card and a
+  chip row on Home show which methods are running right now; buttons of a
+  running method are tinted; Start turns into a green "Running", Stop turns
+  red.
+- Android **captions** (sixth method): the camera reads the closed-caption
+  band off the screen with the on-device text recogniser and feeds the words
+  to the same script learning and matching as speech. Nothing is misheard
+  over the room's fans.
+- Android **Test mode** card on Home: Test TV with its byte-by-byte result
+  printed right there (still on the TV page too).
+- Android **Help** page and ⓘ buttons on every card: what the "bug" is, what
+  a "script" is, ducking vs muting, teaching, test mode, and each method.
+- Android **splash screen** (the app's mark on a deep blue field) and colour:
+  the status card is green for the show, red while ducked, orange while
+  teaching, grey when stopped; each method has its own colour.
+- Android camera setup in **colour**, with **pinch-to-zoom** (and a slider)
+  that zooms the camera itself so the bug is big; the zoom is saved and used
+  by the service. The TV outline turns red with a warning when the whole TV
+  is not in the picture. The status line says SEEN / GONE / not seen yet.
+- Android status line reports what the camera can see ("bug seen", "whole
+  TV not in view", "looking for the bug") and the quiet period after Not an
+  ad.
+
 ## [0.13.0] - 2026-09-14
 ### Fixed
 - Android: the app could vanish without a word. The service installed a

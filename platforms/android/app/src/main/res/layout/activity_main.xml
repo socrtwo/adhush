@@ -15,27 +15,38 @@
         android:layout_width="match_parent" android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp" android:paddingBottom="88dp">
-
-            <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Filled" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Right now" android:textAppearance="?attr/textAppearanceLabelLarge" />
-                    <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="6dp" android:text="stopped" android:textAppearance="?attr/textAppearanceHeadlineSmall" />
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingTop="16dp">
-                        <com.google.android.material.button.MaterialButton android:id="@+id/start" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:text="Start" />
-                        <com.google.android.material.button.MaterialButton android:id="@+id/stop" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Stop" />
-                    </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Teach it" android:textAppearance="?attr/textAppearanceTitleMedium" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:paddingBottom="8dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="When a commercial starts, press Is an ad. When your show is back, press Show\'s back. It remembers the whole break." />
-                    <com.google.android.material.button.MaterialButton android:id="@+id/isAd" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="✓ Is an ad" />
-                    <com.google.android.material.button.MaterialButton android:id="@+id/showBack" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="▶ Show\'s back" />
-                    <com.google.android.material.button.MaterialButton android:id="@+id/notAd" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="✗ Not an ad (undo a mistake)" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Filled" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:id="@+id/statusCard"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Right now" android:textAppearance="?attr/textAppearanceLabelLarge" />
+<TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="6dp" android:text="stopped" android:textAppearance="?attr/textAppearanceHeadlineSmall" />
+<com.google.android.material.chip.ChipGroup android:id="@+id/chips" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="10dp" app:chipSpacingVertical="2dp">
+  <com.google.android.material.chip.Chip android:id="@+id/chipSilence" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Quiet gaps" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipLoudness" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Loudness" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipFingerprints" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Remembered" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipCamera" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bug" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipSpeech" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Speech" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipCaptions" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Captions" />
+</com.google.android.material.chip.ChipGroup>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingTop="14dp">
+  <com.google.android.material.button.MaterialButton android:id="@+id/start" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:text="▶ Start" />
+  <com.google.android.material.button.MaterialButton android:id="@+id/stop" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="■ Stop" />
+</LinearLayout></LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotTeach" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Teach it" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoTeach" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:paddingBottom="8dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="When a commercial starts, press Is an ad. When your show is back, press Show\'s back. It remembers the whole break. Ducked your show by mistake? Not an ad." />
+<com.google.android.material.button.MaterialButton android:id="@+id/isAd" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="✓ Is an ad" app:backgroundTint="@color/adhush_teaching" />
+<com.google.android.material.button.MaterialButton android:id="@+id/showBack" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="▶ Show\'s back" app:backgroundTint="@color/adhush_program" />
+<com.google.android.material.button.MaterialButton android:id="@+id/notAd" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="✗ Not an ad (undo a mistake)" app:strokeColor="@color/adhush_ducked" android:textColor="@color/adhush_ducked" /></LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotTest" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Test mode" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoTest" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:paddingBottom="8dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Talks to the TV the way a commercial would: asks the volume, mutes and unmutes, ducks and restores. The sound should dip twice. Every byte is printed below." />
+<com.google.android.material.button.MaterialButton android:id="@+id/testHome" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Test TV" />
+<TextView android:id="@+id/testResult" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:textSize="11sp" android:fontFamily="monospace" android:textIsSelectable="true" android:text="" /></LinearLayout></com.google.android.material.card.MaterialCardView>
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
@@ -47,7 +58,11 @@
 
             <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="How this phone reaches the TV" android:textAppearance="?attr/textAppearanceTitleMedium" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotTv" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="How this phone reaches the TV" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoTv" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
                     <RadioGroup android:id="@+id/control" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="4dp">
                         <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/controlIp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Network (Wi‑Fi, the big Sharp)" />
                         <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/controlSerial" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Serial cable (USB‑OTG to RS‑232C)" />
@@ -111,42 +126,79 @@
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
-    <!-- SENSES -->
+    <!-- METHODS -->
     <androidx.core.widget.NestedScrollView android:id="@+id/pageSenses" android:visibility="gone"
         android:layout_width="match_parent" android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp" android:paddingBottom="88dp">
-
-            <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Camera" android:textAppearance="?attr/textAppearanceTitleMedium" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Watches the corner of the screen for the channel logo. Gone means a commercial." />
-                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/camera" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Use the back camera" />
-                    <com.google.android.material.button.MaterialButton android:id="@+id/cameraSetup" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Camera setup — see and choose the logo" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Speech" android:textAppearance="?attr/textAppearanceTitleMedium" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Listens for words. Commercials repeat theirs; the show never does. Uses more battery." />
-                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/speech" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Use speech" />
-                    <com.google.android.material.button.MaterialButton android:id="@+id/speechModel" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Download speech model (40 MB)" />
-                    <com.google.android.material.button.MaterialButton android:id="@+id/learnScripts" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Learn scripts now" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Room survey" android:textAppearance="?attr/textAppearanceTitleMedium" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:paddingBottom="8dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Ten minutes of what the microphone measures, numbers only, to tune the app to this room." />
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                        <com.google.android.material.button.MaterialButton android:id="@+id/survey" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:text="Survey (10 min)" />
-                        <com.google.android.material.button.MaterialButton android:id="@+id/share" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Share survey" />
-                    </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Filled" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotMethods" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Six ways to spot a commercial" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoMethods" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:id="@+id/methodsNote" android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Switch on any mix. At least one must be on, or the app has nothing to go on and will not start. A coloured dot means that method is running right now." />
+</LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotSilence" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="1. Quiet gaps" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoSilence" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="The microphone hears the short silence broadcasters leave between the show and each commercial. A hint: needs another method to agree." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/silence" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Listen for quiet gaps" />
+</LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotLoudness" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="2. Loudness jumps" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoLoudness" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Commercials are mixed louder than the show. The microphone notices the sound jumping up and staying up. A hint: needs another method to agree." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/loudness" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Listen for loudness jumps" />
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingTop="4dp">
+  <com.google.android.material.button.MaterialButton android:id="@+id/survey" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:text="Survey room (10 min)" />
+  <com.google.android.material.button.MaterialButton android:id="@+id/share" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Share survey" />
+</LinearLayout></LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotFingerprints" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="3. Remembered breaks" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoFingerprints" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Every break you bracket with Is an ad and Show\'s back is remembered as an audio fingerprint (numbers, not a recording) and recognised next time it airs. Strong enough to duck on its own." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/fingerprints" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Recognise remembered breaks" />
+</LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotCamera" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="4. Channel bug (camera)" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoCamera" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="The back camera watches the corner where the channel\'s logo — the bug — lives. Bug gone for 2.5 s means a commercial. Only acts while the whole TV is in view. Strong enough to duck on its own." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/camera" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Use the back camera" />
+<com.google.android.material.button.MaterialButton android:id="@+id/cameraSetup" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Camera setup — find the bug (in colour)" /></LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotSpeech" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="5. Spoken words (speech)" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoSpeech" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="An offline speech recogniser turns what the microphone hears into words. Commercials repeat their words; the app saves them as scripts and recognises them. Strong enough to duck on its own." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/speech" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Use speech recognition" />
+<com.google.android.material.button.MaterialButton android:id="@+id/speechModel" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Download speech model (40 MB)" />
+<com.google.android.material.button.MaterialButton android:id="@+id/learnScripts" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Learn scripts now" /></LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotCaptions" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="6. On-screen captions" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoCaptions" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="With the TV\'s closed captions on, the camera reads the caption text off the screen and matches it to scripts like speech — but nothing is misheard over the fans. Needs the whole TV in view. Strong enough to duck on its own." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/captions" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Read the captions with the camera" />
+</LinearLayout></com.google.android.material.card.MaterialCardView>
         </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- HELP -->
+    <androidx.core.widget.NestedScrollView android:id="@+id/pageHelp" android:visibility="gone"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        <LinearLayout android:id="@+id/helpList" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp" android:paddingBottom="88dp" />
     </androidx.core.widget.NestedScrollView>
 
     <!-- LOG -->

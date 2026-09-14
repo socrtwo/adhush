@@ -16,7 +16,8 @@ class Settings(context: Context) {
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        AppLog.w("settings", "encrypted settings unavailable, using plain settings: ${e.javaClass.simpleName}: ${e.message}")
         context.getSharedPreferences("adhush.fallback", Context.MODE_PRIVATE)
     }
 
@@ -33,6 +34,17 @@ class Settings(context: Context) {
     var camera: Boolean get() = prefs.getBoolean("camera", false); set(v) = prefs.edit().putBoolean("camera", v).apply()
     /** Recognise speech and learn commercials from their words (ADR 0012). */
     var speech: Boolean get() = prefs.getBoolean("speech", false); set(v) = prefs.edit().putBoolean("speech", v).apply()
+    /** Read the captions off the screen with the camera and match them like speech (ADR 0013). */
+    var captions: Boolean get() = prefs.getBoolean("captions", false); set(v) = prefs.edit().putBoolean("captions", v).apply()
+    /** The three audio methods, on by default. */
+    var silence: Boolean get() = prefs.getBoolean("silence", true); set(v) = prefs.edit().putBoolean("silence", v).apply()
+    var loudness: Boolean get() = prefs.getBoolean("loudness", true); set(v) = prefs.edit().putBoolean("loudness", v).apply()
+    var fingerprints: Boolean get() = prefs.getBoolean("fingerprints", true); set(v) = prefs.edit().putBoolean("fingerprints", v).apply()
+    /** Camera zoom ratio (1.0 = none) chosen on the setup screen; the service uses the same so the template fits. */
+    var cameraZoom: Float get() = prefs.getFloat("camera_zoom", 1f); set(v) = prefs.edit().putFloat("camera_zoom", v).apply()
+
+    /** How many of the six methods are switched on. Zero means the app cannot work. */
+    val methodsOn: Int get() = listOf(silence, loudness, fingerprints, camera, speech, captions).count { it }
     var irAddress: Int get() = prefs.getInt("ir_address", 1); set(v) = prefs.edit().putInt("ir_address", v).apply()
     var irVolumeUp: Int get() = prefs.getInt("ir_vol_up", 0x14); set(v) = prefs.edit().putInt("ir_vol_up", v).apply()
     var irVolumeDown: Int get() = prefs.getInt("ir_vol_down", 0x15); set(v) = prefs.edit().putInt("ir_vol_down", v).apply()

@@ -38,7 +38,11 @@ class SpeechSource(modelDir: File, private val onWords: (List<Word>) -> Unit) {
         recognizer.setWords(true)
     }
 
-    fun feed(block: AudioBlock) { executor.execute { runCatching { process(block) } } }
+    /** Called from the mic thread; after [close] the executor is gone and the block is simply dropped. */
+    fun feed(block: AudioBlock) {
+        if (executor.isShutdown) return
+        try { executor.execute { runCatching { process(block) } } } catch (_: java.util.concurrent.RejectedExecutionException) { /* closing */ }
+    }
 
     private fun process(block: AudioBlock) {
         if (t0 == null) t0 = block.ts

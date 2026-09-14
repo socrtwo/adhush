@@ -54,6 +54,7 @@ class AdHushService : Service(), LifecycleOwner {
     private lateinit var settings: Settings
     private var camera: CameraSource? = null
     private var speech: SpeechSource? = null
+    private var captionReader: CaptionSource? = null
     private var scripts: FileScriptStore? = null
     private var lastRepeatLearnAt = 0L
     @Volatile private var finder: LogoFinder? = null
@@ -84,6 +85,7 @@ class AdHushService : Service(), LifecycleOwner {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Every start — including control actions delivered by startForegroundService —
         // must be answered with startForeground, or Android 8+ kills the app.
+        if (lastText == "stopped") lastText = "starting…"
         startForegroundWithType(buildNotification(lastText))
         val action = intent?.action
         if (engine == null && action != null && action != ACTION_SURVEY) {  // a control action, but nothing is running
@@ -120,12 +122,13 @@ class AdHushService : Service(), LifecycleOwner {
         return START_STICKY
     }
 
-    @Volatile private var lastText = "starting…"
-
     private fun start() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             update("microphone permission missing"); stopSelf(); return
         }
+        // The 0.13 log: a blank address was tried as ":10002" every five seconds. Refuse to start instead.
+        if (settings.control == "ip" && settings.host.isBlank()) { update("no TV address — type it on the TV page and Save"); stopSelf(); return }
+        if (settings.methodsOn == 0) { update("no method is switched on — turn one on under Methods"); stopSelf(); return }
         val ctl: DuckController = when (settings.control) {
             "serial" -> {
                 val t = SerialTransport(this); transport = t
@@ -142,14 +145,28 @@ class AdHushService : Service(), LifecycleOwner {
         }
         controller = ctl
         val store = FileFingerprintStore(File(filesDir, "ads.tsv"))
-        val cameraWanted = settings.camera && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-        val logo = if (cameraWanted) LogoTemplate.load(File(filesDir, LOGO_FILE))?.let { LogoAbsenceDetector(HANDHELD_LOGO_CONFIG, it) } else null
+        val cameraOk = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        val logoWanted = settings.camera && cameraOk
+        val captionsWanted = settings.captions && cameraOk
+        val cameraWanted = logoWanted || captionsWanted
+        val logo = if (logoWanted) LogoTemplate.load(File(filesDir, LOGO_FILE))?.let { LogoAbsenceDetector(HANDHELD_LOGO_CONFIG, it) } else null
         val speechWanted = settings.speech && SpeechSource.isInstalled(this)
-        val scriptStore = if (speechWanted) FileScriptStore(File(filesDir, SCRIPTS_FILE)).also { scripts = it } else null
-        val transcript = scriptStore?.let { TranscriptDetector(it) }
-        val eng = Assembly.engine(NetworkedController(ctl), store, logo = logo, transcript = transcript)
+        val scriptStore = if (speechWanted || captionsWanted) FileScriptStore(File(filesDir, SCRIPTS_FILE)).also { scripts = it } else null
+        val transcript = if (speechWanted) scriptStore?.let { TranscriptDetector(it) } else null
+        val captions = if (captionsWanted) scriptStore?.let { TranscriptDetector(it, name = "captions") } else null
+        val eng = try {
+            Assembly.engine(NetworkedController(ctl), store, logo = logo, transcript = transcript, captions = captions,
+                silence = settings.silence, loudness = settings.loudness, fingerprints = settings.fingerprints)
+        } catch (e: IllegalArgumentException) {
+            update("no method is switched on — turn one on under Methods"); runCatching { ctl.close() }; controller = null; stopSelf(); return
+        }
         eng.addListener { s -> lastStatus = s; main.post { update(describe(s)) } }
         engine = eng
+        running = RunningInfo(
+            silence = settings.silence, loudness = settings.loudness, fingerprints = settings.fingerprints,
+            logo = logo != null, logoNotSetUp = logoWanted && logo == null, speech = speechWanted, speechNoModel = settings.speech && !speechWanted,
+            captions = captionsWanted, control = settings.control,
+        )
         io.execute {
             try {
                 if (ctl.recoverOnStart()) main.post { update("restored volume after an unclean exit") }
@@ -179,9 +196,12 @@ class AdHushService : Service(), LifecycleOwner {
         try { m.start() } catch (e: Exception) { AppLog.e("mic", "failed to start", e); update("mic failed: ${e.message}"); stopSelf(); return }
         mic = m
         if (cameraWanted) {
-            val cam = CameraSource(this, this) { gray ->   // 2 fps, upright
+            val reader = if (captionsWanted) runCatching { CaptionSource { words -> eng.onCaptions(words) } }.onFailure { AppLog.e("captions", "text recogniser failed to start", it) }.getOrNull() else null
+            captionReader = reader
+            val cam = CameraSource(this, this) { gray, _ ->   // 2 fps, upright, luma only
                 val ts = mic?.mediaTime ?: 0.0
                 eng.onFrame(gray, ts)
+                reader?.feed(gray, ts)
                 finder?.let { f ->
                     f.feed(gray)
                     val elapsed = (System.currentTimeMillis() - finderStartedAt) / 1000
@@ -189,11 +209,13 @@ class AdHushService : Service(), LifecycleOwner {
                 }
             }
             camera = cam
+            cam.setZoom(settings.cameraZoom)
             cam.start { msg -> main.post { update(msg) } }
         }
-        val eye = if (cameraWanted) (if (logo != null) " + camera (logo)" else " + camera (not set up)") else ""
+        val eye = if (logoWanted) (if (logo != null) " + camera (bug)" else " + camera (bug not set up)") else ""
+        val cc = if (captionsWanted) " + captions" else ""
         val ear = if (speechWanted) " + speech (${scriptStore?.count() ?: 0} scripts)" else if (settings.speech) " + speech (model not downloaded)" else ""
-        update("listening (${m.sourceName}) via ${settings.control}$eye$ear")
+        update("listening (${m.sourceName}) via ${settings.control}$eye$cc$ear")
         lastRepeatLearnAt = System.currentTimeMillis()
         main.postDelayed(ticker, POLL_MS)
     }
@@ -229,10 +251,12 @@ class AdHushService : Service(), LifecycleOwner {
 
     /** Tear the engine, mic and camera down and start again with the current settings. */
     private fun restart() {
-        speech?.close(); speech = null
+        mic?.stop(); mic = null            // the mic feeds the speech engine: stop the feeder first
         camera?.stop(); camera = null
-        mic?.stop(); mic = null
+        speech?.close(); speech = null
+        captionReader?.close(); captionReader = null
         main.removeCallbacks(ticker)
+        running = null
         engine?.close(); engine = null
         controller?.let { runCatching { it.close() } }; controller = null
         (transport as? AutoCloseable)?.close(); transport = null
@@ -269,16 +293,20 @@ class AdHushService : Service(), LifecycleOwner {
     override fun onDestroy() {
         AppLog.i("service", "destroyed")
         emergencyRestore = null
-        speech?.close(); speech = null
+        mic?.stop(); mic = null            // before the speech engine, which it feeds
         camera?.stop(); camera = null
+        speech?.close(); speech = null
+        captionReader?.close(); captionReader = null
         main.removeCallbacks(ticker)
-        mic?.stop(); mic = null
+        running = null
         val ctl = controller
         engine?.close(); engine = null
         if (ctl != null) runCatching { ctl.close() }   // restore if ducked
         transport?.close(); transport = null
         io.shutdown()
         registry.currentState = Lifecycle.State.DESTROYED
+        lastText = "stopped"
+        sendBroadcast(Intent(BROADCAST_STATUS).setPackage(packageName).putExtra("text", "stopped").putExtra("running", false))
         super.onDestroy()
     }
 
@@ -288,18 +316,20 @@ class AdHushService : Service(), LifecycleOwner {
 
     private fun describe(s: Status): String {
         if (s.teaching) return "TEACHING — ducked; press Show's back when the show returns · ${s.adsLearned} learned"
-        val state = if (s.override != CoreOverride.AUTO) "override: ${s.override.wire}" else if (s.muted) "DUCKED — ad" else s.state.wire.uppercase()
-        return "$state · ${"%.2f".format(s.confidence)} · ${s.adsLearned} learned"
+        val state = if (s.override != CoreOverride.AUTO) "override: ${s.override.wire}" else if (s.muted) "DUCKED — ad" else if (s.quietS > 0.0) "SHOW (you said not an ad; ${s.quietS.toInt()} s of quiet)" else if (s.state == io.adhush.core.AdState.PROGRAM) "SHOW" else s.state.wire.uppercase()
+        val cam = s.camera?.let { " · camera: $it" } ?: ""
+        return "$state · ${"%.2f".format(s.confidence)}$cam · ${s.adsLearned} learned"
     }
 
     private fun refresh() { lastStatus?.let { update(describe(it)) } }
 
     private fun update(text: String) {
         lastText = text
-        AppLog.i("status", text)
+        if (text != lastLogged) { AppLog.i("status", text); lastLogged = text }   // the same line every five seconds is noise in the log
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIF_ID, buildNotification(text))
-        sendBroadcast(Intent(BROADCAST_STATUS).setPackage(packageName).putExtra("text", text))
+        sendBroadcast(Intent(BROADCAST_STATUS).setPackage(packageName).putExtra("text", text).putExtra("running", engine != null).putExtra("ducked", lastStatus?.muted == true).putExtra("teaching", lastStatus?.teaching == true))
     }
+    private var lastLogged = ""
 
     private fun action(code: Int, act: String, label: String): NotificationCompat.Action {
         val pi = PendingIntent.getService(this, code, Intent(this, AdHushService::class.java).setAction(act),
@@ -324,7 +354,7 @@ class AdHushService : Service(), LifecycleOwner {
     }
 
     private fun startForegroundWithType(n: Notification) {
-        val cameraOk = settings.camera && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        val cameraOk = (settings.camera || settings.captions) && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or (if (cameraOk && Build.VERSION.SDK_INT >= 30) ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0)
         if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIF_ID, n, type)
         else startForeground(NOTIF_ID, n)
@@ -343,9 +373,20 @@ class AdHushService : Service(), LifecycleOwner {
         override fun close() { /* the service closes the real controller on its own thread */ }
     }
 
+    /** Which methods are actually running, for the app's indicators. */
+    data class RunningInfo(
+        val silence: Boolean, val loudness: Boolean, val fingerprints: Boolean,
+        val logo: Boolean, val logoNotSetUp: Boolean, val speech: Boolean, val speechNoModel: Boolean,
+        val captions: Boolean, val control: String,
+    )
+
     companion object {
         /** Set while a controller exists: the crash handler restores the volume through it before Android reports. */
         @Volatile var emergencyRestore: (() -> Unit)? = null
+        /** Non-null while the engine runs (same process as the app): what is on, for the indicators. */
+        @Volatile var running: RunningInfo? = null
+        /** The last status line, for an app screen that opens while the service runs. */
+        @Volatile var lastText = "stopped"
         const val CHANNEL = "adhush"
         const val NOTIF_ID = 1
         const val ACTION_NOT_AD = "io.adhush.android.NOT_AD"

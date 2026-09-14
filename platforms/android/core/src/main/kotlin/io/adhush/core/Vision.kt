@@ -126,6 +126,23 @@ object Vision {
         return if (x1 > x0 && y1 > y0) Box(x0, y0, x1, y1) else coarse
     }
 
+    /**
+     * Is this the *whole* TV? A screen box that touches the edge of the frame
+     * is a TV the camera is only partly looking at, and one far from a 16:9
+     * shape (seen from an angle, or a lit wall) is not a TV at all. The logo
+     * detector goes inert on either, so a phone pointed at half the set never
+     * reads as "logo gone".
+     */
+    fun screenComplete(box: Box, frameW: Int, frameH: Int, margin: Int = EDGE_MARGIN): Boolean {
+        if (box.x0 < margin || box.y0 < margin || box.x1 > frameW - margin || box.y1 > frameH - margin) return false
+        if (box.w <= 0 || box.h <= 0) return false
+        val aspect = box.w.toDouble() / box.h
+        return aspect in MIN_ASPECT..MAX_ASPECT
+    }
+    const val EDGE_MARGIN = 2
+    const val MIN_ASPECT = 1.15
+    const val MAX_ASPECT = 2.6
+
     /** np.gradient magnitude: central differences inside, one-sided at the border. */
     fun edgeMap(g: Gray): FloatArray {
         val out = FloatArray(g.w * g.h)
@@ -205,14 +222,22 @@ class LogoFinder(
         private set
     var screenMisses = 0
         private set
+    /** Frames where a screen was found but it touched the edge of the picture: not learned from. */
+    var partialFrames = 0
+        private set
     /** Where the screen was in the last frame fed, in frame pixels; null if it was not found. */
     var lastScreen: Box? = null
         private set
+    /** True when the last frame's screen ran off the edge of the picture. */
+    var lastPartial = false
+        private set
 
-    /** Feed a full camera frame; returns false when no lit screen was found in it. */
+    /** Feed a full camera frame; returns false when no whole lit screen was found in it. */
     fun feed(frame: Gray): Boolean {
-        val box = Vision.findScreen(frame) ?: run { screenMisses++; lastScreen = null; return false }
+        val box = Vision.findScreen(frame) ?: run { screenMisses++; lastScreen = null; lastPartial = false; return false }
         lastScreen = box
+        lastPartial = !Vision.screenComplete(box, frame.w, frame.h)
+        if (lastPartial) { partialFrames++; return false }
         val screen = frame.crop(box).resample(width, height)
         val e = Vision.edgeMap(screen)
         var total = 0.0
@@ -281,10 +306,20 @@ data class LogoAbsenceConfig(
      * inert rather than "absent". 0 disables it.
      */
     val blurRatio: Double = 0.4,
+    /**
+     * How far (in pixels of the 320 × 180 normalised screen) the logo may sit
+     * from where calibration put it. The box is slid over this window and the
+     * best correlation counts, so a screen edge found a few pixels off — a
+     * hand, a slight angle, a different zoom — does not read as "logo gone".
+     * 0 = the fixed box only.
+     */
+    val searchPx: Int = 0,
+    /** Only after the logo has been *seen* can it be missed: absence votes wait for one clear sighting. */
+    val requireSighting: Boolean = false,
 )
 
-/** Hand-held defaults: re-find the screen every frame, be slower to call the logo gone, guard against blur. */
-val HANDHELD_LOGO_CONFIG = LogoAbsenceConfig(absenceS = 2.5, redetectS = 0.0, blurRatio = 0.4)
+/** Hand-held defaults: re-find the screen every frame, slide the box, wait for a sighting, be slower to call the logo gone, guard against blur. */
+val HANDHELD_LOGO_CONFIG = LogoAbsenceConfig(absenceS = 2.5, redetectS = 0.0, blurRatio = 0.4, searchPx = 6, requireSighting = true)
 
 /**
  * Port of detect/logo_absence.py for camera frames. Per frame: find the
@@ -300,11 +335,15 @@ class LogoAbsenceDetector(private val cfg: LogoAbsenceConfig = LogoAbsenceConfig
     private var nextDetectTs = -1.0
     private var score = 1.0
     private var absentSince: Double? = null
+    /** Camera sees a whole, sharp screen right now. */
     var active = false
+        private set
+    /** The logo has been seen present at least once since the last reset (or the user's last correction). */
+    var sighted = false
         private set
     var lastScore: Double = 1.0
         private set
-    /** Why the last frame was inert, if it was: "no_screen" or "blurry". For the setup preview. */
+    /** Why the last frame was inert, if it was: "no_screen", "partial_screen", "blurry" or "logo_not_yet_seen". For the status line. */
     var inertReason: String = "no_screen"
         private set
     /** The screen and the logo box in the last frame's pixel coordinates, for drawing. */
@@ -312,12 +351,25 @@ class LogoAbsenceDetector(private val cfg: LogoAbsenceConfig = LogoAbsenceConfig
         private set
     var lastRoiInFrame: Box? = null
         private set
+    /** Where the best match sat relative to calibration, in normalised-screen pixels. */
+    var lastOffset: Pair<Int, Int> = Pair(0, 0)
+        private set
 
-    override fun warmup() { screen = null; nextDetectTs = -1.0; score = 1.0; absentSince = null; active = false; lastScreen = null; lastRoiInFrame = null }
+    /** With a sighting required the score starts at "unknown" (0), not "present" (1): the bug must earn its first sighting. */
+    override fun warmup() { screen = null; nextDetectTs = -1.0; score = if (cfg.requireSighting) 0.0 else 1.0; absentSince = null; active = false; sighted = !cfg.requireSighting; lastScreen = null; lastRoiInFrame = null; lastOffset = Pair(0, 0) }
     override fun observeAudio(block: AudioBlock) {}
+
+    /** No whole screen, a smeared frame, or a logo never yet seen: no vote, no say in the normaliser. */
+    override val voting: Boolean get() = active && sighted
 
     /** Positive programme proof: the logo is visibly there right now. */
     val programPresent: Boolean get() = active && absentSince == null && score >= cfg.presentThreshold
+
+    /** "Not an ad": the logo was not gone. Forget the absence and demand a fresh sighting before saying so again. */
+    override fun userSaysProgramme(ts: Double) {
+        absentSince = null
+        if (cfg.requireSighting) { sighted = false; score = 0.0 } else score = cfg.presentThreshold
+    }
 
     override fun observeFrame(frame: Gray, ts: Double) {
         if (cfg.redetectS <= 0.0 || ts >= nextDetectTs || screen == null) {
@@ -326,26 +378,56 @@ class LogoAbsenceDetector(private val cfg: LogoAbsenceConfig = LogoAbsenceConfig
         }
         val box = screen ?: run { active = false; inertReason = "no_screen"; lastScreen = null; lastRoiInFrame = null; return }
         lastScreen = box
+        if (!Vision.screenComplete(box, frame.w, frame.h)) { active = false; inertReason = "partial_screen"; lastRoiInFrame = null; return }
         val norm = frame.crop(box).resample(320, 180)
         val roiBox = template.roi.on(norm.w, norm.h)
-        lastRoiInFrame = Box(box.x0 + roiBox.x0 * box.w / norm.w, box.y0 + roiBox.y0 * box.h / norm.h, box.x0 + roiBox.x1 * box.w / norm.w, box.y0 + roiBox.y1 * box.h / norm.h)
         if (cfg.blurRatio > 0.0 && template.screenEdgeMean > 0.0) {
             val e = Vision.edgeMap(norm); var total = 0.0; for (v in e) total += v
-            if (total / e.size < cfg.blurRatio * template.screenEdgeMean) { active = false; inertReason = "blurry"; return }
+            if (total / e.size < cfg.blurRatio * template.screenEdgeMean) { active = false; inertReason = "blurry"; lastRoiInFrame = toFrame(box, norm, roiBox); return }
         }
         active = true
-        val roi = norm.crop(roiBox).resample(template.w, template.h)
-        val raw = Vision.correlation(Vision.edgeMap(roi), template.edges)
+        // Slide the box over the search window and keep the best correlation: the logo is followed, not assumed.
+        var raw = -1.0; var best = roiBox; var bestOff = Pair(0, 0)
+        val r = cfg.searchPx; val step = if (r >= 4) 2 else 1
+        var dy = -r
+        while (dy <= r) {
+            var dx = -r
+            while (dx <= r) {
+                val b = Box(roiBox.x0 + dx, roiBox.y0 + dy, roiBox.x1 + dx, roiBox.y1 + dy)
+                if (b.x0 >= 0 && b.y0 >= 0 && b.x1 <= norm.w && b.y1 <= norm.h) {
+                    val c = Vision.correlation(Vision.edgeMap(norm.crop(b).resample(template.w, template.h)), template.edges)
+                    if (c > raw) { raw = c; best = b; bestOff = Pair(dx, dy) }
+                }
+                dx += step
+            }
+            dy += step
+        }
+        lastOffset = bestOff
+        lastRoiInFrame = toFrame(box, norm, best)
         score += cfg.scoreAlpha * (raw - score)
         lastScore = score
-        if (score < cfg.presentThreshold) { if (absentSince == null) absentSince = ts } else absentSince = null
+        if (score >= cfg.presentThreshold) { absentSince = null; if (raw >= cfg.presentThreshold) sighted = true }
+        else if (sighted) { if (absentSince == null) absentSince = ts }
+        if (!sighted) inertReason = "logo_not_yet_seen"
     }
+
+    private fun toFrame(box: Box, norm: Gray, roiBox: Box) = Box(box.x0 + roiBox.x0 * box.w / norm.w, box.y0 + roiBox.y0 * box.h / norm.h, box.x0 + roiBox.x1 * box.w / norm.w, box.y0 + roiBox.y1 * box.h / norm.h)
 
     override fun vote(ts: Double): DetectorVote {
         if (!active) return vote(ts, 0.0, inertReason)
+        if (!sighted) return vote(ts, 0.0, "logo_not_yet_seen")
         val since = absentSince ?: return vote(ts, 0.0, "logo_present score=${"%.2f".format(Locale.US, score)}")
         val confidence = min(1.0, (ts - since) / cfg.absenceS)
         return vote(ts, confidence, "logo_absent s=${"%.1f".format(Locale.US, ts - since)} score=${"%.2f".format(Locale.US, score)}")
     }
 
+    /** One short line for the status bar: what the camera can and cannot see right now. */
+    fun describe(): String = when {
+        !active && inertReason == "no_screen" -> "no TV in view"
+        !active && inertReason == "partial_screen" -> "whole TV not in view"
+        !active && inertReason == "blurry" -> "picture blurred"
+        !sighted -> "looking for the bug"
+        absentSince != null -> "bug gone"
+        else -> "bug seen"
+    }
 }
