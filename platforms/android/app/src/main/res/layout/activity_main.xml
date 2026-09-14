@@ -11,10 +11,10 @@
     </com.google.android.material.appbar.AppBarLayout>
 
     <!-- HOME -->
-    <androidx.core.widget.NestedScrollView android:id="@+id/pageHome"
+    <androidx.core.widget.NestedScrollView android:id="@+id/pageHome" android:clipToPadding="false"
         android:layout_width="match_parent" android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp" android:paddingBottom="88dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="16dp" android:paddingBottom="104dp">
 <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Filled" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:id="@+id/statusCard"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Right now" android:textAppearance="?attr/textAppearanceLabelLarge" />
 <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="6dp" android:text="stopped" android:textAppearance="?attr/textAppearanceHeadlineSmall" />
@@ -51,10 +51,10 @@
     </androidx.core.widget.NestedScrollView>
 
     <!-- TV -->
-    <androidx.core.widget.NestedScrollView android:id="@+id/pageTv" android:visibility="gone"
+    <androidx.core.widget.NestedScrollView android:id="@+id/pageTv" android:visibility="gone" android:clipToPadding="false"
         android:layout_width="match_parent" android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp" android:paddingBottom="88dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="16dp" android:paddingBottom="104dp">
 
             <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
@@ -127,10 +127,10 @@
     </androidx.core.widget.NestedScrollView>
 
     <!-- METHODS -->
-    <androidx.core.widget.NestedScrollView android:id="@+id/pageSenses" android:visibility="gone"
+    <androidx.core.widget.NestedScrollView android:id="@+id/pageSenses" android:visibility="gone" android:clipToPadding="false"
         android:layout_width="match_parent" android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp" android:paddingBottom="88dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="16dp" android:paddingBottom="104dp">
 <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Filled" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
   <TextView android:id="@+id/dotMethods" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
@@ -195,17 +195,17 @@
     </androidx.core.widget.NestedScrollView>
 
     <!-- HELP -->
-    <androidx.core.widget.NestedScrollView android:id="@+id/pageHelp" android:visibility="gone"
+    <androidx.core.widget.NestedScrollView android:id="@+id/pageHelp" android:visibility="gone" android:clipToPadding="false"
         android:layout_width="match_parent" android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
-        <LinearLayout android:id="@+id/helpList" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp" android:paddingBottom="88dp" />
+        <LinearLayout android:id="@+id/helpList" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="16dp" android:paddingBottom="104dp" />
     </androidx.core.widget.NestedScrollView>
 
     <!-- LOG -->
-    <androidx.core.widget.NestedScrollView android:id="@+id/pageLog" android:visibility="gone"
+    <androidx.core.widget.NestedScrollView android:id="@+id/pageLog" android:visibility="gone" android:clipToPadding="false"
         android:layout_width="match_parent" android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp" android:paddingBottom="88dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="16dp" android:paddingBottom="104dp">
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingBottom="8dp">
                 <com.google.android.material.button.MaterialButton android:id="@+id/shareLog" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:text="Share error log" />
                 <com.google.android.material.button.MaterialButton android:id="@+id/clearLog" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Clear" />

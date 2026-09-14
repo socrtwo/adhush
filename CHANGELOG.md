@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.14.1] - 2026-09-14
+### Fixed
+- Android: the bottom tab bar covered the last part of every page (the
+  Save/Test row on TV, the last method cards, the end of the log). Android
+  ignores `paddingBottom` when `padding` is also set on the same view, so
+  the room left under each page was never applied. Each page now pads its
+  sides explicitly and scrolls clear of the bar.
+
 ## [0.14.0] - 2026-09-14
 ### Fixed
 - Android: the set ducked again seconds after every **Not an ad** during a
