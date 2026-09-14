@@ -80,6 +80,17 @@ Battery → Unrestricted) or Android may pause the service overnight.
   `quietMarginDb` (4 dB) and the fingerprint verify agreement (0.7) are
   starting guesses; see the design's testing section.
 
+## The screens
+
+Four tabs along the bottom. **Home** is the status and the Start/Stop pair
+plus the three teaching buttons. **TV** is how this phone reaches its set,
+the address and login, and the volumes. **Senses** switches the camera and
+speech on, sets them up, and runs the room survey. **Log** shows the app's
+own log and has **Share error log**: every status line, every caught error
+and every crash with its stack trace goes into a rolling file in the app's
+private storage, and that button hands it to mail, Drive or messages. If
+the app ever closes on its own, share that file.
+
 ## Which TV, which cable
 
 At the top of the settings, pick how *this* phone reaches *its* TV:

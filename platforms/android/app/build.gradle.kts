@@ -29,6 +29,7 @@ dependencies {
     implementation(project(":core"))
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.github.mik3y:usb-serial-for-android:3.8.1")   // RS-232C through a USB-OTG cable
     implementation("androidx.camera:camera-core:1.3.4")

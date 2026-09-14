@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/nav_home" android:icon="@android:drawable/ic_media_play" android:title="Home" />
+    <item android:id="@+id/nav_tv" android:icon="@android:drawable/ic_menu_preferences" android:title="TV" />
+    <item android:id="@+id/nav_senses" android:icon="@android:drawable/ic_menu_camera" android:title="Senses" />
+    <item android:id="@+id/nav_log" android:icon="@android:drawable/ic_menu_info_details" android:title="Log" />
+</menu>

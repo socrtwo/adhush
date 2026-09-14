@@ -8,7 +8,7 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
-import android.widget.CheckBox
+import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -26,7 +26,7 @@ class MainActivity : AppCompatActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val i = intent ?: return
             when (i.action) {
-                AdHushService.BROADCAST_STATUS -> findViewById<TextView>(R.id.status).text = i.getStringExtra("text") ?: ""
+                AdHushService.BROADCAST_STATUS -> showStatus(i.getStringExtra("text") ?: "")
                 AdHushService.BROADCAST_SURVEY -> {
                     log("— survey saved; press Share survey to send the numbers (no audio is stored) —")
                     (i.getStringExtra("summary") ?: "").lines().reversed().forEach { log(it) }
@@ -40,7 +40,18 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         settings = Settings(this)
+        AppLog.init(this)
         load()
+        val pages = mapOf(R.id.nav_home to R.id.pageHome, R.id.nav_tv to R.id.pageTv, R.id.nav_senses to R.id.pageSenses, R.id.nav_log to R.id.pageLog)
+        val nav = findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.nav)
+        nav.setOnItemSelectedListener { item ->
+            for ((menuId, pageId) in pages) findViewById<android.view.View>(pageId).visibility = if (menuId == item.itemId) android.view.View.VISIBLE else android.view.View.GONE
+            if (item.itemId != R.id.nav_home) save()            // leaving a page keeps what was typed
+            if (item.itemId == R.id.nav_log) refreshLog()
+            true
+        }
+        findViewById<Button>(R.id.shareLog).setOnClickListener { shareLog() }
+        findViewById<Button>(R.id.clearLog).setOnClickListener { AppLog.clear(); refreshLog(); log("log cleared") }
         findViewById<Button>(R.id.save).setOnClickListener { save(); log("saved") }
         findViewById<Button>(R.id.test).setOnClickListener { save(); when (settings.control) { "serial" -> testSerial(); "ir" -> testIr(); else -> testTv() } }
         findViewById<Button>(R.id.start).setOnClickListener { save(); startWithPermissions(null) }
@@ -55,6 +66,31 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.learnScripts).setOnClickListener { serviceAction(AdHushService.ACTION_LEARN_SCRIPTS) }
     }
 
+    private fun showStatus(text: String) {
+        findViewById<TextView>(R.id.status).text = text
+        findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).subtitle = text.substringBefore(" · ").take(40)
+    }
+
+    private fun refreshLog() { findViewById<TextView>(R.id.log).text = AppLog.tail(150).ifEmpty { "(the log is empty)" } }
+
+    /** The rolling log file, handed to mail, Drive or messages so a crash can be diagnosed. */
+    private fun shareLog() {
+        val file = AppLog.file(this)
+        if (!file.isFile) { log("the log is empty"); return }
+        val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", file)
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(Intent.EXTRA_STREAM, uri).putExtra(Intent.EXTRA_SUBJECT, "AdHush error log")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        startActivity(Intent.createChooser(send, "Share error log"))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val filter = IntentFilter(AdHushService.BROADCAST_STATUS).apply { addAction(AdHushService.BROADCAST_SURVEY) }
+        ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        refreshLog()
+    }
+
     /** One-time 40 MB download of the offline recogniser's English model, into app-private storage. */
     private fun downloadSpeechModel() {
         if (SpeechSource.isInstalled(this)) { log("speech model is already installed"); return }
@@ -64,7 +100,7 @@ class MainActivity : AppCompatActivity() {
                 var last = -1
                 SpeechSource.install(this) { p -> if (p / 10 != last / 10) { last = p; runOnUiThread { log("speech model: $p%") } } }
                 runOnUiThread { log("speech model installed — tick 'Use speech' and Start"); findViewById<Button>(R.id.speechModel).text = "Speech model: installed" }
-            } catch (e: Exception) { runOnUiThread { log("download failed: ${e.message}") } }
+            } catch (e: Exception) { AppLog.e("speech", "model download failed", e); runOnUiThread { log("download failed: ${e.message}") } }
         }
     }
 
@@ -80,12 +116,6 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent.createChooser(send, "Share survey"))
     }
 
-    override fun onResume() {
-        super.onResume()
-        val filter = IntentFilter(AdHushService.BROADCAST_STATUS).apply { addAction(AdHushService.BROADCAST_SURVEY) }
-        ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-    }
-
     override fun onPause() { unregisterReceiver(receiver); super.onPause() }
 
     private fun load() {
@@ -95,9 +125,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<EditText>(R.id.password).setText(settings.password)
         findViewById<EditText>(R.id.duck).setText(settings.duckLevel.toString())
         findViewById<EditText>(R.id.normal).setText(settings.normalVolume.toString())
-        findViewById<CheckBox>(R.id.useMute).isChecked = settings.useMute
-        findViewById<CheckBox>(R.id.camera).isChecked = settings.camera
-        findViewById<CheckBox>(R.id.speech).isChecked = settings.speech
+        findViewById<CompoundButton>(R.id.useMute).isChecked = settings.useMute
+        findViewById<CompoundButton>(R.id.camera).isChecked = settings.camera
+        findViewById<CompoundButton>(R.id.speech).isChecked = settings.speech
         findViewById<Button>(R.id.speechModel).text = if (SpeechSource.isInstalled(this)) "Speech model: installed" else "Download speech model (40 MB)"
         findViewById<android.widget.RadioGroup>(R.id.control).check(when (settings.control) { "serial" -> R.id.controlSerial; "ir" -> R.id.controlIr; else -> R.id.controlIp })
         findViewById<EditText>(R.id.irAddress).setText(settings.irAddress.toString())
@@ -112,9 +142,9 @@ class MainActivity : AppCompatActivity() {
         settings.password = findViewById<EditText>(R.id.password).text.toString()
         settings.duckLevel = (findViewById<EditText>(R.id.duck).text.toString().toIntOrNull() ?: 4).coerceIn(0, 60)
         settings.normalVolume = (findViewById<EditText>(R.id.normal).text.toString().toIntOrNull() ?: 20).coerceIn(0, 60)
-        settings.useMute = findViewById<CheckBox>(R.id.useMute).isChecked
-        settings.camera = findViewById<CheckBox>(R.id.camera).isChecked
-        settings.speech = findViewById<CheckBox>(R.id.speech).isChecked
+        settings.useMute = findViewById<CompoundButton>(R.id.useMute).isChecked
+        settings.camera = findViewById<CompoundButton>(R.id.camera).isChecked
+        settings.speech = findViewById<CompoundButton>(R.id.speech).isChecked
         settings.control = when (findViewById<android.widget.RadioGroup>(R.id.control).checkedRadioButtonId) { R.id.controlSerial -> "serial"; R.id.controlIr -> "ir"; else -> "ip" }
         settings.irAddress = findViewById<EditText>(R.id.irAddress).text.toString().trim().toIntOrNull()?.coerceIn(0, 31) ?: 1
         settings.irVolumeUp = findViewById<EditText>(R.id.irVolUp).text.toString().trim().toIntOrNull(16)?.coerceIn(0, 255) ?: 0x14
@@ -227,8 +257,10 @@ class MainActivity : AppCompatActivity() {
         ContextCompat.startForegroundService(this, Intent(this, AdHushService::class.java).setAction(action))
     }
 
+    /** Everything the app tells the user also goes to the error log, and to the Log page. */
     private fun log(line: String) {
+        AppLog.i("app", line)
         val v = findViewById<TextView>(R.id.log)
-        v.text = "$line\n${v.text}".lines().take(30).joinToString("\n")
+        v.text = (v.text.toString() + "\n" + line).lines().takeLast(150).joinToString("\n")
     }
 }

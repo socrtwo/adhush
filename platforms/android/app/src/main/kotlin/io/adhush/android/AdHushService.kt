@@ -77,7 +77,8 @@ class AdHushService : Service(), LifecycleOwner {
         registry.currentState = Lifecycle.State.RESUMED   // CameraX binds to this service's lifetime
         settings = Settings(this)
         createChannel()
-        Thread.setDefaultUncaughtExceptionHandler { _, _ -> runCatching { controller?.restore() }; android.os.Process.killProcess(android.os.Process.myPid()) }
+        emergencyRestore = { controller?.restore() }   // the app-wide crash handler calls this before reporting
+        AppLog.i("service", "created")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -154,17 +155,28 @@ class AdHushService : Service(), LifecycleOwner {
                 if (ctl.recoverOnStart()) main.post { update("restored volume after an unclean exit") }
                 ctl.trackNormal()
             } catch (e: ControlError) {
+                AppLog.w("tv", "unreachable at start: ${e.message}")
                 main.post { update("TV unreachable: ${e.message}") }
             }
         }
-        val sp = if (speechWanted) runCatching { SpeechSource(SpeechSource.modelDir(this)) { words -> eng.onWords(words) } }.onFailure { main.post { update("speech engine failed: ${it.message}") } }.getOrNull() else null
-        speech = sp
+        // The speech model takes seconds to load: never on the main thread, where it would stall the service start.
+        if (speechWanted) io.execute {
+            try {
+                val sp = SpeechSource(SpeechSource.modelDir(this)) { words -> eng.onWords(words) }
+                speech = sp
+                AppLog.i("speech", "recogniser ready")
+                main.post { update("speech recogniser ready · ${scriptStore?.count() ?: 0} scripts") }
+            } catch (t: Throwable) {
+                AppLog.e("speech", "recogniser failed to start", t)
+                main.post { update("speech engine failed: ${t.message} (see the error log)") }
+            }
+        }
         val m = MicSource(this) { block ->
             eng.onAudio(block)
-            sp?.feed(block)
+            speech?.feed(block)
             survey?.let { if (it.feed(block, controller?.ducked == true)) finishSurvey(it) }
         }
-        try { m.start() } catch (e: Exception) { update("mic failed: ${e.message}"); stopSelf(); return }
+        try { m.start() } catch (e: Exception) { AppLog.e("mic", "failed to start", e); update("mic failed: ${e.message}"); stopSelf(); return }
         mic = m
         if (cameraWanted) {
             val cam = CameraSource(this, this) { gray ->   // 2 fps, upright
@@ -255,6 +267,8 @@ class AdHushService : Service(), LifecycleOwner {
     private fun now(): Double = mic?.mediaTime ?: 0.0
 
     override fun onDestroy() {
+        AppLog.i("service", "destroyed")
+        emergencyRestore = null
         speech?.close(); speech = null
         camera?.stop(); camera = null
         main.removeCallbacks(ticker)
@@ -282,6 +296,7 @@ class AdHushService : Service(), LifecycleOwner {
 
     private fun update(text: String) {
         lastText = text
+        AppLog.i("status", text)
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIF_ID, buildNotification(text))
         sendBroadcast(Intent(BROADCAST_STATUS).setPackage(packageName).putExtra("text", text))
     }
@@ -329,6 +344,8 @@ class AdHushService : Service(), LifecycleOwner {
     }
 
     companion object {
+        /** Set while a controller exists: the crash handler restores the volume through it before Android reports. */
+        @Volatile var emergencyRestore: (() -> Unit)? = null
         const val CHANNEL = "adhush"
         const val NOTIF_ID = 1
         const val ACTION_NOT_AD = "io.adhush.android.NOT_AD"

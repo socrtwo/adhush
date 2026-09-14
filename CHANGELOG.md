@@ -3,6 +3,27 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [Unreleased]
+### Fixed
+- Android: the app could vanish without a word. The service installed a
+  crash handler that killed the process silently on any uncaught error.
+  The app-wide handler now writes the stack trace to the error log,
+  restores the TV volume, and lets Android report the crash.
+- Android speech: the 40 MB model was loaded on the main thread inside the
+  service start, long enough to stall it; it now loads in the background
+  and attaches when ready. Closing the recogniser now waits for the block
+  being processed, instead of racing a native call.
+
+### Added
+- Android **error log**: a rolling file every status line, caught error and
+  crash goes to, shown on the Log tab, with **Share error log**.
+
+### Changed
+- Android interface rebuilt on Material 3: a top bar with the live status,
+  four tabs (Home, TV, Senses, Log), cards, labelled text fields with a
+  password toggle, switches, and one primary action per card. All the same
+  functions, arranged the way a phone app is expected to be.
+
 ## [0.12.0] - 2026-09-14
 ### Added
 - Android **transcript detector**, the fifth way (ADR 0012): offline speech

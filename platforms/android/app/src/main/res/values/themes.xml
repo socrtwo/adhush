@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AdHush" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/adhush_primary</item>
+        <item name="colorOnPrimary">@android:color/white</item>
+        <item name="colorPrimaryContainer">@color/adhush_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/adhush_on_primary_container</item>
+        <item name="colorSecondary">@color/adhush_secondary</item>
+        <item name="colorSecondaryContainer">@color/adhush_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/adhush_on_secondary_container</item>
+        <item name="android:statusBarColor">@color/adhush_primary</item>
+    </style>
+</resources>

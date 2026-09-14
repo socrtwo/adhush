@@ -62,7 +62,12 @@ class SpeechSource(modelDir: File, private val onWords: (List<Word>) -> Unit) {
         if (words.isNotEmpty()) { utterances++; onWords(words) }
     }
 
-    fun close() { executor.shutdown(); runCatching { recognizer.close() }; runCatching { model.close() } }
+    /** Stop feeding first and wait for the last block to finish: closing a native recogniser mid-call is a segfault. */
+    fun close() {
+        executor.shutdown()
+        runCatching { executor.awaitTermination(3, java.util.concurrent.TimeUnit.SECONDS) }
+        runCatching { recognizer.close() }; runCatching { model.close() }
+    }
 
     companion object {
         const val MODEL_NAME = "vosk-model-small-en-us-0.15"
