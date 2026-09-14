@@ -11,7 +11,13 @@ guide re-cut for a Pi 4 B inside a Retroflag NESPi 4 case (`docs/build-guide-nes
 an extra case-assembly step, relay power from a USB-A breakout because the case's
 plug covers header pins 1–8, and one wire leaving the case.
 
-Regenerate either PDF with any headless Chromium:
+`beginner-guide-listener-nespi4.html` / `AdHush-beginner-guide-listener-NESPi4.pdf`
+is the **TV listener** (`docs/build-guide-tv-listener.md`) for a Pi 4 in the
+NESPi 4 case: a webcam and a microphone on a shelf, the Sharp turned down over
+Wi-Fi, nothing wired to the TV and nothing leaving the case. Same fonts and
+page style; the case diagram is shared with the NESPi 4 box guide.
+
+Regenerate any PDF with any headless Chromium:
 
 ```
 chromium --headless --no-pdf-header-footer \
