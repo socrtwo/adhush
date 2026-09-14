@@ -248,7 +248,7 @@ class AdHushService : Service(), LifecycleOwner {
                 }
                 t is io.adhush.core.AquosTransport -> {
                     say("testing through the running connection (${settings.control}) …")
-                    val setTrace: ((String) -> Unit)? -> Unit = { f -> when (t) { is SocketTransport -> t.trace = f; is SerialTransport -> t.trace = f; else -> {} } }
+                    fun setTrace(f: ((String) -> Unit)?) { when (t) { is SocketTransport -> t.trace = f; is SerialTransport -> t.trace = f } }
                     setTrace { line -> say("  $line") }
                     try {
                         val client = SharpIpClient(t)
