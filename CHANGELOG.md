@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
-## [Unreleased]
+## [0.13.0] - 2026-09-14
 ### Fixed
 - Android: the app could vanish without a word. The service installed a
   crash handler that killed the process silently on any uncaught error.
