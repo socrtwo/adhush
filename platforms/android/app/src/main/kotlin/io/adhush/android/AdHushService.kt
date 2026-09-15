@@ -163,9 +163,9 @@ class AdHushService : Service(), LifecycleOwner {
         val logoWanted = settings.camera && cameraOk
         val captionsWanted = settings.captions && cameraOk
         val cameraWanted = logoWanted || captionsWanted
-        val ticker = settings.cameraTarget == "ticker"
-        val logo = if (logoWanted) LogoTemplate.load(File(filesDir, if (ticker) TICKER_FILE else LOGO_FILE))?.let {
-            if (ticker) LogoAbsenceDetector(HANDHELD_LOGO_CONFIG.copy(searchPx = 4), it, name = "ticker_absence", noun = "ticker") else LogoAbsenceDetector(HANDHELD_LOGO_CONFIG, it)
+        val watchTicker = settings.cameraTarget == "ticker"   // not `ticker`, the poll Runnable
+        val logo = if (logoWanted) LogoTemplate.load(File(filesDir, if (watchTicker) TICKER_FILE else LOGO_FILE))?.let {
+            if (watchTicker) LogoAbsenceDetector(HANDHELD_LOGO_CONFIG.copy(searchPx = 4), it, name = "ticker_absence", noun = "ticker") else LogoAbsenceDetector(HANDHELD_LOGO_CONFIG, it)
         } else null
         val speechWanted = settings.speech && SpeechSource.isInstalled(this)
         val cloudWanted = settings.judgeCloud && settings.claudeKey.isNotBlank()
@@ -248,7 +248,7 @@ class AdHushService : Service(), LifecycleOwner {
             cam.setZoom(settings.cameraZoom)
             cam.start { msg -> main.post { update(msg) } }
         }
-        val noun = if (ticker) "ticker" else "bug"
+        val noun = if (watchTicker) "ticker" else "bug"
         val eye = if (logoWanted) (if (logo != null) " + camera ($noun)" else " + camera ($noun not set up)") else ""
         val cc = if (captionsWanted) " + captions" else ""
         val ear = if (speechWanted) " + speech (${scriptStore?.count() ?: 0} scripts)" else if (settings.speech) " + speech (model not downloaded)" else ""
