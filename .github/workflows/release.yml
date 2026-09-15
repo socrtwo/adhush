@@ -77,6 +77,9 @@ jobs:
 
   build-and-publish:
     needs: binaries
+    # A binary runner failing must not hold the APK, the wheel and the web app
+    # hostage: publish what built, and the missing archive is simply absent.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -102,6 +105,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           (cd platforms/web && zip -r "../../dist/adhush-web-${version}.zip" .)
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           pattern: binary-*
           path: dist/bin
@@ -109,7 +113,11 @@ jobs:
       - name: Raspberry Pi bundle (arm64 binary, listener config, guides)
         run: |
           version="${GITHUB_REF_NAME#v}"
-          mkdir -p pi && tar -C pi -xzf "dist/bin/adhush-${version}-linux-arm64.tar.gz"
+          mkdir -p dist/bin pi
+          if [ ! -f "dist/bin/adhush-${version}-linux-arm64.tar.gz" ]; then
+            echo "no arm64 binary this time: skipping the Pi bundle"; exit 0
+          fi
+          tar -C pi -xzf "dist/bin/adhush-${version}-linux-arm64.tar.gz"
           cp config/adhush-listener.example.toml pi/
           cp docs/print/AdHush-beginner-guide-listener-NESPi4.pdf docs/print/AdHush-beginner-guide-NESPi4.pdf pi/ 2>/dev/null || true
           cat > pi/README.txt <<'TXT'
@@ -127,7 +135,11 @@ jobs:
           https://github.com/socrtwo/adhush/blob/main/docs/build-guide-tv-listener.md
           TXT
           (cd pi && zip -q -r "../dist/adhush-${version}-raspberry-pi.zip" .)
-          mv dist/bin/* dist/ && rmdir dist/bin
+      - name: Gather the binaries that built
+        run: |
+          mkdir -p dist/bin
+          mv dist/bin/* dist/ 2>/dev/null || true
+          rmdir dist/bin 2>/dev/null || true
           ls -la dist
       - name: Release notes from the changelog
         run: |
