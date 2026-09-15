@@ -61,7 +61,9 @@ verify_with_audio = true
 port = "/dev/ttyUSB0"        # `ls /dev/ttyUSB*` shows it once the cable is in
 baud = 9600                  # 8 data bits, no parity, 1 stop bit (the manual, p. 58)
 timeout_s = 1.0
-duck_level = 4               # turn the set down to this during a commercial (3-5 is inaudible)
+duck_level = 4               # turn the set down to this during a commercial (3-5 is inaudible —
+                             # to the microphone too: loudness then goes inert and the camera decides
+                             # the unmute; 8-10 lets the mic follow the ducked ad, ADR 0016)
 normal_volume = 19           # used only if the set will not say its own volume
 duck_state_file = "data/preduck-volume.txt"   # so a crash never leaves the set quiet
 

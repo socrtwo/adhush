@@ -223,11 +223,14 @@ spot is recognised offline the next time.
   and Opus 5 cost about two and five times as much. Only text leaves the
   phone, never audio — and the microphone hears the room, so your own words
   can be in it. **Test Claude with a sample** shows what it answers.
-- **Local AI** runs Qwen 2.5 (0.5 billion parameters, 8-bit, about 550 MB,
-  downloaded once from the LiteRT community on Hugging Face) on the phone
-  through MediaPipe's LLM Inference. Free, private, no Wi-Fi needed; each
-  answer takes a few seconds of CPU and the phone runs warmer. It hedges
-  more than Claude and is fooled by garbled speech more easily.
+- **Local AI** runs a Qwen model on the phone through MediaPipe's LLM
+  Inference, in one of three sizes chosen under Methods: Qwen 2.5 0.5B
+  (8-bit, 550 MB, any phone), Qwen 2.5 1.5B (8-bit, 1.6 GB, 6 GB+ of
+  memory) or Qwen 3 4B (mixed int4, 2.7 GB, the newer `.litertlm` bundle,
+  12 GB+). Each size is its own file, so several can be installed and
+  switched. Free, private, works without Wi-Fi; a few seconds per answer
+  and a warmer phone. `docs/print/AdHush-guide-local-AI-OnePlus.pdf` is
+  the walkthrough.
 
 Both are late by nature — the speech engine finishes a sentence a few
 seconds after it is said, the window is 40 seconds, and the answer takes a
@@ -286,3 +289,16 @@ normal show with the phone where it will live; the digest tells you whether
 The installable web app served by a Pi or PC core (`docs/release.md`) remains
 the right choice when a passthrough box is in play or the TV has no network
 control.
+
+## The mute paradox (0.17.0)
+
+The phone's microphone hears the set get quieter the moment the app ducks
+it. Before 0.17.0 the loudness method read that as "programme resumed", the
+set came back up into the commercial and was ducked again. Now the engine
+tells the audio methods about every duck (ADR 0016): loudness waits one
+window, measures how far the room dropped and judges the ducked ad on the
+original scale; silence is inert while ducked. When the ducked set is
+buried under the room — fans louder than a TV at volume 4 — loudness says
+`ducked_buried` and goes inert, and the camera, the fingerprints and the AI
+judges carry the unmute. A duck level of 8–10 keeps the set audible to the
+mic and lets loudness time the unmute itself.

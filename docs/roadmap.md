@@ -59,6 +59,12 @@ sighted before it can be missed, whole screen or nothing, teach mode with
 "Show's back", a quiet period after "Not an ad", and a persistent, ducking
 `network_ip`. `docs/build-guide-tv-listener.md` is the shelf build.
 
+## Phase 9 — the mute paradox (done, 0.17.0)
+What admuffs does that we did not (ADR 0016): the engine tells room-mic
+detectors about every duck; loudness measures the drop and compensates, or
+goes inert when the ducked set is buried under the room; silence is inert
+while ducked. Three sizes of local AI on the phone.
+
 ## Beyond the roadmap
 Candidates, in no particular order: in-browser WASM detectors (the rest of the
 Phase 4 remainder), an iOS on-device core following ADR 0007, an audio delay line for retroactive

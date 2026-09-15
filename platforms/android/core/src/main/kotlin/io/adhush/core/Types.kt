@@ -33,6 +33,12 @@ interface Detector {
      * (a missing logo, a matched script) drop it and start over.
      */
     fun userSaysProgramme(ts: Double) {}
+    /**
+     * The engine turned the set down (or back up) at [ts]. The phone hears the
+     * room, so a detector that judges levels compensates or falls silent
+     * (ADR 0016); the others ignore it.
+     */
+    fun audioDucked(ts: Double, ducked: Boolean) {}
     fun vote(ts: Double): DetectorVote
     fun vote(ts: Double, confidence: Double, reason: String): DetectorVote =
         DetectorVote(name, ts, confidence.coerceIn(0.0, 1.0), reason)

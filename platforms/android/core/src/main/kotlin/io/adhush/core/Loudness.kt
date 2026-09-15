@@ -16,6 +16,13 @@ data class LoudnessConfig(
  * EBU R128-style short-term loudness delta against a slow, freezing baseline.
  * A line-for-line port of detect/loudness.py, including its frequency-domain
  * K-weighting approximation and the Parseval bookkeeping.
+ *
+ * Duck compensation (ADR 0016, after admuffs): the phone's mic hears the set
+ * get quieter the moment the app ducks it and would call that "programme
+ * resumed". Told of the duck, the detector freezes its vote for one window,
+ * measures how far the room dropped, and adds that back to every later
+ * reading. If the ducked set is buried under the room (near the silence gate,
+ * or the mic hears flat noise — fans, not a broadcast) it goes inert instead.
  */
 class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Detector {
     override val name = "loudness"
@@ -31,10 +38,54 @@ class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Det
     private var elevatedS = 0.0  // consecutive seconds above baseline + delta/2
     var lastShortTerm = -70.0
         private set
+    private var ducked = false
+    /** Added to every reading while ducked, so the ducked ad is judged on the original scale. */
+    var duckOffsetDb = 0.0
+        private set
+    private var preDuckLufs: Double? = null
+    private val settleFlatness = ArrayList<Double>()
+    private var settleUntil: Double? = null
+    private var frozen: Pair<Double, String>? = null
+    private var buried = false
+    private var skipBaselineUntil = Double.NEGATIVE_INFINITY
 
     override fun warmup() {
         window.clear(); windowDur = 0.0; baselineLufs = null; observedS = 0.0
         ungatedS = 0.0; elevatedS = 0.0; lastShortTerm = -70.0
+        resetDuck()
+    }
+
+    private fun resetDuck() {
+        ducked = false; duckOffsetDb = 0.0; preDuckLufs = null; settleUntil = null; frozen = null; buried = false; settleFlatness.clear()
+        skipBaselineUntil = Double.NEGATIVE_INFINITY
+    }
+
+    /** Inert while the ducked set is buried under the room: no offset can recover it. */
+    override val voting: Boolean get() = !buried
+
+    override fun audioDucked(ts: Double, ducked: Boolean) {
+        if (!ducked) {
+            resetDuck()
+            skipBaselineUntil = ts + cfg.windowS   // the window still holds ducked audio
+            return
+        }
+        if (this.ducked) return
+        this.ducked = true
+        if (!warm || lastShortTerm <= SILENCE_GATE_LUFS) { buried = true; return }   // nothing to measure against
+        preDuckLufs = lastShortTerm
+        val v = vote(ts)
+        frozen = Pair(v.confidence, v.reason)
+        settleUntil = ts + cfg.windowS + DUCK_SETTLE_MARGIN_S
+    }
+
+    /** One window after the duck: measure the drop, or give up. */
+    private fun settle(raw: Double) {
+        settleUntil = null; frozen = null
+        val pre = preDuckLufs ?: return
+        val noise = settleFlatness.isNotEmpty() && settleFlatness.average() >= BURIED_FLATNESS
+        settleFlatness.clear()
+        if (raw <= SILENCE_GATE_LUFS + DUCK_HEADROOM_DB || noise) { buried = true; return }
+        duckOffsetDb = (pre - raw).coerceIn(0.0, MAX_DUCK_OFFSET_DB)
     }
 
     private val warm: Boolean get() = baselineLufs != null && observedS >= 4 * cfg.windowS
@@ -75,11 +126,15 @@ class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Det
         var total = 0.0
         for ((d, m) in window) total += d * m
         val meanMs = if (windowDur > 0) total / windowDur else 0.0
-        if (meanMs <= 0.0) { lastShortTerm = -70.0; return }
-        lastShortTerm = -0.691 + 10.0 * log10(meanMs)
+        val raw = if (meanMs <= 0.0) -70.0 else -0.691 + 10.0 * log10(meanMs)
+        val now = block.ts + block.duration
+        settleUntil?.let { settleFlatness.add(Dsp.spectralFlatness(block.samples)); if (now >= it) settle(raw) }
+        lastShortTerm = raw + duckOffsetDb
+        if (meanMs <= 0.0) return
 
         if (lastShortTerm <= SILENCE_GATE_LUFS) { ungatedS = 0.0; return }
         ungatedS += block.duration
+        if (settleUntil != null || now < skipBaselineUntil) return   // a window straddling a volume change must not move the baseline
         val baseline = baselineLufs
         if (baseline == null) {
             // Only once the whole window is un-gated programme: a window still
@@ -98,19 +153,29 @@ class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Det
     }
 
     override fun vote(ts: Double): DetectorVote {
+        frozen?.let { (c, r) -> return vote(ts, c, "duck_settling $r") }
+        if (buried) return vote(ts, 0.0, "ducked_buried st_lufs=${"%.1f".format(lastShortTerm)}")
         if (!warm) return vote(ts, 0.0, "warming observed_s=${"%.1f".format(observedS)}")
         val baseline = baselineLufs!!
         if (lastShortTerm <= SILENCE_GATE_LUFS) return vote(ts, 0.0, "gated st_lufs=${"%.1f".format(lastShortTerm)}")
         val delta = lastShortTerm - baseline
         val confidence = (delta / (cfg.deltaLufs * FULL_CONF_FACTOR)).coerceIn(0.0, 1.0)
-        return vote(ts, confidence, "loudness delta_lufs=${"%.2f".format(delta)} st_lufs=${"%.1f".format(lastShortTerm)} baseline_lufs=${"%.1f".format(baseline)}")
+        val duck = if (ducked) " duck_offset_db=${"%.1f".format(duckOffsetDb)}" else ""
+        return vote(ts, confidence, "loudness delta_lufs=${"%.2f".format(delta)} st_lufs=${"%.1f".format(lastShortTerm)} baseline_lufs=${"%.1f".format(baseline)}$duck")
     }
 
     companion object {
         const val HP_HZ = 38.0
         const val SHELF_HZ = 1500.0
         const val SHELF_GAIN = 1.505
-        const val SILENCE_GATE_LUFS = -55.0
         const val FULL_CONF_FACTOR = 1.4
+        const val SILENCE_GATE_LUFS = -55.0
+        /** Duck compensation: wait one window plus this before measuring the drop. */
+        const val DUCK_SETTLE_MARGIN_S = 1.0
+        const val MAX_DUCK_OFFSET_DB = 30.0
+        /** Buried: the ducked level sits within this of the silence gate… */
+        const val DUCK_HEADROOM_DB = 6.0
+        /** …or the settle window is flat noise: the silence detector's own test for "room, not broadcast". */
+        const val BURIED_FLATNESS = 0.2
     }
 }

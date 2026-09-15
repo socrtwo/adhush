@@ -37,6 +37,13 @@ class Detector(ABC):
         """"Not an ad" / "Show's back": whatever this detector was sure of a
         moment ago was the program. Detectors that hold a belief drop it."""
 
+    def audio_ducked(self, ts: float, ducked: bool) -> None:
+        """The engine turned the set down (or back up) at ``ts``, and the
+        audio this detector hears comes from a microphone in the room. A
+        detector that judges levels compensates or falls silent (ADR 0016);
+        the engine never calls this for a line tap, which hears the broadcast
+        whatever the set does."""
+
     def warmup(self) -> None:
         """Reset rolling state before a capture session starts."""
 

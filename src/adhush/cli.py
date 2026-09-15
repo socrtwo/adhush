@@ -46,6 +46,11 @@ def _load(path: Path) -> Config:
         raise SystemExit(f"adhush: config error: {exc}") from exc
 
 
+# Capture backends whose audio is a microphone in the room: a duck changes
+# what they hear, so the detectors are told (ADR 0016).
+ROOM_BACKENDS = frozenset({"camera", "microphone"})
+
+
 def _build_pipeline(
     config: Config, controller: NullController | None, *, video: bool, audio: bool
 ) -> Pipeline:
@@ -81,6 +86,7 @@ def _build_pipeline(
         ctl,
         learner=learner if config.fingerprint.learn else None,
         matcher=matcher,
+        hears_room=config.capture.backend in ROOM_BACKENDS,
     )
 
 

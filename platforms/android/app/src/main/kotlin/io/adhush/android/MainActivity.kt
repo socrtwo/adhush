@@ -76,6 +76,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.speechModel).setOnClickListener { downloadSpeechModel() }
         findViewById<Button>(R.id.learnScripts).setOnClickListener { serviceAction(AdHushService.ACTION_LEARN_SCRIPTS) }
         findViewById<Button>(R.id.localModel).setOnClickListener { downloadLocalModel() }
+        findViewById<android.widget.RadioGroup>(R.id.localModelChoice).setOnCheckedChangeListener { _, _ -> save(); findViewById<Button>(R.id.localModel).text = localModelLabel() }
         findViewById<Button>(R.id.testClaude).setOnClickListener { save(); testJudge(cloud = true) }
         findViewById<Button>(R.id.testLocal).setOnClickListener { save(); testJudge(cloud = false) }
         // The ⓘ buttons: one explanation each.
@@ -225,17 +226,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** One-time download of the on-phone language model (about 550 MB) into app-private storage; resumes if interrupted. */
+    /** The download button's caption for the chosen size. */
+    private fun localModelLabel(): String {
+        val tier = LocalJudge.tier(settings.localModelSize)
+        return if (LocalJudge.isInstalled(this, tier)) "Local AI model: ${tier.label} installed" else "Download ${tier.label} (${tier.sizeMb} MB)"
+    }
+
+    /** One-time download of the chosen on-phone language model into app-private storage; resumes if interrupted. */
     private fun downloadLocalModel() {
         save()
-        if (LocalJudge.isInstalled(this)) { log("the local AI model is already installed"); return }
-        val url = settings.localModelUrl.ifBlank { LocalJudge.DEFAULT_URL }
-        log("downloading the local AI model (${LocalJudge.DEFAULT_SIZE_MB} MB) — keep the app open, Wi-Fi recommended …")
+        val tier = LocalJudge.tier(settings.localModelSize)
+        if (LocalJudge.isInstalled(this, tier)) { log("${tier.label} is already installed"); return }
+        val url = settings.localModelUrl.ifBlank { tier.url }
+        log("downloading ${tier.label} (${tier.sizeMb} MB) — keep the app open, Wi-Fi recommended …")
         thread {
             try {
                 var last = -1
-                LocalJudge.install(this, url) { p -> if (p / 5 != last / 5) { last = p; runOnUiThread { log("local AI model: $p%") } } }
-                runOnUiThread { log("local AI model installed — switch on Local AI and Start"); findViewById<Button>(R.id.localModel).text = "Local AI model: installed" }
+                LocalJudge.install(this, url, { p -> if (p / 5 != last / 5) { last = p; runOnUiThread { log("${tier.label}: $p%") } } }, tier)
+                runOnUiThread { log("${tier.label} installed — switch on Local AI and Start"); findViewById<Button>(R.id.localModel).text = localModelLabel() }
             } catch (e: Exception) { AppLog.e("judge", "model download failed", e); runOnUiThread { log("download failed: ${e.message} — press again to resume") } }
         }
     }
@@ -302,7 +310,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<android.widget.RadioGroup>(R.id.cameraTarget).check(if (settings.cameraTarget == "ticker") R.id.targetTicker else R.id.targetBug)
         findViewById<android.widget.RadioGroup>(R.id.speechModelChoice).check(if (settings.speechModel == "medium") R.id.speechMedium else R.id.speechSmall)
         findViewById<Button>(R.id.cameraSetup).text = if (settings.cameraTarget == "ticker") "Camera setup — find the news ticker (in colour)" else "Camera setup — find the bug (in colour)"
-        findViewById<Button>(R.id.localModel).text = if (LocalJudge.isInstalled(this)) "Local AI model: installed" else "Download the local AI model (${LocalJudge.DEFAULT_SIZE_MB} MB)"
+        findViewById<android.widget.RadioGroup>(R.id.localModelChoice).check(when (settings.localModelSize) { "medium" -> R.id.localMedium; "large" -> R.id.localLarge; else -> R.id.localSmall })
+        findViewById<Button>(R.id.localModel).text = localModelLabel()
         findViewById<Button>(R.id.speechModel).text = speechModelLabel()
         findViewById<android.widget.RadioGroup>(R.id.control).check(when (settings.control) { "serial" -> R.id.controlSerial; "ir" -> R.id.controlIr; else -> R.id.controlIp })
         findViewById<EditText>(R.id.irAddress).setText(settings.irAddress.toString())
@@ -333,6 +342,7 @@ class MainActivity : AppCompatActivity() {
         settings.judgeMode = if (findViewById<android.widget.RadioGroup>(R.id.judgeMode).checkedRadioButtonId == R.id.modeAlways) "always" else "tie"
         settings.cameraTarget = if (findViewById<android.widget.RadioGroup>(R.id.cameraTarget).checkedRadioButtonId == R.id.targetTicker) "ticker" else "bug"
         settings.speechModel = if (findViewById<android.widget.RadioGroup>(R.id.speechModelChoice).checkedRadioButtonId == R.id.speechMedium) "medium" else "small"
+        settings.localModelSize = when (findViewById<android.widget.RadioGroup>(R.id.localModelChoice).checkedRadioButtonId) { R.id.localMedium -> "medium"; R.id.localLarge -> "large"; else -> "small" }
         settings.control = when (findViewById<android.widget.RadioGroup>(R.id.control).checkedRadioButtonId) { R.id.controlSerial -> "serial"; R.id.controlIr -> "ir"; else -> "ip" }
         settings.irAddress = findViewById<EditText>(R.id.irAddress).text.toString().trim().toIntOrNull()?.coerceIn(0, 31) ?: 1
         settings.irVolumeUp = findViewById<EditText>(R.id.irVolUp).text.toString().trim().toIntOrNull(16)?.coerceIn(0, 255) ?: 0x14

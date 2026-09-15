@@ -196,11 +196,11 @@ class Engine(
     private fun apply(action: Action, ts: Double, confidence: Double, reasons: List<String>, source: Source, match: Match?) {
         when (action) {
             Action.MUTE -> {
-                controller.mute(); controllerMuted = true
+                drive(true, ts)
                 adStartTs = ts; adSource = source; activeAdId = match?.adId
             }
             Action.UNMUTE -> {
-                controller.unmute(); controllerMuted = false
+                drive(false, ts)
                 val start = adStartTs; val src = adSource; val adId = activeAdId
                 adStartTs = null; adSource = null; activeAdId = null; userHold = false
                 if (start != null && learner != null && fingerprint != null) {
@@ -223,6 +223,17 @@ class Engine(
     }
 
     private fun matchKind(adId: Int): AdKind = store?.get(adId)?.kind ?: AdKind.AD
+
+    /**
+     * Duck or restore the set, then tell the detectors what the mic will hear
+     * next (ADR 0016). A command that throws leaves them untouched: the set
+     * has not changed.
+     */
+    private fun drive(mute: Boolean, ts: Double) {
+        if (mute) controller.mute() else controller.unmute()
+        controllerMuted = mute
+        for (d in detectors) d.audioDucked(ts, mute)
+    }
 
     /**
      * "✓ Is an ad" — teach mode: duck now and stay ducked, whatever the detectors
@@ -258,7 +269,7 @@ class Engine(
         val adId = activeAdId; val src = adSource
         val action = machine.cancelAd(now)
         if (action == null) return false
-        controller.unmute(); controllerMuted = false
+        drive(false, now)
         adStartTs = null; adSource = null; activeAdId = null; userHold = false
         if (src == Source.FINGERPRINT && adId != null) learner?.forget(adId)
         fingerprint?.abortMatch()
@@ -274,6 +285,7 @@ class Engine(
     @Synchronized fun standDown(now: Double): Boolean {
         val action = machine.cancelAd(now) ?: return false
         controllerMuted = false   // the controller already stood down on its own
+        for (d in detectors) d.audioDucked(now, false)
         adStartTs = null; adSource = null; activeAdId = null; userHold = false
         fingerprint?.abortMatch()
         fusion.reset()
@@ -285,12 +297,12 @@ class Engine(
     @Synchronized fun setOverride(mode: Override, now: Double) {
         override = mode
         when (mode) {
-            Override.MUTE -> if (!controllerMuted) { controller.mute(); controllerMuted = true }
-            Override.UNMUTE -> if (controllerMuted) { controller.unmute(); controllerMuted = false }
+            Override.MUTE -> if (!controllerMuted) drive(true, now)
+            Override.UNMUTE -> if (controllerMuted) drive(false, now)
             Override.AUTO -> {
                 // Resync the transport with the machine's view.
                 val want = machine.muted
-                if (want != controllerMuted) { if (want) controller.mute() else controller.unmute(); controllerMuted = want }
+                if (want != controllerMuted) drive(want, now)
             }
         }
         emit()

@@ -313,3 +313,38 @@ class TestPersistentConnection:
                 tcp(b"VOLM?   \r")
         finally:
             tv.close()
+
+
+class _RecordingDetector(BlackFrameDetector):
+    """A detector that remembers what the engine told it about the volume."""
+
+    def __init__(self) -> None:
+        super().__init__(BlackFrameConfig())
+        self.ducks: list[tuple[float, bool]] = []
+
+    def audio_ducked(self, ts: float, ducked: bool) -> None:
+        self.ducks.append((ts, ducked))
+
+
+def _room_pipeline(hears_room: bool) -> tuple[Pipeline, _RecordingDetector]:
+    fusion_cfg = FusionConfig()
+    detector = _RecordingDetector()
+    fusion = Fusion(fusion_cfg, {}, [detector.name])
+    pipeline = Pipeline(
+        [detector], fusion, AdStateMachine(fusion_cfg), NullController(), hears_room=hears_room
+    )
+    return pipeline, detector
+
+
+def test_room_mic_detectors_hear_about_every_duck() -> None:
+    """ADR 0016: with a microphone in the room, every duck and restore reaches
+    the detectors; with a line tap nothing does, because the tap never changes."""
+    pipeline, detector = _room_pipeline(hears_room=True)
+    pipeline.set_override("mute")
+    pipeline.set_override("unmute")
+    pipeline.set_override("auto")  # reconcile: the machine is not muted
+    assert [d for _, d in detector.ducks] == [True, False, False]
+
+    pipeline, detector = _room_pipeline(hears_room=False)
+    pipeline.set_override("mute")
+    assert detector.ducks == []

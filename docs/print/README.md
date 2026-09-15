@@ -19,6 +19,12 @@ alternative), an optional SSD in the cartridge, nothing leaving the case but
 that one cable. Same fonts and
 page style; the case diagram is shared with the NESPi 4 box guide.
 
+`beginner-guide-local-ai-oneplus.html` / `AdHush-guide-local-AI-OnePlus.pdf`
+is the **Local AI** guide for the Android app (method 8) at about a
+15-year-old's reading level: the three sizes of Qwen the app can download
+(0.5B, 1.5B, Qwen 3 4B), what each needs, how to pick, download, test and
+switch on a OnePlus Ace 6 Ultra, and what to do when it misbehaves.
+
 Regenerate any PDF with any headless Chromium:
 
 ```

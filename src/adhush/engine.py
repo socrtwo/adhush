@@ -61,11 +61,15 @@ class Pipeline:
         *,
         learner: Learner | None = None,
         matcher: Matcher | None = None,
+        hears_room: bool = False,
     ) -> None:
         self._detectors = detectors
         self._fusion = fusion
         self._machine = machine
         self._controller = controller
+        # Audio comes from a microphone in the room, so a duck changes what the
+        # detectors hear; a line tap hears the broadcast whatever the set does.
+        self._hears_room = hears_room
         self._learner = learner
         self._matcher = matcher
         self._fp = next(
@@ -192,14 +196,23 @@ class Pipeline:
         if self._override != "auto":
             return
         try:
-            if transition.action is Action.MUTE:
-                self._controller.mute()
-            else:
-                self._controller.unmute()
+            self._drive(transition.action is Action.MUTE)
         except ControlError:
             # A failed unmute is the dangerous direction; the next decision
             # cycle retries because the state machine has already left AD.
             log.exception("controller failed on %s", transition.action.value)
+
+    def _drive(self, mute: bool) -> None:
+        """Duck or restore the set, then tell the detectors what the room will
+        hear next (ADR 0016). A failed command leaves the detectors untouched:
+        the set has not changed."""
+        if mute:
+            self._controller.mute()
+        else:
+            self._controller.unmute()
+        if self._hears_room:
+            for detector in self._detectors:
+                detector.audio_ducked(self._last_ts, mute)
 
     def _finish_ad(self, ts: float) -> None:
         """Feed the just-ended ad segment back into the fingerprint memory."""
@@ -281,13 +294,11 @@ class Pipeline:
             self._override = mode
             try:
                 if mode == "mute":
-                    self._controller.mute()
+                    self._drive(True)
                 elif mode == "unmute":
-                    self._controller.unmute()
-                elif self._machine.muted:  # back to auto: reconcile
-                    self._controller.mute()
-                else:
-                    self._controller.unmute()
+                    self._drive(False)
+                else:  # back to auto: reconcile
+                    self._drive(self._machine.muted)
             except ControlError:
                 log.exception("controller failed applying override %s", mode)
             self._emit("status", self.status())

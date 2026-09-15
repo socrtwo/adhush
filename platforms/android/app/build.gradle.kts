@@ -11,8 +11,8 @@ android {
         applicationId = "io.adhush.android"
         minSdk = 26          // AudioSource.UNPROCESSED (24), notification channels (26)
         targetSdk = 35
-        versionCode = 16
-        versionName = "0.16.0"
+        versionCode = 17
+        versionName = "0.17.0"
     }
     buildTypes {
         release { isMinifyEnabled = false }

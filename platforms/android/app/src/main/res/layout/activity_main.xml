@@ -232,9 +232,15 @@
   <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="8. Local AI (on the phone)" android:textAppearance="?attr/textAppearanceTitleMedium" />
   <ImageButton android:id="@+id/infoLocal" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
 </LinearLayout>
-<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="The same question answered by a small language model on the phone (Qwen 2.5, about 550 MB, downloaded once). Free, private, no Wi-Fi needed; a few seconds per answer and a warmer phone. Needs Speech or Captions for the words." />
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="The same question answered by a language model on the phone (Qwen, downloaded once). Free, private, no Wi-Fi needed; a few seconds per answer and a warmer phone. Needs Speech or Captions for the words." />
 <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/judgeLocal" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Use the local AI" />
-<com.google.android.material.button.MaterialButton android:id="@+id/localModel" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Download the local AI model (550 MB)" />
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="6dp" android:textAppearance="?attr/textAppearanceLabelLarge" android:text="Which model (bigger = sharper, slower, more memory)" />
+<RadioGroup android:id="@+id/localModelChoice" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/localSmall" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Qwen 2.5 0.5B — 550 MB, any phone, about 2 s an answer" />
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/localMedium" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Qwen 2.5 1.5B — 1.6 GB, 6 GB+ phones, about 5 s" />
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/localLarge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Qwen 3 4B — 2.7 GB, 12 GB+ phones, about 10 s (newer file format)" />
+</RadioGroup>
+<com.google.android.material.button.MaterialButton android:id="@+id/localModel" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Download Qwen 2.5 0.5B (547 MB)" />
 <com.google.android.material.button.MaterialButton android:id="@+id/testLocal" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Test the local AI with a sample" /></LinearLayout></com.google.android.material.card.MaterialCardView>
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>

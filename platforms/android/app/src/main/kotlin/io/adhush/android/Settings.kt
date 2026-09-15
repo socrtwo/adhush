@@ -52,6 +52,8 @@ class Settings(context: Context) {
     /** Method 8: a small language model on the phone. */
     var judgeLocal: Boolean get() = prefs.getBoolean("judge_local", false); set(v) = prefs.edit().putBoolean("judge_local", v).apply()
     var localModelUrl: String get() = prefs.getString("local_model_url", "") ?: ""; set(v) = prefs.edit().putString("local_model_url", v).apply()
+    /** Which size of local model: "small" (0.5B), "medium" (1.5B) or "large" (4B); see LocalJudge.TIERS. */
+    var localModelSize: String get() = prefs.getString("local_model_size", "small") ?: "small"; set(v) = prefs.edit().putString("local_model_size", v).apply()
     /** The channel's name, for the judges' question ("MSNOW"). */
     var channel: String get() = prefs.getString("channel", "") ?: ""; set(v) = prefs.edit().putString("channel", v).apply()
     /** What the camera watches: "bug" (the corner logo) or "ticker" (a news channel's lower-third band). */

@@ -15,7 +15,8 @@ import java.net.URL
  * itself through MediaPipe's LLM Inference task. Nothing leaves the phone
  * and nothing costs money; each question takes a few seconds of CPU, which
  * is why the judge asks on a cadence rather than on every word. The model
- * file (about 550 MB) is downloaded once into app-private storage.
+ * file is downloaded once into app-private storage; three sizes are offered
+ * ([TIERS]) so a phone with the room can run a sharper model.
  */
 class LocalJudge(modelFile: File) : TranscriptJudge, AutoCloseable {
     private val llm: LlmInference
@@ -43,27 +44,41 @@ class LocalJudge(modelFile: File) : TranscriptJudge, AutoCloseable {
 
     override fun close() { runCatching { llm.close() } }
 
+    /** One downloadable model. [file] keeps each size in its own file, so switching never clobbers a finished download. */
+    data class Tier(val key: String, val label: String, val url: String, val sizeMb: Int, val file: String, val ramGb: Int)
+
     companion object {
-        /** The instruction + transcript must fit with the answer: 1280 tokens of context in the bundled model. */
+        /** The instruction + transcript must fit with the answer: 1280 tokens of context in the smallest model. */
         const val MAX_TOKENS = 1024
-        const val MODEL_FILE = "judge.task"
-        /** Qwen2.5 0.5B, 8-bit, packaged for LiteRT / MediaPipe by the LiteRT community; Apache-2.0, no login needed. */
-        const val DEFAULT_URL = "https://huggingface.co/litert-community/Qwen2.5-0.5B-Instruct/resolve/main/Qwen2.5-0.5B-Instruct_multi-prefill-seq_q8_ekv1280.task"
-        const val DEFAULT_SIZE_MB = 547
-        /** A larger choice for phones with the room: Qwen2.5 1.5B, 8-bit, about 1.6 GB. */
-        const val LARGE_URL = "https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct/resolve/main/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv1280.task"
+        /**
+         * All three are Qwen instruct models packaged by the LiteRT community on Hugging Face; Apache-2.0, no login
+         * needed. The small and medium files are MediaPipe `.task` bundles; the large one is the newer `.litertlm`
+         * bundle (there is no plain 3B Qwen chat bundle; Qwen3 4B is the next size up). Phones with 8 GB should stay
+         * on small; 12 GB or more can run any of them.
+         */
+        val TIERS = listOf(
+            Tier("small", "Qwen 2.5 — 0.5 billion", "https://huggingface.co/litert-community/Qwen2.5-0.5B-Instruct/resolve/main/Qwen2.5-0.5B-Instruct_multi-prefill-seq_q8_ekv1280.task", 547, "judge.task", 4),
+            Tier("medium", "Qwen 2.5 — 1.5 billion", "https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct/resolve/main/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.task", 1599, "judge-1.5b.task", 6),
+            Tier("large", "Qwen 3 — 4 billion", "https://huggingface.co/litert-community/Qwen3-4B-Instruct-2507/resolve/main/qwen3_4b_instruct_2507_mixed_int4.litertlm", 2660, "judge-4b.litertlm", 8),
+        )
+        val DEFAULT_URL = TIERS[0].url
+        val DEFAULT_SIZE_MB = TIERS[0].sizeMb
         @Volatile var APP_CONTEXT: Context? = null
 
-        fun modelFile(context: Context) = File(File(context.filesDir, "llm"), MODEL_FILE)
-        fun isInstalled(context: Context) = modelFile(context).let { it.isFile && it.length() > 10_000_000 }
+        fun tier(context: Context): Tier = tier(Settings(context).localModelSize)
+        fun tier(key: String): Tier = TIERS.firstOrNull { it.key == key } ?: TIERS[0]
+        fun modelFile(context: Context, tier: Tier = tier(context)) = File(File(context.filesDir, "llm"), tier.file)
+        fun isInstalled(context: Context, tier: Tier = tier(context)) = modelFile(context, tier).let { it.isFile && it.length() > 10_000_000 }
+        /** Which sizes are already on the phone. */
+        fun installed(context: Context): List<Tier> = TIERS.filter { isInstalled(context, it) }
 
         /** The Qwen chat layout; the model answers after the final assistant tag. */
         fun chatPrompt(system: String, user: String): String =
             "<|im_start|>system\n$system<|im_end|>\n<|im_start|>user\n$user<|im_end|>\n<|im_start|>assistant\n"
 
-        /** Download the model once; progress is 0..100. Blocking — call off the main thread. Resumable on retry. */
-        fun install(context: Context, url: String, onProgress: (Int) -> Unit) {
-            val target = modelFile(context); target.parentFile?.mkdirs()
+        /** Download the chosen size once; progress is 0..100. Blocking — call off the main thread. Resumable on retry. */
+        fun install(context: Context, url: String, onProgress: (Int) -> Unit, tier: Tier = tier(context)) {
+            val target = modelFile(context, tier); target.parentFile?.mkdirs()
             val part = File(target.path + ".part")
             val have = if (part.isFile) part.length() else 0L
             val conn = URL(url).openConnection() as HttpURLConnection

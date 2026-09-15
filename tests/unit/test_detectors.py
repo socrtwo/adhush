@@ -173,3 +173,77 @@ class TestLoudness:
             detector.observe_audio(AudioEvent(ts=ts, samples=hot, sample_rate=RATE))
             ts += 0.1
         assert detector.vote(ts).confidence == 1.0
+
+
+class TestDuckCompensation:
+    """ADR 0016: a room mic hears the duck; the loudness detector compensates."""
+
+    @staticmethod
+    def _block(i: int, amp: float, hz: float = 440.0) -> np.ndarray:
+        n = RATE // 10
+        t = (np.arange(n, dtype=np.float64) + i * n) / RATE
+        # Alternate blocks 6 dB apart: broadcast audio moves, a fan does not.
+        swing = 1.0 if i % 2 == 0 else 0.5
+        return (amp * swing * np.sin(2 * np.pi * hz * t)).astype(np.float32)
+
+    def _feed(self, detector: LoudnessDetector, i: int, count: int, amp: float) -> int:
+        for _ in range(count):
+            detector.observe_audio(AudioEvent(ts=i * 0.1, samples=self._block(i, amp), sample_rate=RATE))
+            i += 1
+        return i
+
+    def test_ducked_ad_is_still_an_ad_and_ducked_program_is_not(self) -> None:
+        detector = LoudnessDetector(LoudnessConfig(window_s=1.5, baseline_s=30.0))
+        detector.warmup()
+        i = self._feed(detector, 0, 200, 0.1)  # 20 s of programme
+        assert detector.vote(i * 0.1).confidence == 0.0
+        i = self._feed(detector, i, 30, 0.25)  # an ad 8 dB hot
+        assert detector.vote(i * 0.1).confidence == 1.0
+        detector.audio_ducked(i * 0.1, True)  # the engine turns the set down ~20 dB
+        assert detector.voting
+        i = self._feed(detector, i, 10, 0.025)  # still settling: the vote is frozen
+        vote = detector.vote(i * 0.1)
+        assert vote.confidence == 1.0 and vote.reason.startswith("duck_settling")
+        i = self._feed(detector, i, 30, 0.025)  # measured; the ducked ad reads on the old scale
+        vote = detector.vote(i * 0.1)
+        assert 17.0 < detector.duck_offset_db < 23.0, vote.reason
+        assert vote.confidence == 1.0 and "duck_offset_db" in vote.reason
+        i = self._feed(detector, i, 30, 0.01)  # the show is back, still ducked
+        vote = detector.vote(i * 0.1)
+        assert vote.confidence < 0.05, vote.reason
+        detector.audio_ducked(i * 0.1, False)
+        assert detector.duck_offset_db == 0.0
+        i = self._feed(detector, i, 30, 0.1)  # volume restored: programme is programme
+        assert detector.vote(i * 0.1).confidence == 0.0
+
+    def test_buried_under_the_room_goes_inert(self) -> None:
+        detector = LoudnessDetector(LoudnessConfig(window_s=1.5, baseline_s=30.0))
+        detector.warmup()
+        i = self._feed(detector, 0, 200, 0.1)
+        i = self._feed(detector, i, 30, 0.25)
+        detector.audio_ducked(i * 0.1, True)
+        # What the mic hears now is broadband noise: the fans, not the ducked set.
+        rng = np.random.default_rng(7)
+        for _ in range(40):
+            fans = (0.02 * rng.standard_normal(RATE // 10)).astype(np.float32)
+            detector.observe_audio(AudioEvent(ts=i * 0.1, samples=fans, sample_rate=RATE))
+            i += 1
+        assert not detector.voting
+        assert detector.vote(i * 0.1).reason.startswith("ducked_buried")
+        detector.audio_ducked(i * 0.1, False)
+        assert detector.voting
+
+    def test_silence_is_inert_while_ducked(self) -> None:
+        detector = SilenceDetector(SilenceConfig(min_run_ms=200))
+        detector.warmup()
+        quiet = np.zeros(RATE // 10, dtype=np.float32)
+        for k in range(5):
+            detector.observe_audio(AudioEvent(ts=k * 0.1, samples=quiet, sample_rate=RATE))
+        assert detector.vote(0.5).confidence == 1.0
+        detector.audio_ducked(0.5, True)
+        for k in range(5, 10):
+            detector.observe_audio(AudioEvent(ts=k * 0.1, samples=quiet, sample_rate=RATE))
+        assert not detector.voting
+        assert detector.vote(1.0).confidence == 0.0
+        detector.audio_ducked(1.0, False)
+        assert detector.voting

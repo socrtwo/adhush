@@ -3,6 +3,22 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.17.0] - 2026-09-15
+### Added
+- **Three sizes of local AI** on Android (method 8): Qwen 2.5 0.5B
+  (550 MB), Qwen 2.5 1.5B (1.6 GB) and Qwen 3 4B (2.7 GB, the newer
+  `.litertlm` bundle). Each size keeps its own file; pick one under
+  Methods, download, switch on. `docs/print/AdHush-guide-local-AI-OnePlus.pdf`
+  walks through it.
+- **Duck compensation** (ADR 0016, borrowed from admuffs): with a room
+  microphone the loudness detector is told about every duck, waits one
+  window, measures how far the room dropped and judges the ducked ad on the
+  original scale — so a ducked commercial no longer reads as "programme
+  resumed" and the set is not ducked again and again. When the ducked set
+  is buried under the room (near the silence gate, or flat fan noise), the
+  loudness and silence detectors go inert and the other methods carry the
+  unmute; the reason says `ducked_buried`. Python listener and phone alike.
+
 ## [0.16.0] - 2026-09-15
 ### Added
 - Android **method 7, Ask Claude** (ADR 0015): the last 40 seconds of words

@@ -81,9 +81,11 @@ object Help {
         "You need an API key from console.anthropic.com; it is stored in the app's encrypted settings.")
 
     val LOCAL = Topic("Method 8 — Local AI (on the phone)",
-        "The same question as Method 7, answered by a small language model running on the phone itself (Qwen 2.5, 0.5 billion parameters, about 550 MB, downloaded once). " +
+        "The same question as Method 7, answered by a language model running on the phone itself (Qwen, downloaded once). " +
         "Nothing leaves the phone and nothing costs money. Each answer takes a few seconds of CPU, so it asks on a cadence, not on every word, and the phone runs warmer while it is on.\n\n" +
-        "It is less sharp than Claude — a small model hedges more and is fooled by garbled speech more easily — but it is free, private and works without Wi-Fi. " +
+        "Three sizes: 0.5 billion parameters (550 MB, runs on any phone, hedges the most), 1.5 billion (1.6 GB, needs about 6 GB of memory, noticeably sharper) and Qwen 3 at 4 billion (2.7 GB, needs 12 GB or more, the best judgement, about ten seconds an answer). " +
+        "Each size is its own file, so you can download more than one and switch. Pick the size, press Download, wait, switch on Local AI, Start.\n\n" +
+        "Even the largest is less sharp than Claude — a small model hedges more and is fooled by garbled speech more easily — but it is free, private and works without Wi-Fi. " +
         "Like Method 7 it needs words from Speech or Captions, and a confident COMMERCIAL answer is saved as a script.")
 
     val TICKER = Topic("The news ticker instead of the bug",
