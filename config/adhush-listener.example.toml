@@ -1,7 +1,8 @@
 # The TV listener: a Raspberry Pi with a USB webcam and microphone on a shelf
-# facing the TV, turning a Sharp AQUOS down over Wi-Fi during commercials.
+# facing the TV, turning a Sharp AQUOS down during commercials through the
+# set's RS-232C serial port (a USB null-modem cable) -- or over Wi-Fi.
 # No HDMI hardware, no relay, no soldering (docs/build-guide-tv-listener.md).
-# Copy to config/adhush.toml and edit the [control.network_ip] section.
+# Copy to config/adhush.toml and edit the [control] section.
 
 [capture]
 backend = "camera"
@@ -50,21 +51,33 @@ max_mute_s = 240
 not_ad_quiet_s = 60          # after "Not an ad", a minute in which nothing may duck
 
 [control]
-backend = "network_ip"
+backend = "rs232_sharp"      # the cable; or "network_ip" for Wi-Fi (section below)
 verify_with_audio = true
 
+# The serial cable: USB-to-RS-232 null-modem cable (FTDI chip) from a front USB
+# port of the Pi to the TV's 9-pin RS-232C socket. No login, no Wi-Fi needed.
+# The user running AdHush must be in the "dialout" group to open the port.
+[control.rs232_sharp]
+port = "/dev/ttyUSB0"        # `ls /dev/ttyUSB*` shows it once the cable is in
+baud = 9600                  # 8 data bits, no parity, 1 stop bit (the manual, p. 58)
+timeout_s = 1.0
+duck_level = 4               # turn the set down to this during a commercial (3-5 is inaudible)
+normal_volume = 19           # used only if the set will not say its own volume
+duck_state_file = "data/preduck-volume.txt"   # so a crash never leaves the set quiet
+
+# The Wi-Fi alternative: set backend = "network_ip" above and fill this in.
 [control.network_ip]
 host = "192.168.1.12"        # the TV's address (MENU > Initial Setup > Internet Setup)
 port = 10002
 login_id = "admin"           # the IP Control login you set on the TV, or blank
 login_password = ""          # never commit a real password; config/adhush.toml is git-ignored
-duck_level = 4               # turn the set down to this during a commercial (3-5 is inaudible)
-normal_volume = 19           # used only if the set will not say its own volume
-duck_state_file = "data/preduck-volume.txt"   # so a crash never leaves the set quiet
+duck_level = 4
+normal_volume = 19
+duck_state_file = "data/preduck-volume.txt"
 
 [ipc]
 enabled = true
-host = "0.0.0.0"             # the phone page needs the Pi reachable on the Wi-Fi
+host = "0.0.0.0"             # the phone page (the three buttons) needs the Pi reachable on the Wi-Fi
 port = 8675
 token = ""
 

@@ -216,9 +216,10 @@ footer { margin-top: 0.24in; padding-top: 0.12in; border-top: 1pt solid var(--li
 <h1>Build the AdHush TV Listener</h1>
 <p class="lede">A Raspberry Pi 4 in a <strong>NESPi 4</strong> case, with a webcam and a microphone,
 that sits on a shelf, <strong>watches and listens</strong> to your TV, and turns the sound down
-to a whisper when a commercial starts &mdash; then back up when your show comes back.
-<strong>No HDMI boxes, no relay, no scissors, no soldering.</strong> Five things plug together with USB.</p>
-<span class="editionline">NESPi 4 edition &middot; Sharp TV over Wi-Fi &middot; AdHush 0.15</span>
+to a whisper when a commercial starts &mdash; then back up when your show comes back. It gives the TV
+its orders through <strong>one cable</strong> into the TV&rsquo;s serial socket, so it works even when the
+Wi-Fi is having a bad day. <strong>No HDMI boxes, no relay, no scissors, no soldering.</strong></p>
+<span class="editionline">NESPi 4 edition &middot; Sharp TV by serial cable &middot; AdHush 0.15</span>
 
 <div class="safety">
 <span class="boxtitle">Read this first</span>
@@ -235,7 +236,7 @@ Pi&rsquo;s own power brick, and you never open that. Ask an adult for the two st
 that logo the <strong>bug</strong>, because it sits there all through the show like a bug on the glass.
 During a commercial the bug is taken off the screen. The microphone listens for the quiet gaps and
 the loudness jumps around commercials, and remembers the sound of every break you teach it. When
-the Pi is sure, it tells the TV over Wi-Fi: <em>turn down to 4</em>. When the show is back: <em>turn
+the Pi is sure, it tells the TV down the cable: <em>turn down to 4</em>. When the show is back: <em>turn
 back up</em>.</p>
 <figure class="diagram">
 <svg role="img" aria-label="A TV on the left. On a shelf to the right, the Pi in its NESPi case with a webcam on top and a microphone beside it. Light and sound travel from the TV to the webcam and microphone; a Wi-Fi arc goes from the Pi back to the TV saying turn down to 4, back up to 19." viewBox="0 0 720 270">
@@ -247,9 +248,9 @@ back up</em>.</p>
     <rect x="100" y="210" width="90" height="6" rx="2" fill="currentColor"/>
     <rect x="210" y="160" width="30" height="20" rx="3" fill="#FFD54F"/>
     <text x="225" y="174" text-anchor="middle" font-size="9" font-weight="700" fill="#241F18">BUG</text>
-    <text x="145" y="236" text-anchor="middle" font-weight="700">the TV (a Sharp, on the Wi-Fi)</text>
+    <text x="145" y="236" text-anchor="middle" font-weight="700">the TV (a Sharp)</text>
     <text x="145" y="253" text-anchor="middle" font-size="10" opacity="0.75">the bug lives in a corner during the show</text>
-    <rect x="460" y="200" width="240" height="14" fill="var(--line)"/>
+    <rect x="480" y="200" width="220" height="14" fill="var(--line)"/>
     <text x="580" y="236" text-anchor="middle" font-size="10" opacity="0.75">a shelf, 6&ndash;10 feet from the TV</text>
     <rect x="490" y="150" width="150" height="50" rx="8" fill="#F1EDE4" stroke="currentColor" stroke-width="1.6"/>
     <text x="565" y="180" text-anchor="middle" font-weight="700">Pi in the NESPi 4</text>
@@ -261,19 +262,21 @@ back up</em>.</p>
     <text x="472" y="152" text-anchor="middle" font-size="10">mic = ears</text>
     <path d="M262 100 L534 122" stroke="var(--wire-video)" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#ar)"/>
     <text x="395" y="98" text-anchor="middle" font-size="10.5" fill="var(--wire-video)">light: is the bug there?</text>
-    <path d="M262 170 L460 178" stroke="var(--wire-audio)" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#ar)"/>
-    <text x="365" y="193" text-anchor="middle" font-size="10.5" fill="var(--wire-audio)">sound: gaps, loudness, breaks</text>
-    <path d="M520 150 C 470 20, 250 20, 150 56" stroke="var(--accent)" stroke-width="2.5" fill="none" marker-end="url(#ar)"/>
-    <text x="340" y="26" text-anchor="middle" font-size="11" font-weight="700" fill="var(--accent)">Wi-Fi: &ldquo;turn down to 4&rdquo; &hellip; &ldquo;back up to 19&rdquo;</text>
+    <path d="M262 152 L460 164" stroke="var(--wire-audio)" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#ar)"/>
+    <text x="355" y="148" text-anchor="middle" font-size="10.5" fill="var(--wire-audio)">sound: gaps, loudness, breaks</text>
+    <path d="M490 188 L266 188" stroke="var(--accent)" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <rect x="252" y="180" width="14" height="16" rx="2" fill="var(--accent)"/>
+    <text x="360" y="213" text-anchor="middle" font-size="11" font-weight="700" fill="var(--accent)">serial cable: &ldquo;turn down to 4&rdquo; &hellip; &ldquo;back up to 19&rdquo;</text>
+    <text x="360" y="227" text-anchor="middle" font-size="9.5" fill="var(--accent)">USB end in the Pi, 9-pin end in the TV&rsquo;s RS-232C socket</text>
   </g>
 </svg>
-<figcaption>Nothing is wired to the TV. The Pi talks to it over your home Wi-Fi, the same way the phone app does.</figcaption>
+<figcaption>One cable carries the orders. Wi-Fi is still used for the phone page, but the TV never depends on it.</figcaption>
 </figure>
 </section>
 
 <!-- ==================== THE PARTS ==================== -->
 <section class="step">
-<div class="step-head"><div class="badge plain">&#9679;</div><h2>The parts (about $110&ndash;140, less if you already own a Pi)</h2></div>
+<div class="step-head"><div class="badge plain">&#9679;</div><h2>The parts (about $125&ndash;160, less if you already own a Pi)</h2></div>
 <table>
 <thead><tr><th>#</th><th>Part</th><th>What it does</th><th>Rough price</th></tr></thead>
 <tbody>
@@ -281,13 +284,16 @@ back up</em>.</p>
 <tr><td>2</td><td>Retroflag <strong>NESPi 4</strong> case (comes with a fan, heatsinks and screws)</td><td>The body &mdash; and it looks great on a shelf</td><td class="price">$30&ndash;40</td></tr>
 <tr><td>3</td><td>microSD card, 32 GB</td><td>The brain&rsquo;s memory</td><td class="price">$8</td></tr>
 <tr><td>4</td><td>USB webcam, 1080p, with a <strong>built-in microphone</strong> (most have one)</td><td>The eyes and the ears</td><td class="price">$20&ndash;30</td></tr>
-<tr><td>5</td><td><em>Optional:</em> a small USB microphone, if the webcam has none or hears badly</td><td>Better ears</td><td class="price">$10&ndash;15</td></tr>
-<tr><td>6</td><td>A shelf, table or small tripod 6&ndash;10 feet in front of the TV</td><td>Somewhere to stand</td><td class="price">&mdash;</td></tr>
+<tr class="pick"><td>5</td><td><strong>USB-to-serial null-modem cable</strong> with an FTDI chip: a USB plug on one end, a 9-pin <strong>female</strong> plug on the other, marked &ldquo;null modem&rdquo; or &ldquo;crossover&rdquo;; long enough to reach from the shelf to the back of the TV</td><td>The voice: how the Pi tells the TV to turn down</td><td class="price">$15&ndash;20</td></tr>
+<tr><td>6</td><td><em>Optional:</em> a small USB microphone (and a small USB hub, since the case has two ports), if the webcam has none or hears badly</td><td>Better ears</td><td class="price">$10&ndash;15</td></tr>
+<tr><td>7</td><td>A shelf, table or small tripod 6&ndash;10 feet in front of the TV</td><td>Somewhere to stand</td><td class="price">&mdash;</td></tr>
 </tbody>
 </table>
 <p class="mini">Just for setup, borrow: a keyboard, a mouse, a monitor or TV with HDMI (and a micro-HDMI cable
-for the Pi), and your home Wi-Fi password. The TV must be a Sharp AQUOS on the same Wi-Fi with
-<strong>IP Control</strong> switched on &mdash; Step 4 shows where.</p>
+for the Pi), and your home Wi-Fi password (the Pi still uses Wi-Fi for the phone page, not for the TV). The TV must
+be a Sharp AQUOS with an <strong>RS-232C</strong> socket on the back: 9 pins, D-shaped, <strong>male</strong> (pins, not
+holes). The cable end that goes there must be <strong>female</strong> and <strong>cross-wired</strong> (&ldquo;null modem&rdquo;).
+A plain straight serial cable looks the same and does nothing &mdash; the one mistake this build can make.</p>
 <figure class="diagram">
 <svg role="img" aria-label="The parts laid out: the Pi board, the NESPi 4 case, a microSD card, a USB webcam, a small USB microphone, and the Pi's power supply." viewBox="0 0 720 150">
   <g font-family="Atkinson Hyperlegible, sans-serif" font-size="11" fill="currentColor" text-anchor="middle">
@@ -299,8 +305,8 @@ for the Pi), and your home Wi-Fi password. The TV must be a Sharp AQUOS on the s
     <text x="293" y="112">3 &middot; microSD</text>
     <rect x="340" y="34" width="70" height="44" rx="8" fill="#fff" stroke="currentColor" stroke-width="1.6"/><circle cx="375" cy="56" r="13" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="375" cy="56" r="5" fill="currentColor"/>
     <text x="375" y="112">4 &middot; webcam</text>
-    <rect x="450" y="30" width="18" height="46" rx="9" fill="var(--wire-audio)"/><rect x="455" y="76" width="8" height="14" fill="currentColor" opacity="0.6"/>
-    <text x="459" y="112">5 &middot; USB mic</text>
+    <rect x="436" y="46" width="22" height="16" rx="2" fill="currentColor" opacity="0.7"/><path d="M458 54 h20" stroke="var(--accent)" stroke-width="3"/><path d="M478 44 l10 10 l-10 10 z" fill="var(--accent)"/>
+    <text x="462" y="112">5 &middot; serial cable</text>
     <rect x="510" y="36" width="60" height="40" rx="6" fill="var(--wire-power)" opacity="0.8"/><path d="M570 56 h60" stroke="var(--wire-power)" stroke-width="3"/>
     <text x="570" y="112">power supply</text>
     <rect x="640" y="36" width="60" height="40" rx="4" fill="#fff" stroke="currentColor" stroke-width="1.6"/><path d="M646 44 h48 M646 52 h48 M646 60 h48 M646 68 h30" stroke="currentColor" stroke-width="1.2"/>
@@ -488,9 +494,9 @@ Then carry on with Step 3.</li>
 </ol>
 <div class="fixbox">
 <span class="boxtitle">Two things to know about the SSD</span>
-<p><strong>Wi-Fi.</strong> The cartridge uses a USB 3.0 link, and USB 3.0 can put noise on 2.4 GHz Wi-Fi. If the TV becomes
-&ldquo;unreachable&rdquo; now and then after adding the SSD, join your router&rsquo;s 5 GHz network, or plug an Ethernet cable
-into the back of the case &mdash; the surest fix.</p>
+<p><strong>Wi-Fi.</strong> The cartridge uses a USB 3.0 link, and USB 3.0 can put noise on 2.4 GHz Wi-Fi. The TV is on a cable,
+so it does not care; if the <em>phone page</em> becomes hard to reach after adding the SSD, join your router&rsquo;s 5 GHz network,
+or plug an Ethernet cable into the back of the case.</p>
 <p><strong>Switching off.</strong> With SAFE SHUTDOWN off, the POWER button cuts the power like pulling the plug. The listener is
 meant to stay on, but when you do want it off, type <code>sudo poweroff</code> first and press POWER once the green light has
 stopped blinking.</p>
@@ -504,8 +510,9 @@ stopped blinking.</p>
 <!-- ==================== STEP 3 ==================== -->
 <section class="step">
 <div class="step-head"><div class="badge">3</div><h2>Plug in the eyes and ears</h2></div>
-<p>Plug the <strong>webcam</strong> into one of the two USB ports under the case&rsquo;s small front flap. If you have a
-separate USB microphone, plug it into the other one. Then ask the Pi what it found:</p>
+<p>Plug the <strong>webcam</strong> into one of the two USB ports under the case&rsquo;s small front flap. The other port is
+for the serial cable (Step 4). If you also want a separate USB microphone, put a small USB hub in one of the ports.
+Then ask the Pi what it found:</p>
 <pre><code>adhush doctor</code></pre>
 <p>It prints a list of <strong>video devices</strong> (the webcam is usually <code>/dev/video0</code>) and a list of
 <strong>sound cards</strong> with numbers, something like <code>card 1: Webcam</code>. Find the line for your microphone
@@ -525,9 +532,9 @@ audio_device = "alsa:plughw:1,0"   <span class="cmt"># the microphone: card 1, d
     <path d="M62 83 C 150 83, 190 60, 270 60" stroke="var(--wire-video)" stroke-width="2.5" fill="none"/>
     <rect x="270" y="44" width="50" height="32" rx="6" fill="#fff" stroke="currentColor" stroke-width="1.6"/><circle cx="295" cy="60" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="295" cy="60" r="4" fill="currentColor"/>
     <text x="295" y="96" text-anchor="middle">webcam (eyes + ears)</text>
-    <path d="M90 83 C 150 95, 200 118, 270 118" stroke="var(--wire-audio)" stroke-width="2.5" fill="none"/>
-    <rect x="270" y="106" width="12" height="26" rx="6" fill="var(--wire-audio)"/>
-    <text x="330" y="142" text-anchor="middle" font-size="10">USB mic (optional, better ears)</text>
+    <path d="M90 83 C 150 95, 200 118, 270 118" stroke="var(--accent)" stroke-width="2.5" fill="none"/>
+    <rect x="270" y="110" width="22" height="16" rx="2" fill="currentColor" opacity="0.7"/>
+    <text x="330" y="142" text-anchor="middle" font-size="10">serial cable to the TV (Step 4)</text>
     <rect x="400" y="24" width="300" height="104" rx="6" fill="var(--code-bg)"/>
     <g fill="var(--code-ink)" font-family="JetBrains Mono, DejaVu Sans Mono, monospace" font-size="10.5">
       <text x="412" y="44">$ adhush doctor</text>
@@ -545,31 +552,65 @@ audio_device = "alsa:plughw:1,0"   <span class="cmt"># the microphone: card 1, d
 <!-- ==================== STEP 4 ==================== -->
 <section class="step">
 <div class="step-head"><div class="badge">4</div><h2>Let the TV take orders &nbsp;<span class="adult">ADULT CHECK</span></h2></div>
-<p>On the TV&rsquo;s remote press <strong>MENU</strong>, then go to <strong>Initial Setup &rarr; Internet Setup &rarr; Network Setup
-&rarr; IP Control Setup</strong> and set it to <strong>Enable</strong>. Write down three things the TV shows there:</p>
-<ul>
-<li>its <strong>IP address</strong> &mdash; four numbers with dots, like <code>192.168.1.12</code>;</li>
-<li>the <strong>port</strong> &mdash; usually <code>10002</code>;</li>
-<li>the <strong>login ID and password</strong>, if it asks for them (the login is often <code>admin</code>).</li>
-</ul>
-<p>Back on the Pi, open the settings file again (<code>nano config/adhush.toml</code>), scroll down to the
-<code>[control.network_ip]</code> part, and fill it in:</p>
-<pre><code>[control.network_ip]
-host = "192.168.1.12"      <span class="cmt"># the TV's address, from its menu</span>
-port = 10002
-login_id = "admin"
-login_password = "the password from the TV menu"
+<p>Plug the <strong>9-pin end</strong> of the serial cable into the <strong>RS-232C</strong> socket on the back of the TV (it only
+fits one way; tighten the two thumbscrews if it has them). Plug the <strong>USB end</strong> into the free front USB port on the
+case. That is the whole wiring.</p>
+<figure class="diagram">
+<svg role="img" aria-label="The back of the TV with its 9-pin RS-232C socket; the cable's female 9-pin end plugs into it, the USB end goes to a front port of the NESPi case. A callout says the TV socket has pins, the cable end has holes and is cross-wired." viewBox="0 0 720 170">
+  <g font-family="Atkinson Hyperlegible, sans-serif" font-size="11" fill="currentColor">
+    <rect x="20" y="30" width="220" height="100" rx="6" fill="#241F18" opacity="0.9"/>
+    <text x="130" y="52" text-anchor="middle" fill="#fff" font-weight="700">back of the TV</text>
+    <path d="M150 74 h60 v26 h-60 z" fill="#F1EDE4" stroke="#fff" stroke-width="1.2"/>
+    <g fill="currentColor"><circle cx="158" cy="82" r="1.8"/><circle cx="167" cy="82" r="1.8"/><circle cx="176" cy="82" r="1.8"/><circle cx="185" cy="82" r="1.8"/><circle cx="194" cy="82" r="1.8"/><circle cx="162" cy="92" r="1.8"/><circle cx="171" cy="92" r="1.8"/><circle cx="180" cy="92" r="1.8"/><circle cx="189" cy="92" r="1.8"/></g>
+    <text x="180" y="118" text-anchor="middle" font-size="9.5" fill="#fff">RS-232C &mdash; 9 pins (male)</text>
+    <path d="M260 87 h30" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M290 72 h34 v30 h-34 z" fill="var(--accent)"/>
+    <text x="307" y="120" text-anchor="middle" font-size="9.5">female end,</text>
+    <text x="307" y="133" text-anchor="middle" font-size="9.5">cross-wired</text>
+    <path d="M324 87 C 380 87, 400 60, 460 60" stroke="var(--accent)" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <rect x="460" y="52" width="24" height="16" rx="2" fill="currentColor" opacity="0.7"/>
+    <text x="472" y="42" text-anchor="middle" font-size="9.5">USB end</text>
+    <rect x="500" y="30" width="200" height="100" rx="8" fill="#F1EDE4" stroke="currentColor" stroke-width="1.6"/>
+    <text x="600" y="52" text-anchor="middle" font-weight="700">front of the case</text>
+    <rect x="520" y="76" width="22" height="14" rx="2" fill="var(--wire-video)"/><rect x="548" y="76" width="22" height="14" rx="2" fill="var(--accent)"/>
+    <path d="M484 60 C 520 60, 540 70, 559 76" stroke="var(--accent)" stroke-width="3" fill="none"/>
+    <text x="545" y="108" text-anchor="middle" font-size="9.5">webcam &middot; serial cable</text>
+    <text x="600" y="122" text-anchor="middle" font-size="9" opacity="0.75">two ports: a mic needs a small hub</text>
+    <text x="360" y="160" text-anchor="middle" font-size="9.5" fill="var(--red)" font-weight="700">a plain straight serial cable looks identical and does nothing &mdash; it must say null modem / crossover</text>
+  </g>
+</svg>
+</figure>
+<p>Now ask the Pi where the cable landed, and put yourself on the list of people allowed to use serial ports
+(Linux keeps one); the reboot makes it take:</p>
+<pre><code>ls /dev/ttyUSB*              <span class="cmt"># should answer /dev/ttyUSB0</span>
+sudo usermod -aG dialout $USER
+sudo reboot</code></pre>
+<p>After the reboot, open the settings file (<code>nano config/adhush.toml</code>) and check the <code>[control]</code> part.
+It already says the right things; make sure the port matches what <code>ls</code> showed:</p>
+<pre><code>[control]
+backend = "rs232_sharp"
+
+[control.rs232_sharp]
+port = "/dev/ttyUSB0"      <span class="cmt"># what ls /dev/ttyUSB* showed</span>
+baud = 9600
 duck_level = 4             <span class="cmt"># how quiet a commercial gets (4 is a whisper)</span></code></pre>
 <p>Save (<strong>Ctrl+O</strong>, Enter, <strong>Ctrl+X</strong>). Now test it &mdash; this is the exact thing the listener does
 when a commercial comes on:</p>
-<pre><code>adhush probe --active   <span class="cmt"># turns the TV down to 4, waits, turns it back up</span></code></pre>
+<pre><code>adhush probe --active   <span class="cmt"># asks the volume, turns the TV down to 4, waits, turns it back up</span></code></pre>
 <div class="fixbox">
 <span class="boxtitle">What you should hear &mdash; and what the messages mean</span>
 <p><strong>The sound dips for two seconds and comes back:</strong> the TV path works. That is the whole point of this step.</p>
-<p><strong>&ldquo;unreachable&rdquo;:</strong> the TV is off, on a different Wi-Fi, or the address is wrong.</p>
-<p><strong>&ldquo;rejected IP control login&rdquo;:</strong> the login ID or password does not match what the TV&rsquo;s menu shows.</p>
-<p><strong>&ldquo;hung up before asking for a login&rdquo;:</strong> something else is already connected. The Sharp allows
-<em>one</em> control connection at a time &mdash; the AdHush phone app, for instance. Press Stop in the app and try again.</p>
+<p><strong>&ldquo;cannot open serial port&rdquo; / &ldquo;Permission denied&rdquo;:</strong> the <code>dialout</code> line has not taken yet &mdash; reboot.</p>
+<p><strong>&ldquo;serial port /dev/ttyUSB0 not present&rdquo;:</strong> the USB end is not in the Pi, or it landed on <code>ttyUSB1</code> &mdash; fix the port line.</p>
+<p><strong>&ldquo;timeout&rdquo; (the TV says nothing):</strong> a straight cable instead of null-modem, or the plug is not in the RS-232C socket. The TV must be on; standby is fine.</p>
+<p><strong>&ldquo;rejected VOLM&rdquo; / ERR:</strong> wrong socket, or a second control cable is fighting it.</p>
+</div>
+<div class="note">
+<span class="boxtitle">Rather use Wi-Fi?</span>
+<p>The TV takes the same orders over the network: MENU &rarr; Initial Setup &rarr; Internet Setup &rarr; Network Setup &rarr; IP Control
+Setup &rarr; Enable. Set <code>backend = "network_ip"</code> and fill in the <code>[control.network_ip]</code> part of the settings file
+with the TV&rsquo;s address and login instead. The phone app uses that path; the Sharp allows only one such connection at a time,
+so the app must be stopped while the Pi is running. The cable has no such limit and no password.</p>
 </div>
 </section>
 
@@ -704,9 +745,10 @@ Pi stands still on a shelf, the camera method is steadier here than in a hand.</
 <table>
 <thead><tr><th>Problem</th><th>Try</th></tr></thead>
 <tbody>
-<tr><td><code>adhush probe --active</code> says <em>unreachable</em></td><td>Is the TV on and on the same Wi-Fi? Is the address right? Is IP Control set to Enable on the TV (Step 4)?</td></tr>
-<tr><td>It says <em>rejected IP control login</em></td><td>The login ID or password in the settings file does not match the TV&rsquo;s menu</td></tr>
-<tr><td>It says <em>hung up before asking for a login</em></td><td>Something else is connected &mdash; press Stop in the phone app, or unplug whatever else talks to the TV, and try again</td></tr>
+<tr><td><code>adhush probe --active</code> says <em>cannot open serial port</em> or <em>Permission denied</em></td><td>Run the <code>dialout</code> line from Step 4 and reboot</td></tr>
+<tr><td>It says <em>serial port &hellip; not present</em></td><td>The USB end is not in the Pi, or it is <code>ttyUSB1</code>: check <code>ls /dev/ttyUSB*</code> and the port line</td></tr>
+<tr><td>It says <em>timeout</em> &mdash; the TV says nothing</td><td>Straight cable instead of null-modem, or not in the RS-232C socket. The TV must be on</td></tr>
+<tr><td>Using Wi-Fi instead and it says <em>hung up before asking for a login</em></td><td>Something else is connected &mdash; press Stop in the phone app and try again</td></tr>
 <tr><td>The phone page says <em>camera: whole TV not in view</em></td><td>Move the shelf back or turn the webcam until the whole TV, with a border, is in the picture (Step 5)</td></tr>
 <tr><td>The phone page says <em>camera: looking for the bug</em> for minutes</td><td>Run <code>adhush calibrate</code> again during a show, or fix the corner in the settings file (Step 5)</td></tr>
 <tr><td>It turns the show down by mistake</td><td>Press <strong>&#10007; Not an ad</strong>. If it keeps happening on one channel, calibrate again</td></tr>
@@ -720,7 +762,7 @@ Pi stands still on a shelf, the camera method is steadier here than in a hand.</
 <footer>AdHush is free software (MIT). This guide matches AdHush 0.15 and <code>config/adhush-listener.example.toml</code>;
 the same steps in plain text are in <code>docs/build-guide-tv-listener.md</code>. Nothing you build here records
 sound or pictures &mdash; the listener keeps only numbers about them, and nothing leaves the Pi except the
-&ldquo;turn down&rdquo; and &ldquo;turn up&rdquo; orders to the TV.</footer>
+&ldquo;turn down&rdquo; and &ldquo;turn up&rdquo; orders down the cable to the TV.</footer>
 </section>
 
 </body>

@@ -54,6 +54,28 @@ class TestSharpRs232:
         with pytest.raises(ControlError, match="rejected"):
             controller.mute()
 
+    def test_ducking_turns_down_and_puts_back(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        state = tmp_path / "preduck.txt"
+        link = FakeLink([b"19\r", b"OK\r", b"OK\r"])
+        controller = SharpRs232Controller({"duck_level": 4, "duck_state_file": str(state)}, link=link)
+        controller.mute()
+        assert link.written == [b"VOLM?   \r", b"VOLM4   \r"] and state.read_text() == "19"
+        controller.mute()
+        assert len(link.written) == 2, "already ducked: nothing sent"
+        controller.unmute()
+        assert link.written[-1] == b"VOLM19  \r" and not state.exists()
+        # A run that died ducked is repaired by the next start.
+        state.write_text("21")
+        again = SharpRs232Controller({"duck_level": 4, "duck_state_file": str(state)}, link=FakeLink([b"OK\r"]))
+        assert again.recover_on_start() and not state.exists()
+
+    def test_closing_while_ducked_restores(self) -> None:
+        link = FakeLink([b"19\r", b"OK\r", b"OK\r"])
+        controller = SharpRs232Controller({"duck_level": 4}, link=link)
+        controller.mute()
+        controller.close()
+        assert link.written[-1] == b"VOLM19  \r"
+
     def test_closed_controller_refuses(self) -> None:
         controller = SharpRs232Controller({}, link=FakeLink([]))
         controller.close()

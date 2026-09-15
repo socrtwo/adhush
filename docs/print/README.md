@@ -13,8 +13,10 @@ plug covers header pins 1–8, and one wire leaving the case.
 
 `beginner-guide-listener-nespi4.html` / `AdHush-beginner-guide-listener-NESPi4.pdf`
 is the **TV listener** (`docs/build-guide-tv-listener.md`) for a Pi 4 in the
-NESPi 4 case: a webcam and a microphone on a shelf, the Sharp turned down over
-Wi-Fi, nothing wired to the TV and nothing leaving the case. Same fonts and
+NESPi 4 case: a webcam and a microphone on a shelf, the Sharp turned down
+through its RS-232C socket by a USB null-modem cable (Wi-Fi as the
+alternative), an optional SSD in the cartridge, nothing leaving the case but
+that one cable. Same fonts and
 page style; the case diagram is shared with the NESPi 4 box guide.
 
 Regenerate any PDF with any headless Chromium:

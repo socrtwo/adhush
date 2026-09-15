@@ -2,9 +2,11 @@
 
 This is the Raspberry Pi version of what the phone app does: a little
 computer on a shelf that **watches and listens** to the TV, and turns the
-TV down to a whisper over Wi-Fi when a commercial starts, then back up when
-the show returns. No HDMI boxes, no relay, no scissors, no soldering: five
-things plug together with USB cables.
+TV down to a whisper when a commercial starts, then back up when the show
+returns. It gives the TV its orders through one cable plugged into the
+TV's **serial port** (the 9-pin socket on the back of the Sharp), so it
+works even when the Wi-Fi is having a bad day. No HDMI boxes, no relay, no
+scissors, no soldering: everything plugs together.
 
 It is written so a 12-year-old can follow it. Ask an adult for the two
 steps marked 👨‍🔧. Everything runs on low-voltage USB power; nothing here
@@ -16,11 +18,11 @@ and follow a recipe, you can do this.
 ## What you're building
 
 ```
-   ┌──────────┐      Wi-Fi: "turn down to 4"   ┌────────────────┐
-   │   TV     │ <──────────────────────────────│  Raspberry Pi  │
-   │ (Sharp)  │                                 │  + webcam  👁  │
-   │          │ ───── light and sound ────────> │  + microphone 👂│
-   └──────────┘                                 └────────────────┘
+   ┌──────────┐   serial cable: "turn down to 4"   ┌────────────────┐
+   │   TV     │ <═══════════════════════════════════│  Raspberry Pi  │
+   │ (Sharp)  │                                     │  + webcam  👁  │
+   │          │ ───── light and sound ────────────> │  + microphone 👂│
+   └──────────┘                                     └────────────────┘
 ```
 
 The webcam looks at the TV and watches the little channel logo in the
@@ -28,19 +30,24 @@ corner (broadcasters call it the **bug**). The microphone listens for the
 quiet gaps and loudness jumps around commercials, and remembers the sound
 of every break you teach it. When it is sure, it tells the TV to turn down.
 
-## The parts (about $80–110, less if you already own a Pi)
+## The parts (about $95–130, less if you already own a Pi)
 
 | # | Part | What it does | Rough price |
 |---|------|--------------|-------------|
 | 1 | Raspberry Pi 4 (2 GB or more) + official USB-C power supply | The brain | $45–60 |
 | 2 | microSD card, 32 GB | The brain's memory | $8 |
 | 3 | USB webcam, 1080p, with a **built-in microphone** (most have one) | The eyes and the ears | $20–30 |
-| 4 | *(optional)* USB microphone, if the webcam has none or hears badly | Better ears | $10–15 |
-| 5 | A shelf or small tripod 6–10 feet in front of the TV | Somewhere to stand | — |
+| 4 | **USB-to-serial null-modem cable** with an FTDI chip (a USB plug on one end, a 9-pin **female** plug on the other, labelled "null modem" or "crossover"), long enough to reach from the shelf to the back of the TV | The voice: how the Pi tells the TV to turn down | $15–20 |
+| 5 | *(optional)* USB microphone, if the webcam has none or hears badly | Better ears | $10–15 |
+| 6 | A shelf or small tripod 6–10 feet in front of the TV | Somewhere to stand | — |
 
 You also need, just for setup (borrow them): a keyboard, a mouse, a monitor
-with HDMI, and your home Wi-Fi password. And the TV must be a Sharp AQUOS
-that is on the same Wi-Fi, with **IP Control** switched on (Step 3).
+with HDMI, and your home Wi-Fi password (the Pi still uses Wi-Fi for the
+phone page, just not for the TV). The TV must be a Sharp AQUOS with an
+**RS-232C** socket on the back: a 9-pin, D-shaped, **male** connector (pins,
+not holes). The cable end that goes there must be **female** and **cross-
+wired** ("null modem"). A plain straight serial cable looks the same and
+does nothing, which is the one mistake this build can make.
 
 ## Step 1 — Set up the Pi (👨‍🔧 with an adult)
 
@@ -113,9 +120,9 @@ cartridge. The cartridge shell comes in the case box.
 Two things to know:
 
 - The cartridge uses a USB 3.0 link, and USB 3.0 can put noise on 2.4 GHz
-  Wi-Fi. If the TV becomes "unreachable" now and then after adding the
-  SSD, join your router's 5 GHz network, or plug an Ethernet cable into
-  the back of the case — the surest fix.
+  Wi-Fi. The TV is on a cable, so it does not care; if the *phone page*
+  becomes hard to reach after adding the SSD, join your router's 5 GHz
+  network, or plug an Ethernet cable into the back of the case.
 - With SAFE SHUTDOWN off, the POWER button cuts the power like pulling the
   plug. The listener is meant to stay on, but when you do want it off,
   type `sudo poweroff` first and press POWER when the green light has
@@ -155,34 +162,69 @@ Save with **Ctrl+O**, Enter, then leave with **Ctrl+X**.
 
 ## Step 3 — Let the TV take orders (👨‍🔧 with an adult)
 
-On the TV's remote press **MENU**, then go to **Initial Setup → Internet
-Setup → Network Setup → IP Control Setup** and set it to **Enable**. Write
-down three things the TV shows there: its **IP address** (four numbers with
-dots, like 192.168.1.12), the **port** (usually 10002), and the **login ID
-and password** if it asks for them (the default login is often `admin`).
+Plug the **9-pin end** of the serial cable into the **RS-232C** socket on
+the back of the TV (it only fits one way; tighten the two thumbscrews if it
+has them). Plug the **USB end** into a USB port on the Pi — on the NESPi 4,
+one of the two ports under the small front flap. The webcam takes the
+other. If you also want a separate USB microphone, put a small USB hub in
+one port; there are only two.
 
-Back on the Pi, open the settings file again (`nano config/adhush.toml`)
-and fill in the `[control.network_ip]` part:
+Now ask the Pi where the cable landed:
+
+```
+ls /dev/ttyUSB*
+```
+
+It should answer `/dev/ttyUSB0`. (If it says "No such file", the cable is
+not plugged in, or the Pi does not know its chip — FTDI ones just work.)
+
+Linux only lets certain users talk to serial ports. Put yourself on that
+list once, then reboot so it takes:
+
+```
+sudo usermod -aG dialout $USER
+sudo reboot
+```
+
+Back in the Terminal, open the settings file (`nano config/adhush.toml`)
+and check the `[control.rs232_sharp]` part. It already says the right
+things; make sure the port matches what `ls` showed:
 
 ```toml
-host = "192.168.1.12"     # the TV's address
-port = 10002
-login_id = "admin"
-login_password = "the password from the TV menu"
+[control]
+backend = "rs232_sharp"
+
+[control.rs232_sharp]
+port = "/dev/ttyUSB0"     # what `ls /dev/ttyUSB*` showed
+baud = 9600
 duck_level = 4            # how quiet a commercial gets (4 is a whisper)
 ```
 
-Now test it — this is the same thing the app does when a commercial comes on:
+Save (Ctrl+O, Enter, Ctrl+X). Now test it — this is the same thing the
+listener does when a commercial comes on:
 
 ```
 adhush probe --active
 ```
 
-It connects to the TV, asks the volume, turns it down to 4, waits two
-seconds, and turns it back up. **If the sound dipped and came back, the
-TV path works.** If it says *"hung up before asking for a login"*, something
-else is connected to the TV — the phone app, for instance. The Sharp only
-allows one control connection at a time; stop the other one and try again.
+It asks the TV its volume, turns it down to 4, waits two seconds, and
+turns it back up. **If the sound dipped and came back, the TV path works.**
+
+- *"cannot open serial port"* or *"Permission denied"*: the `dialout` step
+  above has not taken yet — reboot.
+- *"serial port /dev/ttyUSB0 not present"*: the cable is not plugged into
+  the Pi, or it is on `ttyUSB1` — fix the port line.
+- *"timeout"* (the TV says nothing): the cable is straight, not null-modem,
+  or it is not in the RS-232C socket. The TV must be on (standby is fine).
+- *"rejected VOLM"* / *ERR*: wrong socket, or a second control cable is
+  fighting it.
+
+**Rather use Wi-Fi?** The TV can also take the same orders over the network
+(MENU → Initial Setup → Internet Setup → Network Setup → IP Control Setup →
+Enable). Set `backend = "network_ip"` and fill in the `[control.network_ip]`
+part of the settings file with the TV's address and login instead. The
+phone app uses that path; the Sharp allows only one such connection at a
+time, so the app must be stopped while the Pi is running.
 
 ## Step 4 — Point the eyes
 
@@ -264,9 +306,10 @@ steadier here than in a hand.
 
 | Problem | Try |
 |---|---|
-| `adhush probe --active` says *unreachable* | Is the TV on and on the same Wi-Fi? Is the address right? Is IP Control enabled on the TV? |
-| It says *rejected IP control login* | The login ID or password in `config/adhush.toml` does not match the TV's menu |
-| It says *hung up before asking for a login* | Something else is connected — stop the phone app (Stop button) and try again |
+| `adhush probe --active` says *cannot open serial port* or *Permission denied* | Run the `dialout` line from Step 3 and reboot |
+| It says *serial port … not present* | The USB end is not in the Pi, or it is `ttyUSB1`: check `ls /dev/ttyUSB*` and the port line |
+| It says *timeout* — the TV says nothing | Straight cable instead of null-modem, or not in the RS-232C socket. The TV must be on |
+| Using Wi-Fi instead and it says *hung up before asking for a login* | Something else is connected — stop the phone app (Stop button) and try again |
 | The phone page says *camera: whole TV not in view* | Move the webcam back or turn it until the whole TV, with a border, is in the picture |
 | The phone page says *camera: looking for the bug* for minutes | Redo `adhush calibrate` during a show, or fix the `roi` corner |
 | It turns the show down by mistake | Press **✗ Not an ad**. If it keeps happening on one channel, recalibrate |

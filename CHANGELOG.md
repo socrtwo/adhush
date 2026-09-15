@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.15.1] - 2026-09-15
+### Added
+- `rs232_sharp`: **ducking** over the cable (`duck_level`, `normal_volume`,
+  `duck_state_file`, crash recovery at the next start, restore on close),
+  the same behaviour `network_ip` gained in 0.15.0.
+- The listener guide now wires the TV by its **RS-232C serial socket**
+  (USB null-modem cable, no login, no Wi-Fi dependence), with Wi-Fi as the
+  alternative; `config/adhush-listener.example.toml` defaults to the cable.
+  The illustrated NESPi 4 edition
+  (`docs/print/AdHush-beginner-guide-listener-NESPi4.pdf`) is rewritten to
+  match and gains an optional SSD-in-the-cartridge page.
+- Android: version number only.
+
 ## [0.15.0] - 2026-09-14
 ### Added
 - **The Pi listener** (ADR 0014): the Python core learns what the phone
