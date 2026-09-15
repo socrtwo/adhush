@@ -1,17 +1,25 @@
-# Release 0.19.0 — what runs where
+# Release 0.20.0 — what runs where
 
 The honest platform matrix for this release. "Core" is the Python engine
 (`adhush run`); "UI" is what you look at and tap.
 
-| Platform | Core runs here? | Always running | Always-on-top mini window | How to get it |
+| Platform | Core runs here? | Always running | Always-on-top mini window | Download |
 |---|---|---|---|---|
-| **Windows** | yes | `adhush service install` (Task Scheduler, at logon) | `adhush overlay` (Tk) — also the Mini window button in Chrome/Edge | `pip install adhush-0.19.0-py3-none-any.whl` |
-| **macOS** | yes | `adhush service install` (launchd agent) | `adhush overlay` (Tk); Mini window in Chrome/Edge | wheel; tkinter ships with python.org Python |
-| **Linux / Raspberry Pi** | yes (reference) | desktop: `adhush service install` (systemd --user); headless box: `scripts/install-pi.sh` | `adhush overlay` (Tk; `apt install python3-tk`) | wheel or `pip install -e .` |
-| **ChromeOS** | yes, in the Linux container | `adhush service install` inside the container | Chrome's Mini window (Document Picture-in-Picture) floats above everything; the Tk overlay works inside the container's window | wheel in Crostini, then open the served page in Chrome |
-| **Web** | no — thin client | n/a | Mini window (Document PiP in Chromium 116+); popup elsewhere | open `http://<core>:8675/` — the core serves it |
-| **Android** | **yes — on-device app** (since 0.7.0; Sharp LC-46LE830U via `VOLM` ducking) | microphone foreground service | notification + Quick Settings tile | `adhush-<ver>-android-debug.apk` from the release, sideloaded; or the thin-client web app as before |
-| **iOS** | **no — thin client** | same | none; Safari has no PiP for documents | open the address in Safari → Share → *Add to Home Screen* |
+| **Windows 10/11 (x64)** | yes | `adhush service install` (Task Scheduler, at logon; uses the silent `adhushw.exe`) | `adhush overlay` (Tk) — also the Mini window button in Chrome/Edge | `adhush-0.20.0-windows-x64.zip`; or the wheel |
+| **macOS (Apple silicon)** | yes | `adhush service install` (launchd agent) | `adhush overlay` (Tk); Mini window in Chrome/Edge | `adhush-0.20.0-macos-arm64.zip`; Intel Macs: the wheel with python.org Python |
+| **Linux desktop (x64 / arm64)** | yes (reference) | `adhush service install` (systemd --user) | `adhush overlay` (Tk; `apt install python3-tk` if the overlay says so) | `adhush-0.20.0-linux-x64.tar.gz` / `-linux-arm64.tar.gz`; needs glibc 2.35+ (Ubuntu 22.04, Debian bookworm) |
+| **Raspberry Pi 4 / 5** | yes (reference) | `adhush service install`; headless box: `scripts/install-pi.sh` | n/a | `adhush-0.20.0-raspberry-pi.zip` — the arm64 binary, the listener config and the PDF guides; 64-bit Pi OS bookworm |
+| **ChromeOS** | yes, in the Linux container | `adhush service install` inside the container | Chrome's Mini window (Document Picture-in-Picture) floats above everything | the Linux binary for the Chromebook's chip (x64 or arm64) in Crostini, then open the served page in Chrome |
+| **Web** | no — thin client | n/a | Mini window (Document PiP in Chromium 116+); popup elsewhere | open `http://<core>:8675/` — the core serves it; the page itself is `adhush-web-0.20.0.zip` |
+| **Android** | **yes — on-device app** (since 0.7.0; nine methods, stream learning, the remote) | microphone foreground service | notification + Quick Settings tile | `adhush-0.20.0-android-debug.apk`, sideloaded; or the web app |
+| **iOS** | **no — thin client**; there is no native app and none is planned without an Apple developer account | same | none; Safari has no PiP for documents | open the core's address in Safari → Share → *Add to Home Screen*: the page is a PWA and installs as an app |
+
+Every binary is smoke-tested on its own runner before it is published:
+`--version`, `init`, `doctor`, and an offline replay of a synthesised
+fixture. `ffmpeg` on PATH is the one thing every desktop needs for live
+capture (`adhush doctor` says so). Unsigned binaries: Windows SmartScreen
+and macOS Gatekeeper will ask once (More info → Run anyway; right-click →
+Open, or `xattr -d com.apple.quarantine adhush`).
 
 ## What "always running" means
 
@@ -26,6 +34,12 @@ and keeps going until you stop it. Stopping is deliberate and explicit:
 
 Closing the mini window with the right-click menu's *Hide* does not stop the
 core. Only ■ does.
+
+## New in 0.20.0
+
+One-file binaries for Windows, macOS, Linux (x64 and arm64) and a Raspberry
+Pi bundle, next to the APK, the web app and the wheel (ADR 0019);
+`adhush init` for a first config.
 
 ## New in 0.19.0
 
@@ -63,7 +77,7 @@ the Python listener and the phone, and three sizes of local AI on Android
 
 ```
 python -m build                       # dist/adhush-0.17.0-py3-none-any.whl, .tar.gz
-(cd platforms/web && zip -r ../../dist/adhush-web-0.19.0.zip .)
+(cd platforms/web && zip -r ../../dist/adhush-web-0.20.0.zip .)
 ```
 
 Pushing a `v*` tag runs `.github/workflows/release.yml`, which does the same

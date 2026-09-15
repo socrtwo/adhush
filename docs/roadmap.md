@@ -73,6 +73,10 @@ and a remote with every TV key and every AdHush control on one screen.
 ADR 0018: the phone hears its own playback and learns a channel's national
 spots before the first evening at the TV; the memory moves between phones.
 
+## Phase 12 — a release for every platform (done, 0.20.0)
+ADR 0019: PyInstaller one-file binaries for Windows, macOS and Linux (x64,
+arm64), a Raspberry Pi bundle, the iOS web app as a PWA, `adhush init`.
+
 ## Beyond the roadmap
 An audio-only fingerprint matcher for the Python listener (the phone's
 `AudioMatcher` ported), so a memory learned from a stream or on a phone is

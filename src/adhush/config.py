@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from adhush.util.resources import bundled
+
 PHASE1_DETECTORS = ("black_frame", "silence", "loudness")
 PHASE2_DETECTORS = ("logo_absence", "scene_cut", "fingerprint")
 PHASE3_DETECTORS = ("clock",)
@@ -330,6 +332,8 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
     data = _load_toml(path)
     if profiles_dir is None:
         profiles_dir = path.parent / "profiles"
+        if not profiles_dir.is_dir():
+            profiles_dir = bundled("config/profiles")  # the set shipped with AdHush
 
     cap = data.get("capture", {})
     capture = CaptureConfig(

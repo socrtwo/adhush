@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.20.0] - 2026-09-15
+### Added
+- **A release for every platform** (ADR 0019): one-file binaries of the
+  core for Windows x64, macOS (Apple silicon), Linux x64 and Linux arm64,
+  each smoke-tested on its own runner; a Raspberry Pi bundle with the arm64
+  binary, the listener config and the PDF guides; the Android APK, the web
+  app (which is also the iOS install, through Add to Home Screen) and the
+  wheel as before. `adhush init` writes a starter config and the profile
+  library next to a binary. The web front end and the profiles travel
+  inside the binary; ffmpeg is the one thing to install.
+
 ## [0.19.0] - 2026-09-15
 ### Added
 - Android **Learn from a stream** (ADR 0018): with Android's playback

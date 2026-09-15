@@ -35,6 +35,7 @@ from adhush.events import AdSegment, AudioEvent, FrameEvent
 from adhush.fingerprint import open_fingerprints
 from adhush.state import AdStateMachine
 from adhush.util.imageops import extract_roi
+from adhush.util.resources import bundled, self_command
 
 _DEFAULT_CONFIG = Path("config/adhush.toml")
 
@@ -96,6 +97,24 @@ def _build_pipeline(
     )
 
 
+def _cmd_init(args: argparse.Namespace) -> int:
+    """Write a starter config (and the profile library next to it) so a
+    one-file binary is usable from any folder without a checkout."""
+    target: Path = args.config
+    if target.exists() and not args.force:
+        print(f"{target} already exists; add --force to overwrite it")
+        return 1
+    example = "config/adhush-listener.example.toml" if args.listener else "config/adhush.example.toml"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(bundled(example), target)
+    profiles = target.parent / "profiles"
+    if not profiles.is_dir():
+        shutil.copytree(bundled("config/profiles"), profiles)
+    print(f"wrote {target} from {Path(example).name}, profiles in {profiles}/")
+    print("edit the [control] section for your set, then: adhush doctor, adhush probe, adhush run")
+    return 0
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     config = _load(args.config)
     logging.basicConfig(level=config.log_level.upper())
@@ -146,7 +165,7 @@ def _spawn_overlay(address: tuple[str, int], token: str) -> subprocess.Popen[byt
     host, port = address
     if host in ("0.0.0.0", "::"):
         host = "127.0.0.1"
-    argv = [sys.executable, "-m", "adhush", "overlay", "--base", f"http://{host}:{port}"]
+    argv = [*self_command(), "overlay", "--base", f"http://{host}:{port}"]
     if token:
         argv += ["--token", token]
     try:
@@ -443,6 +462,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="adhush", description="Mute TV commercials automatically.")
     parser.add_argument("--version", action="version", version=f"adhush {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_init = sub.add_parser("init", help="write a starter config and the profile library")
+    p_init.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)
+    p_init.add_argument("--listener", action="store_true", help="the shelf listener (camera + mic + serial)")
+    p_init.add_argument("--force", action="store_true", help="overwrite an existing config")
+    p_init.set_defaults(func=_cmd_init)
 
     p_run = sub.add_parser("run", help="run live detection and control")
     p_run.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)

@@ -42,6 +42,7 @@ from adhush.config import IpcConfig
 from adhush.control.base import ControlError
 from adhush.engine import Pipeline
 from adhush.ipc.protocol import Command, ProtocolError, encode_event, parse_command
+from adhush.util.resources import bundled
 
 log = logging.getLogger(__name__)
 
@@ -65,10 +66,11 @@ _SHUTDOWN_DELAY_S = 0.05
 
 
 def resolve_web_root(web_root: str) -> Path | None:
-    """Locate the front end: as given, else relative to a source checkout."""
+    """Locate the front end: as given, else the copy shipped with AdHush
+    (inside a one-file binary, or a source checkout)."""
     candidates = [Path(web_root)]
     if not Path(web_root).is_absolute():
-        candidates.append(Path(__file__).resolve().parents[3] / web_root)
+        candidates.append(bundled(web_root))
     for candidate in candidates:
         if (candidate / "index.html").is_file():
             return candidate
