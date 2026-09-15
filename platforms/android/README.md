@@ -315,3 +315,15 @@ and mute) together with Start, Stop, Is an ad, Show's back, Not an ad and
 the timed ducks. While AdHush runs the keys go through its connection, since
 the Sharp allows one; otherwise the screen opens its own and closes it when
 it leaves the foreground (ADR 0017).
+
+## Learn from a stream (0.19.0)
+
+On Android 10+, **Methods → Learn from a stream → Start** asks for the
+"record or cast" permission and then the phone hears its own playback: open
+the channel's live stream in Chrome and leave it playing. The engine runs
+without a TV, fingerprints on, speech and the AI judges as configured, and
+every break it ends is learned into the same `ads.tsv` and `scripts.tsv`
+the TV mode uses; ✓ / ▶ on the notification teach by hand. Players that
+block capture give silence and the status line says so. **Share this
+phone's memory** / **Import memory from a file** on card 3 move breaks,
+scripts and the clock between phones (ADR 0018).

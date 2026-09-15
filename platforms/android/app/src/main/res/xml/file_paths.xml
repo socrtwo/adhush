@@ -2,4 +2,5 @@
 <paths>
     <files-path name="survey" path="survey/" />
     <files-path name="logs" path="logs/" />
+    <files-path name="share" path="share/" />
 </paths>

@@ -1,6 +1,7 @@
 package io.adhush.android
 
 import android.Manifest
+import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -14,6 +15,8 @@ import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.media.projection.MediaProjectionManager
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -43,6 +46,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private var pendingAction: String? = null
+
+    /** Android's "record or cast" consent, which is how one app may hear another's sound (ADR 0018). */
+    private val projectionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val data = r.data
+        if (r.resultCode != Activity.RESULT_OK || data == null) { log("screen capture was not allowed — stream learning needs it to hear the player"); return@registerForActivityResult }
+        save()
+        val i = Intent(this, AdHushService::class.java).setAction(AdHushService.ACTION_STREAM_START)
+            .putExtra(AdHushService.EXTRA_RESULT_CODE, r.resultCode).putExtra(AdHushService.EXTRA_RESULT_DATA, data)
+        ContextCompat.startForegroundService(this, i)
+        log("stream learning started — play the channel's live stream in Chrome and leave it playing")
+    }
+    private val importLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) importMemory(uri) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -75,6 +90,10 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.openRemote).setOnClickListener { save(); startActivity(Intent(this, RemoteActivity::class.java)) }
         findViewById<Button>(R.id.survey).setOnClickListener { save(); if (checkBeforeStart()) startWithPermissions(AdHushService.ACTION_SURVEY) }
         findViewById<Button>(R.id.share).setOnClickListener { shareSurvey() }
+        findViewById<Button>(R.id.streamStart).setOnClickListener { startStreamLearning() }
+        findViewById<Button>(R.id.streamStop).setOnClickListener { serviceAction(AdHushService.ACTION_STOP) }
+        findViewById<Button>(R.id.shareMemory).setOnClickListener { shareMemory() }
+        findViewById<Button>(R.id.importMemory).setOnClickListener { importLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }
         findViewById<Button>(R.id.cameraSetup).setOnClickListener { save(); startActivity(Intent(this, CameraSetupActivity::class.java)) }
         findViewById<Button>(R.id.speechModel).setOnClickListener { downloadSpeechModel() }
         findViewById<Button>(R.id.learnScripts).setOnClickListener { serviceAction(AdHushService.ACTION_LEARN_SCRIPTS) }
@@ -88,7 +107,7 @@ class MainActivity : AppCompatActivity() {
             R.id.infoCamera to Help.CAMERA, R.id.infoSpeech to Help.SPEECH, R.id.infoCaptions to Help.CAPTIONS,
             R.id.infoTeach to Help.TEACH, R.id.infoTest to Help.TEST, R.id.infoTv to Help.DUCK,
             R.id.infoClaude to Help.CLAUDE, R.id.infoLocal to Help.LOCAL,
-            R.id.infoClock to Help.CLOCK, R.id.infoManual to Help.TIMED,
+            R.id.infoClock to Help.CLOCK, R.id.infoManual to Help.TIMED, R.id.infoStream to Help.STREAM,
         )
         for ((id, topic) in info) findViewById<View>(id).setOnClickListener { Help.show(this, topic) }
         for (id in listOf(R.id.silence, R.id.loudness, R.id.fingerprints, R.id.camera, R.id.speech, R.id.captions, R.id.judgeCloud, R.id.judgeLocal, R.id.clockOn))
@@ -156,11 +175,11 @@ class MainActivity : AppCompatActivity() {
         val on = mapOf(
             "silence" to (r?.silence == true), "loudness" to (r?.loudness == true), "fingerprints" to (r?.fingerprints == true),
             "camera" to (r?.logo == true), "speech" to (r?.speech == true), "captions" to (r?.captions == true),
-            "claude" to (r?.cloud == true), "local" to (r?.local == true), "clock" to (r?.clock == true),
+            "claude" to (r?.cloud == true), "local" to (r?.local == true), "clock" to (r?.clock == true), "stream" to (r?.stream == true),
         )
-        val colours = mapOf("silence" to R.color.method_silence, "loudness" to R.color.method_loudness, "fingerprints" to R.color.method_fingerprints, "camera" to R.color.method_camera, "speech" to R.color.method_speech, "captions" to R.color.method_captions, "claude" to R.color.method_claude, "local" to R.color.method_local, "clock" to R.color.method_clock)
-        val chips = mapOf("silence" to R.id.chipSilence, "loudness" to R.id.chipLoudness, "fingerprints" to R.id.chipFingerprints, "camera" to R.id.chipCamera, "speech" to R.id.chipSpeech, "captions" to R.id.chipCaptions, "claude" to R.id.chipClaude, "local" to R.id.chipLocal, "clock" to R.id.chipClock)
-        val dots = mapOf("silence" to R.id.dotSilence, "loudness" to R.id.dotLoudness, "fingerprints" to R.id.dotFingerprints, "camera" to R.id.dotCamera, "speech" to R.id.dotSpeech, "captions" to R.id.dotCaptions, "claude" to R.id.dotClaude, "local" to R.id.dotLocal, "clock" to R.id.dotClock)
+        val colours = mapOf("silence" to R.color.method_silence, "loudness" to R.color.method_loudness, "fingerprints" to R.color.method_fingerprints, "camera" to R.color.method_camera, "speech" to R.color.method_speech, "captions" to R.color.method_captions, "claude" to R.color.method_claude, "local" to R.color.method_local, "clock" to R.color.method_clock, "stream" to R.color.method_stream)
+        val chips = mapOf("silence" to R.id.chipSilence, "loudness" to R.id.chipLoudness, "fingerprints" to R.id.chipFingerprints, "camera" to R.id.chipCamera, "speech" to R.id.chipSpeech, "captions" to R.id.chipCaptions, "claude" to R.id.chipClaude, "local" to R.id.chipLocal, "clock" to R.id.chipClock, "stream" to R.id.chipStream)
+        val dots = mapOf("silence" to R.id.dotSilence, "loudness" to R.id.dotLoudness, "fingerprints" to R.id.dotFingerprints, "camera" to R.id.dotCamera, "speech" to R.id.dotSpeech, "captions" to R.id.dotCaptions, "claude" to R.id.dotClaude, "local" to R.id.dotLocal, "clock" to R.id.dotClock, "stream" to R.id.dotStream)
         for ((k, chipId) in chips) {
             val active = running && on[k] == true
             val c = ContextCompat.getColor(this, if (active) colours[k]!! else R.color.method_off)
@@ -276,6 +295,38 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread { log("done — the first should say COMMERCIAL, the second SHOW") }
             } catch (e: Exception) { AppLog.e("judge", "test failed", e); runOnUiThread { log("✗ FAILED: ${e.message}") } }
             finally { (judge as? AutoCloseable)?.let { runCatching { it.close() } } }
+        }
+    }
+
+    /** Stream learning (ADR 0018): ask for the playback-capture consent, then the service does the rest. */
+    private fun startStreamLearning() {
+        if (Build.VERSION.SDK_INT < 29) { log("stream learning needs Android 10 or newer — play the stream on a laptop next to the phone and use Start instead"); return }
+        if (AdHushService.running != null) { log("stop AdHush first, then start stream learning"); return }
+        save()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 2); log("allow the microphone, then press Start learning again"); return
+        }
+        val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        projectionLauncher.launch(mpm.createScreenCaptureIntent())
+    }
+
+    /** The phone's memory — breaks, scripts, clock — as one zip, handed to whatever the user picks. */
+    private fun shareMemory() {
+        val file = try { Memory.export(this) } catch (e: Exception) { log("could not build the memory file: ${e.message}"); return }
+        val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", file)
+        val send = Intent(Intent.ACTION_SEND).setType("application/zip")
+            .putExtra(Intent.EXTRA_STREAM, uri).putExtra(Intent.EXTRA_SUBJECT, "AdHush memory")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        startActivity(Intent.createChooser(send, "Share this phone's memory"))
+        log("memory file built (${file.length() / 1024} KB) — send it to the other phone and Import it there")
+    }
+
+    private fun importMemory(uri: android.net.Uri) {
+        if (AdHushService.running != null) { log("stop AdHush first — the memory is read when it starts"); return }
+        thread {
+            val result = try { contentResolver.openInputStream(uri)?.use { Memory.import(this, it) } ?: "could not open the file" }
+            catch (e: Exception) { AppLog.e("memory", "import failed", e); "import failed: ${e.message}" }
+            runOnUiThread { log(result) }
         }
     }
 
@@ -470,6 +521,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 2) { if (grantResults.all { it == android.content.pm.PackageManager.PERMISSION_GRANTED }) startStreamLearning() else log("microphone permission is required"); return }
         if (requestCode == 1 && grantResults.all { it == android.content.pm.PackageManager.PERMISSION_GRANTED }) startWithPermissions(pendingAction)
         else log("microphone permission is required")
     }

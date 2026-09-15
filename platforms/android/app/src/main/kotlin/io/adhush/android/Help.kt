@@ -107,6 +107,13 @@ object Help {
         "The remote control page has every button of the TV's own remote (through the network or the serial cable — infrared knows only volume and mute) plus Start, Stop, Is an ad, Show's back, Not an ad and the four timed ducks, " +
         "so one screen does it all. When AdHush is running, the keys go through its connection; the Sharp allows only one.")
 
+    val STREAM = Topic("Learn from a stream",
+        "A channel's live stream plays the same national commercials as cable. Play it on this phone — in Chrome, or in an app that allows capture — press Start learning from a stream, and the phone hears its own playback instead of the microphone: clean sound, no room, no fans. " +
+        "Every break it recognises (quiet gap, loudness jump, a known script, an AI judge) is remembered when it ends, and ✓ / ▶ on the notification teach by hand. No TV is touched.\n\n" +
+        "What it learns lands in the same memory the TV mode uses, so when you Stop and press the normal Start by the TV, those spots are already known. The stream's own inserted ads never air on cable; they simply never match. " +
+        "The break clock does not learn from a stream: streams run about half a minute behind cable.\n\n" +
+        "Share this phone's memory (card 3) zips the breaks, scripts and clock; Import memory from a file merges another phone's, skipping what is already known. Stop AdHush before importing.")
+
     val METHODS = Topic("Choosing methods",
         "Any mix of the eight methods can be on, but AT LEAST ONE must be on or the app has nothing to go on and will refuse to start.\n\n" +
         "Quiet gaps and loudness jumps are hints: two of them have to agree before the TV is ducked. Remembered breaks, the channel bug or ticker, spoken words, captions, and the two AI judges are each strong enough to duck on their own.\n\n" +
@@ -117,7 +124,7 @@ object Help {
         "Test TV talks to the set the way the app does when a commercial comes on: it asks the volume, mutes and unmutes, ducks and restores, and prints every byte it sent and got back. " +
         "If the sound dips twice, the connection works. It uses whatever connection is chosen on the TV page — network, serial cable or infrared.")
 
-    val ALL = listOf(METHODS, BUG, TICKER, SCRIPT, DUCK, TEACH, TIMED, TEST, SILENCE, LOUDNESS, FINGERPRINTS, CAMERA, SPEECH, CAPTIONS, CLAUDE, LOCAL, CLOCK)
+    val ALL = listOf(METHODS, BUG, TICKER, SCRIPT, DUCK, TEACH, TIMED, TEST, SILENCE, LOUDNESS, FINGERPRINTS, CAMERA, SPEECH, CAPTIONS, CLAUDE, LOCAL, CLOCK, STREAM)
 
     fun show(context: Context, topic: Topic) {
         MaterialAlertDialogBuilder(context).setTitle(topic.title).setMessage(topic.body).setPositiveButton("Got it", null).show()

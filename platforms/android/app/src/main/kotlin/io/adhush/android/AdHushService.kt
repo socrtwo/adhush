@@ -5,8 +5,11 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.Activity
 import android.app.Service
 import android.content.Context
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
@@ -74,6 +77,12 @@ class AdHushService : Service(), LifecycleOwner {
     private var controller: DuckController? = null
     private var transport: AutoCloseable? = null
     private var mic: MicSource? = null
+    /** Stream learning (ADR 0018): the phone's own playback instead of the mic, and no TV. */
+    private var stream: StreamSource? = null
+    private var projection: MediaProjection? = null
+    private var streamStore: FileFingerprintStore? = null
+    private var streamAdsAtStart = 0
+    private var streamScriptsAtStart = 0
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var lastStatus: Status? = null
@@ -101,10 +110,11 @@ class AdHushService : Service(), LifecycleOwner {
         // A control action (Is an ad from the tile or a button) before the app has ever been
         // granted the microphone: Android refuses a microphone-type foreground service and
         // the refusal is a crash on the main thread. Say so in the log and stop instead.
-        try { startForegroundWithType(buildNotification(lastText)) } catch (e: SecurityException) {
+        try { startForegroundWithType(buildNotification(lastText), action == ACTION_STREAM_START || stream != null) } catch (e: SecurityException) {
             AppLog.w("service", "cannot run in the foreground yet (${e.message?.substringBefore(':')}) — open the app, allow the microphone, press Start")
             stopSelf(); return START_NOT_STICKY
         }
+        if (action == ACTION_STREAM_START) { startStream(intent); return START_STICKY }
         if (engine == null && action != null && action != ACTION_SURVEY) {  // a control action, but nothing is running
             if (action != ACTION_STOP) update("not running — press Start in the app")
             stopSelf()
@@ -185,19 +195,7 @@ class AdHushService : Service(), LifecycleOwner {
         val transcript = if (speechWanted) scriptStore?.let { TranscriptDetector(it) } else null
         val captions = if (captionsWanted) scriptStore?.let { TranscriptDetector(it, name = "captions") } else null
         // The judges need words from somewhere: speech or captions.
-        val judgeCfg = JudgeConfig(tieBreaker = settings.judgeMode != "always")
-        val judges = ArrayList<JudgeDetector>()
-        if (cloudWanted) {
-            val cj = ClaudeJudge(settings.claudeKey, settings.claudeModel); cloudJudge = cj
-            judges.add(JudgeDetector("judge_claude", judgeCfg, cj, { r -> think.execute(r) }, scriptStore, settings.channel))
-        }
-        if (localWanted) {
-            LocalJudge.APP_CONTEXT = applicationContext
-            try {
-                val lj = LocalJudge(LocalJudge.modelFile(this)); localJudge = lj
-                judges.add(JudgeDetector("judge_local", judgeCfg, lj, { r -> think.execute(r) }, scriptStore, settings.channel))
-            } catch (t: Throwable) { AppLog.e("judge", "local model failed to load", t); update("local AI failed to load: ${t.message} (see the error log)") }
-        }
+        val judges = makeJudges(scriptStore, cloudWanted, localWanted)
         val eng = try {
             Assembly.engine(NetworkedController(ctl), store, logo = logo, transcript = transcript, captions = captions, judges = judges,
                 silence = settings.silence, loudness = settings.loudness, fingerprints = settings.fingerprints, clock = breakClock)
@@ -225,17 +223,7 @@ class AdHushService : Service(), LifecycleOwner {
             }
         }
         // The speech model takes seconds to load: never on the main thread, where it would stall the service start.
-        if (speechWanted) io.execute {
-            try {
-                val sp = SpeechSource(SpeechSource.modelDir(this)) { words -> eng.onWords(words) }
-                speech = sp
-                AppLog.i("speech", "recogniser ready")
-                main.post { update("speech recogniser ready · ${scriptStore?.count() ?: 0} scripts") }
-            } catch (t: Throwable) {
-                AppLog.e("speech", "recogniser failed to start", t)
-                main.post { update("speech engine failed: ${t.message} (see the error log)") }
-            }
-        }
+        if (speechWanted) startSpeech(eng, scriptStore)
         val m = MicSource(this) { block ->
             eng.onAudio(block)
             speech?.feed(block)
@@ -365,6 +353,14 @@ class AdHushService : Service(), LifecycleOwner {
             io.execute { val n = engine?.learnScriptsFromTranscript() ?: 0; if (n > 0) main.post { update("learned $n new script(s) from repetition · ${scripts?.count()} total") } }
         }
         survey?.let { update("surveying the room: ${clock(it.elapsedS)} / ${clock(SURVEY_S)} · ${lastStatus?.let(::describe) ?: "listening"}") }
+        stream?.let { st ->
+            when {
+                System.currentTimeMillis() - st.lastBlockAt > MIC_DEAD_MS -> update("playback capture stopped delivering audio — Stop and start stream learning again")
+                st.mediaTime > 40.0 && st.silentS > 30.0 -> update("hearing nothing from the player (${clock(st.mediaTime)} listened) — it may block capture; use the channel's web player in Chrome")
+                else -> lastStatus?.let { update(describeStream(it)) }
+            }
+            return
+        }
         val ctl = controller ?: return
         val m = mic ?: return
         io.execute {
@@ -380,12 +376,113 @@ class AdHushService : Service(), LifecycleOwner {
     }
 
     /** The engine runs on media time (seconds of audio delivered), not the wall clock. */
-    private fun now(): Double = mic?.mediaTime ?: 0.0
+    private fun now(): Double = mic?.mediaTime ?: stream?.mediaTime ?: 0.0
+
+    private fun makeJudges(scriptStore: FileScriptStore?, cloudWanted: Boolean, localWanted: Boolean): List<JudgeDetector> {
+        val judgeCfg = JudgeConfig(tieBreaker = settings.judgeMode != "always")
+        val judges = ArrayList<JudgeDetector>()
+        if (cloudWanted) {
+            val cj = ClaudeJudge(settings.claudeKey, settings.claudeModel); cloudJudge = cj
+            judges.add(JudgeDetector("judge_claude", judgeCfg, cj, { r -> think.execute(r) }, scriptStore, settings.channel))
+        }
+        if (localWanted) {
+            LocalJudge.APP_CONTEXT = applicationContext
+            try {
+                val lj = LocalJudge(LocalJudge.modelFile(this)); localJudge = lj
+                judges.add(JudgeDetector("judge_local", judgeCfg, lj, { r -> think.execute(r) }, scriptStore, settings.channel))
+            } catch (t: Throwable) { AppLog.e("judge", "local model failed to load", t); update("local AI failed to load: ${t.message} (see the error log)") }
+        }
+        return judges
+    }
+
+    /** The speech model takes seconds to load: never on the main thread, where it would stall the service start. */
+    private fun startSpeech(eng: Engine, scriptStore: FileScriptStore?) {
+        io.execute {
+            try {
+                val sp = SpeechSource(SpeechSource.modelDir(this)) { words -> eng.onWords(words) }
+                speech = sp
+                AppLog.i("speech", "recogniser ready")
+                main.post { update("speech recogniser ready · ${scriptStore?.count() ?: 0} scripts") }
+            } catch (t: Throwable) {
+                AppLog.e("speech", "recogniser failed to start", t)
+                main.post { update("speech engine failed: ${t.message} (see the error log)") }
+            }
+        }
+    }
+
+    /** No TV in stream mode: the engine's ducks are bookkeeping, so a break is learned exactly as at the set. */
+    private class VirtualController : MuteController {
+        private var muted = false
+        override fun mute() { muted = true }
+        override fun unmute() { muted = false }
+        override fun state() = muted
+        override fun close() {}
+    }
+
+    /**
+     * Stream learning (ADR 0018): hear the phone's own playback through
+     * Android's playback capture and learn every break into the same memory
+     * the TV mode uses. The camera and the break clock stay off (the stream
+     * is delayed); fingerprints are always on, speech and the judges as set.
+     */
+    private fun startStream(intent: Intent) {
+        if (Build.VERSION.SDK_INT < 29) { update("stream learning needs Android 10 or newer"); stopSelf(); return }
+        if (engine != null) { update("stop AdHush first, then start stream learning"); return }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { update("microphone permission missing"); stopSelf(); return }
+        val code = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
+        @Suppress("DEPRECATION")
+        val data: Intent? = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java) else intent.getParcelableExtra(EXTRA_RESULT_DATA)
+        if (code != Activity.RESULT_OK || data == null) { update("screen capture was not allowed — stream learning needs it to hear the player"); stopSelf(); return }
+        val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        val mp = try { mpm.getMediaProjection(code, data) } catch (e: Exception) { AppLog.e("stream", "projection", e); null }
+        if (mp == null) { update("could not start playback capture"); stopSelf(); return }
+        mp.registerCallback(object : MediaProjection.Callback() {
+            override fun onStop() { main.post { if (stream != null) { update("stream capture ended by Android — stream learning stopped"); stopSelf() } } }
+        }, main)
+        projection = mp
+        val store = FileFingerprintStore(File(filesDir, "ads.tsv")); streamStore = store
+        val speechWanted = settings.speech && SpeechSource.isInstalled(this)
+        val cloudWanted = settings.judgeCloud && settings.claudeKey.isNotBlank()
+        val localWanted = settings.judgeLocal && LocalJudge.isInstalled(this)
+        val scriptStore = FileScriptStore(File(filesDir, SCRIPTS_FILE)).also { scripts = it }
+        val transcript = if (speechWanted) TranscriptDetector(scriptStore) else null
+        val judges = makeJudges(scriptStore, cloudWanted, localWanted)
+        val eng = Assembly.engine(VirtualController(), store, transcript = transcript, judges = judges,
+            silence = settings.silence, loudness = settings.loudness, fingerprints = true)
+        eng.addListener { s -> lastStatus = s; main.post { update(describeStream(s)) } }
+        engine = eng
+        streamAdsAtStart = store.count(); streamScriptsAtStart = scriptStore.count()
+        running = RunningInfo(
+            silence = settings.silence, loudness = settings.loudness, fingerprints = true,
+            logo = false, logoNotSetUp = false, speech = speechWanted, speechNoModel = settings.speech && !speechWanted,
+            captions = false, control = "none", cloud = cloudWanted, local = localWanted,
+            judgesDeaf = judges.isNotEmpty() && !speechWanted, stream = true,
+        )
+        if (speechWanted) startSpeech(eng, scriptStore)
+        val s = StreamSource(mp) { block -> eng.onAudio(block); speech?.feed(block) }
+        try { s.start() } catch (e: Exception) { AppLog.e("stream", "capture failed to start", e); update("playback capture failed: ${e.message}"); stopSelf(); return }
+        stream = s
+        main.postDelayed(ticker, POLL_MS)
+        AppLog.i("stream", "learning from the phone's playback")
+        update("STREAM LEARNING · play the channel's live stream in Chrome and leave it playing")
+    }
+
+    private fun describeStream(s: Status): String {
+        val t = stream?.mediaTime ?: 0.0
+        val breaks = (streamStore?.count() ?: 0) - streamAdsAtStart
+        val newScripts = (scripts?.count() ?: 0) - streamScriptsAtStart
+        val state = if (s.teaching) "teaching — press Show's back when the show returns" else if (s.muted) "commercial (learning)" else "show"
+        val ai = s.judges.entries.joinToString("") { (k, v) -> " · ${if (k == "judge_claude") "Claude" else "local AI"}: $v" }
+        return "STREAM LEARNING · ${clock(t)} listened · $state$ai · +$breaks breaks · +$newScripts scripts"
+    }
 
     override fun onDestroy() {
         AppLog.i("service", "destroyed")
         emergencyRestore = null
         mic?.stop(); mic = null            // before the speech engine, which it feeds
+        stream?.stop(); stream = null
+        projection?.stop(); projection = null
+        streamStore = null
         camera?.stop(); camera = null
         speech?.close(); speech = null
         captionReader?.close(); captionReader = null
@@ -461,9 +558,11 @@ class AdHushService : Service(), LifecycleOwner {
             .build()
     }
 
-    private fun startForegroundWithType(n: Notification) {
+    private fun startForegroundWithType(n: Notification, mediaProjection: Boolean = false) {
         val cameraOk = (settings.camera || settings.captions) && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-        val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or (if (cameraOk && Build.VERSION.SDK_INT >= 30) ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0)
+        // Stream learning declares the media-projection type: Android 14 refuses playback capture without it.
+        val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or (if (cameraOk && Build.VERSION.SDK_INT >= 30) ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0) or
+            (if (mediaProjection && Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION else 0)
         if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIF_ID, n, type)
         else startForeground(NOTIF_ID, n)
     }
@@ -491,6 +590,8 @@ class AdHushService : Service(), LifecycleOwner {
         /** An AI judge is on but neither speech nor captions feed it words. */
         val judgesDeaf: Boolean = false,
         val clock: Boolean = false,
+        /** Stream learning: hearing the phone's own playback, no TV (ADR 0018). */
+        val stream: Boolean = false,
     )
 
     companion object {
@@ -515,6 +616,9 @@ class AdHushService : Service(), LifecycleOwner {
         const val ACTION_KEY = "io.adhush.android.KEY"
         const val EXTRA_KEY = "key"
         const val CLOCK_FILE = "clock.tsv"
+        const val ACTION_STREAM_START = "io.adhush.android.STREAM_START"
+        const val EXTRA_RESULT_CODE = "result_code"
+        const val EXTRA_RESULT_DATA = "result_data"
         const val BROADCAST_TEST = "io.adhush.android.TEST_LINE"
         const val SCRIPTS_FILE = "scripts.tsv"
         const val REPEAT_LEARN_MS = 10 * 60 * 1000L

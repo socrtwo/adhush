@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.19.0] - 2026-09-15
+### Added
+- Android **Learn from a stream** (ADR 0018): with Android's playback
+  capture the phone hears the live stream it is playing (MS NOW, Xfinity
+  Stream, any channel's web player) and learns every break into the same
+  memory it uses at the TV — fingerprints, and words with Speech on; no TV
+  is touched. Started from the Methods page; the notification counts the
+  breaks. `docs/print/AdHush-guide-stream-learning.pdf` is the guide.
+- Android **memory that moves**: *Share this phone's memory* zips the
+  breaks, scripts and clock; *Import memory from a file* merges another
+  phone's without doubling what is known.
+
 ## [0.18.0] - 2026-09-15
 ### Added
 - **Method 9, the break clock** (ADR 0017): learns which minutes of the

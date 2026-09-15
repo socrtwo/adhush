@@ -25,6 +25,11 @@ is the **Local AI** guide for the Android app (method 8) at about a
 (0.5B, 1.5B, Qwen 3 4B), what each needs, how to pick, download, test and
 switch on a OnePlus Ace 6 Ultra, and what to do when it misbehaves.
 
+`beginner-guide-stream-learning.html` / `AdHush-guide-stream-learning.pdf`
+teaches the phone from a channel's live stream (Android 10+ playback
+capture): what a stream can and cannot teach, starting it, teaching by hand,
+moving the memory to another phone, and which streams work.
+
 Regenerate any PDF with any headless Chromium:
 
 ```

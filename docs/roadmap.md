@@ -69,7 +69,15 @@ while ducked. Three sizes of local AI on the phone.
 ADR 0017: a learned minute-of-hour prior as method 9, timed manual ducks,
 and a remote with every TV key and every AdHush control on one screen.
 
+## Phase 11 — teach it from a stream (done, 0.19.0)
+ADR 0018: the phone hears its own playback and learns a channel's national
+spots before the first evening at the TV; the memory moves between phones.
+
 ## Beyond the roadmap
+An audio-only fingerprint matcher for the Python listener (the phone's
+`AudioMatcher` ported), so a memory learned from a stream or on a phone is
+useful on the Pi too.
+
 Candidates, in no particular order: in-browser WASM detectors (the rest of the
 Phase 4 remainder), an iOS on-device core following ADR 0007, an audio delay line for retroactive
 mutes on the passthrough box, `metrics.py` (Prometheus text endpoint), RC-6 /
