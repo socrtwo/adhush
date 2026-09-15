@@ -72,16 +72,37 @@ object Help {
         "It needs the whole TV in view, reasonably close or zoomed, and captions big enough to read — the Camera setup screen shows what the camera sees.\n\n" +
         "No cable can deliver captions to the phone: the TV's serial and network control ports only carry commands (volume, power, input), and infrared is one-way into the set. The camera is the only way in.")
 
+    val CLAUDE = Topic("Method 7 — Ask Claude (cloud AI)",
+        "Every ten seconds or so, the last 40 seconds of words (from Speech or Captions) are sent to Claude, Anthropic's AI, with one question: is a commercial playing right now? " +
+        "It answers COMMERCIAL or SHOW with a confidence and a few words why. Unlike the script methods it needs no memory of the commercial: it recognises someone selling something from the words alone.\n\n" +
+        "It costs money: about 13 cents per hour of TV with Haiku, the cheap model, in \"always\" mode, and a tenth of that in tie-breaker mode (ask only when the other methods are unsure, or while ducked). " +
+        "A confident COMMERCIAL answer is saved as a script, so the next airing is recognised offline for free.\n\n" +
+        "Privacy: only text leaves the phone, never audio, and only while this switch is on. The microphone also hears the room, so words spoken near the phone can be in that text. Anthropic keeps API data for 30 days. " +
+        "You need an API key from console.anthropic.com; it is stored in the app's encrypted settings.")
+
+    val LOCAL = Topic("Method 8 — Local AI (on the phone)",
+        "The same question as Method 7, answered by a small language model running on the phone itself (Qwen 2.5, 0.5 billion parameters, about 550 MB, downloaded once). " +
+        "Nothing leaves the phone and nothing costs money. Each answer takes a few seconds of CPU, so it asks on a cadence, not on every word, and the phone runs warmer while it is on.\n\n" +
+        "It is less sharp than Claude — a small model hedges more and is fooled by garbled speech more easily — but it is free, private and works without Wi-Fi. " +
+        "Like Method 7 it needs words from Speech or Captions, and a confident COMMERCIAL answer is saved as a script.")
+
+    val TICKER = Topic("The news ticker instead of the bug",
+        "On a news channel the lower part of the picture carries a band — the ticker, or the chyron with the headline — whose top and bottom edges are straight lines that never move, while the words inside scroll. " +
+        "During a commercial the band is gone. Camera setup can watch that band instead of the corner bug: choose \"news ticker\" under Channel bug, press Camera setup, Watch 45 s, and the yellow box should sit on the band.\n\n" +
+        "Same rules as the bug: the whole TV must be in view, the band must have been seen once before its absence counts, and it must be gone for 2.5 seconds. " +
+        "It works on channels that keep a ticker up through the whole show; some shows drop it for interviews, which would read as a commercial — then use the bug instead.")
+
     val METHODS = Topic("Choosing methods",
-        "Any mix of the six methods can be on, but AT LEAST ONE must be on or the app has nothing to go on and will refuse to start.\n\n" +
-        "Quiet gaps and loudness jumps are hints: two of them have to agree before the TV is ducked. Remembered breaks, the channel bug, spoken words and captions are each strong enough to duck on their own.\n\n" +
-        "A good starting set: the three sound methods on, plus the camera once you have set the bug up, plus captions if the TV shows them.")
+        "Any mix of the eight methods can be on, but AT LEAST ONE must be on or the app has nothing to go on and will refuse to start.\n\n" +
+        "Quiet gaps and loudness jumps are hints: two of them have to agree before the TV is ducked. Remembered breaks, the channel bug or ticker, spoken words, captions, and the two AI judges are each strong enough to duck on their own.\n\n" +
+        "The AI judges (7 and 8) need words to read, so they only work together with Speech or Captions.\n\n" +
+        "A good starting set: the three sound methods on, plus the camera once you have set the bug or ticker up, plus captions if the TV shows them, plus one AI judge as a tie-breaker.")
 
     val TEST = Topic("Test mode",
         "Test TV talks to the set the way the app does when a commercial comes on: it asks the volume, mutes and unmutes, ducks and restores, and prints every byte it sent and got back. " +
         "If the sound dips twice, the connection works. It uses whatever connection is chosen on the TV page — network, serial cable or infrared.")
 
-    val ALL = listOf(METHODS, BUG, SCRIPT, DUCK, TEACH, TEST, SILENCE, LOUDNESS, FINGERPRINTS, CAMERA, SPEECH, CAPTIONS)
+    val ALL = listOf(METHODS, BUG, TICKER, SCRIPT, DUCK, TEACH, TEST, SILENCE, LOUDNESS, FINGERPRINTS, CAMERA, SPEECH, CAPTIONS, CLAUDE, LOCAL)
 
     fun show(context: Context, topic: Topic) {
         MaterialAlertDialogBuilder(context).setTitle(topic.title).setMessage(topic.body).setPositiveButton("Got it", null).show()

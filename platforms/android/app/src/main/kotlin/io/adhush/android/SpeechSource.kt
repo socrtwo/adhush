@@ -74,16 +74,21 @@ class SpeechSource(modelDir: File, private val onWords: (List<Word>) -> Unit) {
     }
 
     companion object {
+        /** "small": 40 MB, quick, mishears over fans. "medium": 128 MB, the same recogniser with a bigger vocabulary and better accuracy. */
+        val MODELS = mapOf("small" to "vosk-model-small-en-us-0.15", "medium" to "vosk-model-en-us-0.22-lgraph")
+        val SIZES_MB = mapOf("small" to 40, "medium" to 128)
         const val MODEL_NAME = "vosk-model-small-en-us-0.15"
-        const val MODEL_URL = "https://alphacephei.com/vosk/models/$MODEL_NAME.zip"
-        fun modelDir(context: Context) = File(File(context.filesDir, "speech"), MODEL_NAME)
+        fun modelName(context: Context) = MODELS[Settings(context).speechModel] ?: MODEL_NAME
+        fun modelUrl(name: String) = "https://alphacephei.com/vosk/models/$name.zip"
+        fun modelDir(context: Context) = File(File(context.filesDir, "speech"), modelName(context))
         fun isInstalled(context: Context) = File(modelDir(context), "am").isDirectory
 
-        /** Download the ~40 MB model zip and unpack it; progress is 0..100. Blocking — call off the main thread. */
+        /** Download the chosen model zip and unpack it; progress is 0..100. Blocking — call off the main thread. */
         fun install(context: Context, onProgress: (Int) -> Unit) {
             val root = File(context.filesDir, "speech"); root.mkdirs()
-            val zip = File(root, "$MODEL_NAME.zip")
-            val conn = URL(MODEL_URL).openConnection() as HttpURLConnection
+            val name = modelName(context)
+            val zip = File(root, "$name.zip")
+            val conn = URL(modelUrl(name)).openConnection() as HttpURLConnection
             conn.connectTimeout = 15_000; conn.readTimeout = 30_000
             val total = conn.contentLength.toLong()
             conn.inputStream.use { inp -> FileOutputStream(zip).use { out ->

@@ -25,6 +25,8 @@ import io.adhush.core.LogoAbsenceDetector
 import io.adhush.core.LogoFinder
 import io.adhush.core.LogoTemplate
 import io.adhush.core.FileScriptStore
+import io.adhush.core.JudgeConfig
+import io.adhush.core.JudgeDetector
 import io.adhush.core.TranscriptDetector
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -56,6 +58,10 @@ class AdHushService : Service(), LifecycleOwner {
     private var camera: CameraSource? = null
     private var speech: SpeechSource? = null
     private var captionReader: CaptionSource? = null
+    private var cloudJudge: ClaudeJudge? = null
+    private var localJudge: LocalJudge? = null
+    /** The judges' questions run here: slow (a network call, or seconds of CPU) and never on the audio thread. */
+    private val think = Executors.newSingleThreadExecutor { r -> Thread(r, "adhush-judge").apply { priority = Thread.MIN_PRIORITY } }
     private var scripts: FileScriptStore? = null
     private var lastRepeatLearnAt = 0L
     @Volatile private var finder: LogoFinder? = null
@@ -157,13 +163,32 @@ class AdHushService : Service(), LifecycleOwner {
         val logoWanted = settings.camera && cameraOk
         val captionsWanted = settings.captions && cameraOk
         val cameraWanted = logoWanted || captionsWanted
-        val logo = if (logoWanted) LogoTemplate.load(File(filesDir, LOGO_FILE))?.let { LogoAbsenceDetector(HANDHELD_LOGO_CONFIG, it) } else null
+        val ticker = settings.cameraTarget == "ticker"
+        val logo = if (logoWanted) LogoTemplate.load(File(filesDir, if (ticker) TICKER_FILE else LOGO_FILE))?.let {
+            if (ticker) LogoAbsenceDetector(HANDHELD_LOGO_CONFIG.copy(searchPx = 4), it, name = "ticker_absence", noun = "ticker") else LogoAbsenceDetector(HANDHELD_LOGO_CONFIG, it)
+        } else null
         val speechWanted = settings.speech && SpeechSource.isInstalled(this)
-        val scriptStore = if (speechWanted || captionsWanted) FileScriptStore(File(filesDir, SCRIPTS_FILE)).also { scripts = it } else null
+        val cloudWanted = settings.judgeCloud && settings.claudeKey.isNotBlank()
+        val localWanted = settings.judgeLocal && LocalJudge.isInstalled(this)
+        val scriptStore = if (speechWanted || captionsWanted || cloudWanted || localWanted) FileScriptStore(File(filesDir, SCRIPTS_FILE)).also { scripts = it } else null
         val transcript = if (speechWanted) scriptStore?.let { TranscriptDetector(it) } else null
         val captions = if (captionsWanted) scriptStore?.let { TranscriptDetector(it, name = "captions") } else null
+        // The judges need words from somewhere: speech or captions.
+        val judgeCfg = JudgeConfig(tieBreaker = settings.judgeMode != "always")
+        val judges = ArrayList<JudgeDetector>()
+        if (cloudWanted) {
+            val cj = ClaudeJudge(settings.claudeKey, settings.claudeModel); cloudJudge = cj
+            judges.add(JudgeDetector("judge_claude", judgeCfg, cj, { r -> think.execute(r) }, scriptStore, settings.channel))
+        }
+        if (localWanted) {
+            LocalJudge.APP_CONTEXT = applicationContext
+            try {
+                val lj = LocalJudge(LocalJudge.modelFile(this)); localJudge = lj
+                judges.add(JudgeDetector("judge_local", judgeCfg, lj, { r -> think.execute(r) }, scriptStore, settings.channel))
+            } catch (t: Throwable) { AppLog.e("judge", "local model failed to load", t); update("local AI failed to load: ${t.message} (see the error log)") }
+        }
         val eng = try {
-            Assembly.engine(NetworkedController(ctl), store, logo = logo, transcript = transcript, captions = captions,
+            Assembly.engine(NetworkedController(ctl), store, logo = logo, transcript = transcript, captions = captions, judges = judges,
                 silence = settings.silence, loudness = settings.loudness, fingerprints = settings.fingerprints)
         } catch (e: IllegalArgumentException) {
             update("no method is switched on — turn one on under Methods"); runCatching { ctl.close() }; controller = null; stopSelf(); return
@@ -174,6 +199,9 @@ class AdHushService : Service(), LifecycleOwner {
             silence = settings.silence, loudness = settings.loudness, fingerprints = settings.fingerprints,
             logo = logo != null, logoNotSetUp = logoWanted && logo == null, speech = speechWanted, speechNoModel = settings.speech && !speechWanted,
             captions = captionsWanted, control = settings.control,
+            cloud = cloudWanted, cloudNoKey = settings.judgeCloud && !cloudWanted,
+            local = localJudge != null, localNoModel = settings.judgeLocal && !LocalJudge.isInstalled(this),
+            judgesDeaf = judges.isNotEmpty() && !speechWanted && !captionsWanted,
         )
         io.execute {
             try {
@@ -220,10 +248,12 @@ class AdHushService : Service(), LifecycleOwner {
             cam.setZoom(settings.cameraZoom)
             cam.start { msg -> main.post { update(msg) } }
         }
-        val eye = if (logoWanted) (if (logo != null) " + camera (bug)" else " + camera (bug not set up)") else ""
+        val noun = if (ticker) "ticker" else "bug"
+        val eye = if (logoWanted) (if (logo != null) " + camera ($noun)" else " + camera ($noun not set up)") else ""
         val cc = if (captionsWanted) " + captions" else ""
         val ear = if (speechWanted) " + speech (${scriptStore?.count() ?: 0} scripts)" else if (settings.speech) " + speech (model not downloaded)" else ""
-        update("listening (${m.sourceName}) via ${settings.control}$eye$cc$ear")
+        val ai = (if (cloudWanted) " + Claude" else "") + (if (localJudge != null) " + local AI" else "") + (if (judges.isNotEmpty() && !speechWanted && !captionsWanted) " (AI has no words: turn on speech or captions)" else "")
+        update("listening (${m.sourceName}) via ${settings.control}$eye$cc$ear$ai")
         lastRepeatLearnAt = System.currentTimeMillis()
         main.postDelayed(ticker, POLL_MS)
     }
@@ -284,14 +314,14 @@ class AdHushService : Service(), LifecycleOwner {
     /** The one button's result: save the template and restart with the logo detector in the loop. */
     private fun finishSetup(f: LogoFinder) {
         finder = null
-        val t = f.result()
+        val t = if (settings.cameraTarget == "ticker") f.bandResult() else f.result()
         main.post {
             if (t == null) {
                 update("no logo found — was a show on, and is the whole screen in view? (screen seen ${f.frames}/${f.frames + f.screenMisses})")
                 sendBroadcast(Intent(BROADCAST_STATUS).setPackage(packageName).putExtra("text", lastText))
                 return@post
             }
-            runCatching { t.save(File(filesDir, LOGO_FILE)) }
+            runCatching { t.save(File(filesDir, if (settings.cameraTarget == "ticker") TICKER_FILE else LOGO_FILE)) }
             update("logo found ${t.roi.corner} (stability ${"%.2f".format(java.util.Locale.US, t.stability)}) — restarting with the camera watching")
             restart()
         }
@@ -303,6 +333,8 @@ class AdHushService : Service(), LifecycleOwner {
         camera?.stop(); camera = null
         speech?.close(); speech = null
         captionReader?.close(); captionReader = null
+        cloudJudge?.close(); cloudJudge = null
+        localJudge?.close(); localJudge = null
         main.removeCallbacks(ticker)
         running = null
         engine?.close(); engine = null
@@ -345,6 +377,9 @@ class AdHushService : Service(), LifecycleOwner {
         camera?.stop(); camera = null
         speech?.close(); speech = null
         captionReader?.close(); captionReader = null
+        cloudJudge?.close(); cloudJudge = null
+        localJudge?.close(); localJudge = null
+        think.shutdown()
         main.removeCallbacks(ticker)
         running = null
         val ctl = controller
@@ -366,7 +401,8 @@ class AdHushService : Service(), LifecycleOwner {
         if (s.teaching) return "TEACHING — ducked; press Show's back when the show returns · ${s.adsLearned} learned"
         val state = if (s.override != CoreOverride.AUTO) "override: ${s.override.wire}" else if (s.muted) "DUCKED — ad" else if (s.quietS > 0.0) "SHOW (you said not an ad; ${s.quietS.toInt()} s of quiet)" else if (s.state == AdState.PROGRAM) "SHOW" else s.state.wire.uppercase()
         val cam = s.camera?.let { " · camera: $it" } ?: ""
-        return "$state · ${"%.2f".format(s.confidence)}$cam · ${s.adsLearned} learned"
+        val ai = s.judges.entries.joinToString("") { (k, v) -> " · ${if (k == "judge_claude") "Claude" else "local AI"}: $v" }
+        return "$state · ${"%.2f".format(s.confidence)}$cam$ai · ${s.adsLearned} learned"
     }
 
     private fun refresh() { lastStatus?.let { update(describe(it)) } }
@@ -426,6 +462,10 @@ class AdHushService : Service(), LifecycleOwner {
         val silence: Boolean, val loudness: Boolean, val fingerprints: Boolean,
         val logo: Boolean, val logoNotSetUp: Boolean, val speech: Boolean, val speechNoModel: Boolean,
         val captions: Boolean, val control: String,
+        val cloud: Boolean = false, val cloudNoKey: Boolean = false,
+        val local: Boolean = false, val localNoModel: Boolean = false,
+        /** An AI judge is on but neither speech nor captions feed it words. */
+        val judgesDeaf: Boolean = false,
     )
 
     companion object {
@@ -449,6 +489,7 @@ class AdHushService : Service(), LifecycleOwner {
         const val SCRIPTS_FILE = "scripts.tsv"
         const val REPEAT_LEARN_MS = 10 * 60 * 1000L
         const val LOGO_FILE = "logo.tsv"
+        const val TICKER_FILE = "ticker.tsv"
         const val SETUP_S = 45L
         const val ACTION_SURVEY = "io.adhush.android.SURVEY"
         const val BROADCAST_STATUS = "io.adhush.android.STATUS"

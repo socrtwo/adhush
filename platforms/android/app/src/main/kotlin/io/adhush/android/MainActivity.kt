@@ -75,15 +75,23 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.cameraSetup).setOnClickListener { save(); startActivity(Intent(this, CameraSetupActivity::class.java)) }
         findViewById<Button>(R.id.speechModel).setOnClickListener { downloadSpeechModel() }
         findViewById<Button>(R.id.learnScripts).setOnClickListener { serviceAction(AdHushService.ACTION_LEARN_SCRIPTS) }
+        findViewById<Button>(R.id.localModel).setOnClickListener { downloadLocalModel() }
+        findViewById<Button>(R.id.testClaude).setOnClickListener { save(); testJudge(cloud = true) }
+        findViewById<Button>(R.id.testLocal).setOnClickListener { save(); testJudge(cloud = false) }
         // The ⓘ buttons: one explanation each.
         val info = mapOf(
             R.id.infoMethods to Help.METHODS, R.id.infoSilence to Help.SILENCE, R.id.infoLoudness to Help.LOUDNESS, R.id.infoFingerprints to Help.FINGERPRINTS,
             R.id.infoCamera to Help.CAMERA, R.id.infoSpeech to Help.SPEECH, R.id.infoCaptions to Help.CAPTIONS,
             R.id.infoTeach to Help.TEACH, R.id.infoTest to Help.TEST, R.id.infoTv to Help.DUCK,
+            R.id.infoClaude to Help.CLAUDE, R.id.infoLocal to Help.LOCAL,
         )
         for ((id, topic) in info) findViewById<View>(id).setOnClickListener { Help.show(this, topic) }
-        for (id in listOf(R.id.silence, R.id.loudness, R.id.fingerprints, R.id.camera, R.id.speech, R.id.captions))
+        for (id in listOf(R.id.silence, R.id.loudness, R.id.fingerprints, R.id.camera, R.id.speech, R.id.captions, R.id.judgeCloud, R.id.judgeLocal))
             findViewById<CompoundButton>(id).setOnCheckedChangeListener { _, _ -> methodsNote() }
+        findViewById<android.widget.RadioGroup>(R.id.cameraTarget).setOnCheckedChangeListener { _, id ->
+            findViewById<Button>(R.id.cameraSetup).text = if (id == R.id.targetTicker) "Camera setup — find the news ticker (in colour)" else "Camera setup — find the bug (in colour)"
+        }
+        findViewById<android.widget.RadioGroup>(R.id.speechModelChoice).setOnCheckedChangeListener { _, _ -> save(); findViewById<Button>(R.id.speechModel).text = speechModelLabel() }
         showStatus(AdHushService.lastText, AdHushService.running != null, false, false)
     }
 
@@ -109,9 +117,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun methodsNote() {
-        val n = listOf(R.id.silence, R.id.loudness, R.id.fingerprints, R.id.camera, R.id.speech, R.id.captions).count { findViewById<CompoundButton>(it).isChecked }
-        findViewById<TextView>(R.id.methodsNote).text = if (n == 0) "⚠ Nothing is switched on. The app cannot work with no method — turn on at least one."
-            else "$n of 6 methods on. At least one must be on. A coloured dot means that method is running right now."
+        val ids = listOf(R.id.silence, R.id.loudness, R.id.fingerprints, R.id.camera, R.id.speech, R.id.captions, R.id.judgeCloud, R.id.judgeLocal)
+        val n = ids.count { findViewById<CompoundButton>(it).isChecked }
+        val ai = findViewById<CompoundButton>(R.id.judgeCloud).isChecked || findViewById<CompoundButton>(R.id.judgeLocal).isChecked
+        val words = findViewById<CompoundButton>(R.id.speech).isChecked || findViewById<CompoundButton>(R.id.captions).isChecked
+        findViewById<TextView>(R.id.methodsNote).text = when {
+            n == 0 -> "⚠ Nothing is switched on. The app cannot work with no method — turn on at least one."
+            ai && !words -> "⚠ An AI judge is on but has no words to read: turn on Spoken words or On-screen captions too."
+            else -> "$n of 8 methods on. At least one must be on. A coloured dot means that method is running right now."
+        }
+    }
+
+    private fun speechModelLabel(): String {
+        val which = if (findViewById<android.widget.RadioGroup>(R.id.speechModelChoice).checkedRadioButtonId == R.id.speechMedium) "medium" else "small"
+        return if (SpeechSource.isInstalled(this)) "Speech model ($which): installed" else "Download the $which speech model (${SpeechSource.SIZES_MB[which]} MB)"
     }
 
     /** The status line, the card's colour, the chips and the buttons all follow the service. */
@@ -130,10 +149,11 @@ class MainActivity : AppCompatActivity() {
         val on = mapOf(
             "silence" to (r?.silence == true), "loudness" to (r?.loudness == true), "fingerprints" to (r?.fingerprints == true),
             "camera" to (r?.logo == true), "speech" to (r?.speech == true), "captions" to (r?.captions == true),
+            "claude" to (r?.cloud == true), "local" to (r?.local == true),
         )
-        val colours = mapOf("silence" to R.color.method_silence, "loudness" to R.color.method_loudness, "fingerprints" to R.color.method_fingerprints, "camera" to R.color.method_camera, "speech" to R.color.method_speech, "captions" to R.color.method_captions)
-        val chips = mapOf("silence" to R.id.chipSilence, "loudness" to R.id.chipLoudness, "fingerprints" to R.id.chipFingerprints, "camera" to R.id.chipCamera, "speech" to R.id.chipSpeech, "captions" to R.id.chipCaptions)
-        val dots = mapOf("silence" to R.id.dotSilence, "loudness" to R.id.dotLoudness, "fingerprints" to R.id.dotFingerprints, "camera" to R.id.dotCamera, "speech" to R.id.dotSpeech, "captions" to R.id.dotCaptions)
+        val colours = mapOf("silence" to R.color.method_silence, "loudness" to R.color.method_loudness, "fingerprints" to R.color.method_fingerprints, "camera" to R.color.method_camera, "speech" to R.color.method_speech, "captions" to R.color.method_captions, "claude" to R.color.method_claude, "local" to R.color.method_local)
+        val chips = mapOf("silence" to R.id.chipSilence, "loudness" to R.id.chipLoudness, "fingerprints" to R.id.chipFingerprints, "camera" to R.id.chipCamera, "speech" to R.id.chipSpeech, "captions" to R.id.chipCaptions, "claude" to R.id.chipClaude, "local" to R.id.chipLocal)
+        val dots = mapOf("silence" to R.id.dotSilence, "loudness" to R.id.dotLoudness, "fingerprints" to R.id.dotFingerprints, "camera" to R.id.dotCamera, "speech" to R.id.dotSpeech, "captions" to R.id.dotCaptions, "claude" to R.id.dotClaude, "local" to R.id.dotLocal)
         for ((k, chipId) in chips) {
             val active = running && on[k] == true
             val c = ContextCompat.getColor(this, if (active) colours[k]!! else R.color.method_off)
@@ -145,6 +165,8 @@ class MainActivity : AppCompatActivity() {
         tint(R.id.speechModel, running && on["speech"] == true, R.color.method_speech)
         tint(R.id.learnScripts, running && (on["speech"] == true || on["captions"] == true), R.color.method_speech)
         tint(R.id.survey, running && on["loudness"] == true, R.color.method_loudness)
+        tint(R.id.testClaude, running && on["claude"] == true, R.color.method_claude)
+        tint(R.id.localModel, running && on["local"] == true, R.color.method_local)
         findViewById<TextView>(R.id.dotTeach).setTextColor(ContextCompat.getColor(this, if (teaching || text.startsWith("TEACHING")) R.color.adhush_teaching else if (running) R.color.adhush_program else R.color.method_off))
         findViewById<TextView>(R.id.dotTest).setTextColor(ContextCompat.getColor(this, if (running) R.color.adhush_program else R.color.method_off))
         findViewById<TextView>(R.id.dotTv).setTextColor(ContextCompat.getColor(this, if (running) R.color.adhush_program else R.color.method_off))
@@ -152,6 +174,9 @@ class MainActivity : AppCompatActivity() {
         val notSetUp = when {
             r?.logoNotSetUp == true -> "camera is on but the bug is not set up yet — press Camera setup"
             r?.speechNoModel == true -> "speech is on but the model is not downloaded — press Download speech model"
+            r?.cloudNoKey == true -> "Ask Claude is on but there is no API key — paste one under Methods"
+            r?.localNoModel == true -> "the local AI is on but its model is not downloaded — press Download the local AI model"
+            r?.judgesDeaf == true -> "an AI judge is on but has no words to read — turn on Spoken words or On-screen captions"
             else -> null
         }
         notSetUp?.let { if (it != lastWarning) { lastWarning = it; log("⚠ $it") } }
@@ -182,20 +207,61 @@ class MainActivity : AppCompatActivity() {
         val filter = IntentFilter(AdHushService.BROADCAST_STATUS).apply { addAction(AdHushService.BROADCAST_SURVEY); addAction(AdHushService.BROADCAST_TEST) }
         ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         refreshLog()
-        findViewById<Button>(R.id.speechModel).text = if (SpeechSource.isInstalled(this)) "Speech model: installed" else "Download speech model (40 MB)"
+        findViewById<Button>(R.id.speechModel).text = speechModelLabel()
         showStatus(AdHushService.lastText, AdHushService.running != null, false, false)
     }
 
     /** One-time 40 MB download of the offline recogniser's English model, into app-private storage. */
     private fun downloadSpeechModel() {
+        save()
         if (SpeechSource.isInstalled(this)) { log("speech model is already installed"); return }
-        log("downloading the speech model (40 MB) …")
+        log("downloading the ${settings.speechModel} speech model (${SpeechSource.SIZES_MB[settings.speechModel]} MB) …")
         thread {
             try {
                 var last = -1
                 SpeechSource.install(this) { p -> if (p / 10 != last / 10) { last = p; runOnUiThread { log("speech model: $p%") } } }
-                runOnUiThread { log("speech model installed — switch on Spoken words and Start"); findViewById<Button>(R.id.speechModel).text = "Speech model: installed" }
+                runOnUiThread { log("speech model installed — switch on Spoken words and Start"); findViewById<Button>(R.id.speechModel).text = speechModelLabel() }
             } catch (e: Exception) { AppLog.e("speech", "model download failed", e); runOnUiThread { log("download failed: ${e.message}") } }
+        }
+    }
+
+    /** One-time download of the on-phone language model (about 550 MB) into app-private storage; resumes if interrupted. */
+    private fun downloadLocalModel() {
+        save()
+        if (LocalJudge.isInstalled(this)) { log("the local AI model is already installed"); return }
+        val url = settings.localModelUrl.ifBlank { LocalJudge.DEFAULT_URL }
+        log("downloading the local AI model (${LocalJudge.DEFAULT_SIZE_MB} MB) — keep the app open, Wi-Fi recommended …")
+        thread {
+            try {
+                var last = -1
+                LocalJudge.install(this, url) { p -> if (p / 5 != last / 5) { last = p; runOnUiThread { log("local AI model: $p%") } } }
+                runOnUiThread { log("local AI model installed — switch on Local AI and Start"); findViewById<Button>(R.id.localModel).text = "Local AI model: installed" }
+            } catch (e: Exception) { AppLog.e("judge", "model download failed", e); runOnUiThread { log("download failed: ${e.message} — press again to resume") } }
+        }
+    }
+
+    /** Ask the chosen AI about two sample transcripts, so you can see what it answers and how long it takes. */
+    private fun testJudge(cloud: Boolean) {
+        val samples = listOf(
+            "ask your doctor if it is right for you side effects may include headache nausea and dizziness do not take if you are allergic call now for a free trial",
+            "the senate is expected to vote later today on the spending bill and we will bring you that as it happens joining me now is our correspondent on capitol hill",
+        )
+        val judge: io.adhush.core.TranscriptJudge = try {
+            if (cloud) { if (settings.claudeKey.isBlank()) { log("paste an Anthropic API key first"); return }; ClaudeJudge(settings.claudeKey, settings.claudeModel) }
+            else { if (!LocalJudge.isInstalled(this)) { log("download the local AI model first"); return }; LocalJudge.APP_CONTEXT = applicationContext; LocalJudge(LocalJudge.modelFile(this)) }
+        } catch (e: Exception) { AppLog.e("judge", "could not start the judge", e); log("could not start: ${e.message}"); return }
+        log(if (cloud) "asking ${settings.claudeModel} …" else "asking the local AI (the first answer takes longer while the model loads) …")
+        thread {
+            try {
+                for (t in samples) {
+                    val t0 = System.currentTimeMillis()
+                    val v = judge.judge(t, settings.channel)
+                    val ms = System.currentTimeMillis() - t0
+                    runOnUiThread { log("  \"${t.take(50)}…\" → " + (v?.let { "${if (it.commercial) "COMMERCIAL" else "SHOW"} ${"%.0f".format(it.confidence * 100)}%: ${it.reason}" } ?: "no clear answer") + " ($ms ms)") }
+                }
+                runOnUiThread { log("done — the first should say COMMERCIAL, the second SHOW") }
+            } catch (e: Exception) { AppLog.e("judge", "test failed", e); runOnUiThread { log("✗ FAILED: ${e.message}") } }
+            finally { (judge as? AutoCloseable)?.let { runCatching { it.close() } } }
         }
     }
 
@@ -227,7 +293,17 @@ class MainActivity : AppCompatActivity() {
         findViewById<CompoundButton>(R.id.camera).isChecked = settings.camera
         findViewById<CompoundButton>(R.id.speech).isChecked = settings.speech
         findViewById<CompoundButton>(R.id.captions).isChecked = settings.captions
-        findViewById<Button>(R.id.speechModel).text = if (SpeechSource.isInstalled(this)) "Speech model: installed" else "Download speech model (40 MB)"
+        findViewById<CompoundButton>(R.id.judgeCloud).isChecked = settings.judgeCloud
+        findViewById<CompoundButton>(R.id.judgeLocal).isChecked = settings.judgeLocal
+        findViewById<EditText>(R.id.claudeKey).setText(settings.claudeKey)
+        findViewById<EditText>(R.id.channel).setText(settings.channel)
+        findViewById<android.widget.RadioGroup>(R.id.claudeModel).check(when (settings.claudeModel) { "claude-sonnet-5" -> R.id.modelSonnet; "claude-opus-5" -> R.id.modelOpus; else -> R.id.modelHaiku })
+        findViewById<android.widget.RadioGroup>(R.id.judgeMode).check(if (settings.judgeMode == "always") R.id.modeAlways else R.id.modeTie)
+        findViewById<android.widget.RadioGroup>(R.id.cameraTarget).check(if (settings.cameraTarget == "ticker") R.id.targetTicker else R.id.targetBug)
+        findViewById<android.widget.RadioGroup>(R.id.speechModelChoice).check(if (settings.speechModel == "medium") R.id.speechMedium else R.id.speechSmall)
+        findViewById<Button>(R.id.cameraSetup).text = if (settings.cameraTarget == "ticker") "Camera setup — find the news ticker (in colour)" else "Camera setup — find the bug (in colour)"
+        findViewById<Button>(R.id.localModel).text = if (LocalJudge.isInstalled(this)) "Local AI model: installed" else "Download the local AI model (${LocalJudge.DEFAULT_SIZE_MB} MB)"
+        findViewById<Button>(R.id.speechModel).text = speechModelLabel()
         findViewById<android.widget.RadioGroup>(R.id.control).check(when (settings.control) { "serial" -> R.id.controlSerial; "ir" -> R.id.controlIr; else -> R.id.controlIp })
         findViewById<EditText>(R.id.irAddress).setText(settings.irAddress.toString())
         findViewById<EditText>(R.id.irVolUp).setText("%02X".format(settings.irVolumeUp))
@@ -249,6 +325,14 @@ class MainActivity : AppCompatActivity() {
         settings.camera = findViewById<CompoundButton>(R.id.camera).isChecked
         settings.speech = findViewById<CompoundButton>(R.id.speech).isChecked
         settings.captions = findViewById<CompoundButton>(R.id.captions).isChecked
+        settings.judgeCloud = findViewById<CompoundButton>(R.id.judgeCloud).isChecked
+        settings.judgeLocal = findViewById<CompoundButton>(R.id.judgeLocal).isChecked
+        settings.claudeKey = findViewById<EditText>(R.id.claudeKey).text.toString().trim()
+        settings.channel = findViewById<EditText>(R.id.channel).text.toString().trim()
+        settings.claudeModel = when (findViewById<android.widget.RadioGroup>(R.id.claudeModel).checkedRadioButtonId) { R.id.modelSonnet -> "claude-sonnet-5"; R.id.modelOpus -> "claude-opus-5"; else -> "claude-haiku-4-5" }
+        settings.judgeMode = if (findViewById<android.widget.RadioGroup>(R.id.judgeMode).checkedRadioButtonId == R.id.modeAlways) "always" else "tie"
+        settings.cameraTarget = if (findViewById<android.widget.RadioGroup>(R.id.cameraTarget).checkedRadioButtonId == R.id.targetTicker) "ticker" else "bug"
+        settings.speechModel = if (findViewById<android.widget.RadioGroup>(R.id.speechModelChoice).checkedRadioButtonId == R.id.speechMedium) "medium" else "small"
         settings.control = when (findViewById<android.widget.RadioGroup>(R.id.control).checkedRadioButtonId) { R.id.controlSerial -> "serial"; R.id.controlIr -> "ir"; else -> "ip" }
         settings.irAddress = findViewById<EditText>(R.id.irAddress).text.toString().trim().toIntOrNull()?.coerceIn(0, 31) ?: 1
         settings.irVolumeUp = findViewById<EditText>(R.id.irVolUp).text.toString().trim().toIntOrNull(16)?.coerceIn(0, 255) ?: 0x14

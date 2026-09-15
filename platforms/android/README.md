@@ -110,7 +110,7 @@ file.
 - **Material / remembered break** — the audio fingerprint (numbers, not a
   recording) of a break you bracketed with *Is an ad* and *Show's back*.
 
-## The six methods
+## The eight methods
 
 | # | Method | What it uses | Can duck alone? |
 |---|---|---|---|
@@ -120,6 +120,8 @@ file.
 | 4 | Channel bug | camera: the logo corner, whole TV in view | yes |
 | 5 | Spoken words | microphone + offline speech recogniser: scripts | yes |
 | 6 | On-screen captions | camera: the caption band read as text: scripts | yes |
+| 7 | Ask Claude | the words of 5 or 6 judged by Claude over the API (opt-in, paid) | yes |
+| 8 | Local AI | the words of 5 or 6 judged by a small model on the phone (free) | yes |
 
 **Not an ad** now does three things: restores the volume, tells every
 method it was wrong (the camera must see the bug again before it may call
@@ -201,6 +203,46 @@ them as scripts. The words of anything you bracket with *Is an ad* and
 script ducks the set on its own and the volume returns a few seconds after
 the last matching words. Legal and sales boilerplate ("ask your doctor",
 "call now") ducks the set by itself. Details: ADR 0012.
+
+## Asking an AI (methods 7 and 8)
+
+Both AI methods read the words that **Spoken words** or **On-screen
+captions** produce, so one of those must be on. Every so often they hand
+the last 40 seconds to a language model with one question — is a commercial
+playing right now? — and take the one-line answer (`COMMERCIAL 0.9: ask your
+doctor`) as a vote strong enough to duck on its own. By default they ask
+only as a **tie-breaker**: when the other methods are unsure, or while the
+set is ducked, and otherwise once a minute. "Always" asks every ten
+seconds. A confident COMMERCIAL answer is saved as a script, so the same
+spot is recognised offline the next time.
+
+- **Ask Claude** sends the text to Anthropic's API. You need an API key
+  (console.anthropic.com), pasted under Methods; it lives in the app's
+  encrypted settings. Haiku 4.5 is the cheap default, about 13 cents per
+  hour of TV in "always" mode and a tenth of that as a tie-breaker; Sonnet 5
+  and Opus 5 cost about two and five times as much. Only text leaves the
+  phone, never audio — and the microphone hears the room, so your own words
+  can be in it. **Test Claude with a sample** shows what it answers.
+- **Local AI** runs Qwen 2.5 (0.5 billion parameters, 8-bit, about 550 MB,
+  downloaded once from the LiteRT community on Hugging Face) on the phone
+  through MediaPipe's LLM Inference. Free, private, no Wi-Fi needed; each
+  answer takes a few seconds of CPU and the phone runs warmer. It hedges
+  more than Claude and is fooled by garbled speech more easily.
+
+Both are late by nature — the speech engine finishes a sentence a few
+seconds after it is said, the window is 40 seconds, and the answer takes a
+moment — so they are best at *starting* a duck; the bug, the ticker or a
+remembered break brings the sound back. Details: ADR 0015.
+
+## The news ticker instead of the bug
+
+On a news channel the lower third carries a band (the ticker or the chyron
+with the headline) whose top and bottom edges never move while the words
+inside scroll; during a commercial the band is gone. Under **Channel bug**
+choose **the news ticker**, then Camera setup, Watch 45 s: the yellow box
+should sit on the band. Same rules as the bug (whole TV in view, seen once
+before it can be missed, gone for 2.5 s). Shows that drop the ticker for
+interviews would read as a commercial — use the bug on those.
 
 ## Teaching it the commercials
 

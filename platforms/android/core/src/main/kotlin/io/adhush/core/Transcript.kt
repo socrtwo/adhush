@@ -249,6 +249,9 @@ class TranscriptDetector(
         val id = store.add(words, endTs - startTs); matcher.refresh(); return id
     }
 
+    /** Another detector (the AI judge) added scripts to the shared store: pick them up. */
+    @Synchronized fun refreshScripts() { matcher.refresh() }
+
     /** Run repetition learning over what has been heard; returns how many new scripts were found. */
     @Synchronized fun learnFromHistory(): Int {
         val added = learner.learn(history.toList())

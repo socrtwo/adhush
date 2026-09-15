@@ -11,8 +11,8 @@ android {
         applicationId = "io.adhush.android"
         minSdk = 26          // AudioSource.UNPROCESSED (24), notification channels (26)
         targetSdk = 35
-        versionCode = 15
-        versionName = "0.15.1"
+        versionCode = 16
+        versionName = "0.16.0"
     }
     buildTypes {
         release { isMinifyEnabled = false }
@@ -32,6 +32,8 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("com.google.mlkit:text-recognition:16.0.1")   // reads the captions off the screen; model bundled, offline
+    implementation("com.anthropic:anthropic-java:2.62.0")          // method 7: ask Claude (opt-in, text only)
+    implementation("com.google.mediapipe:tasks-genai:0.10.27")    // method 8: a small language model on the phone
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.github.mik3y:usb-serial-for-android:3.8.1")   // RS-232C through a USB-OTG cable
     implementation("androidx.camera:camera-core:1.3.4")

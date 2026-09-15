@@ -59,6 +59,8 @@ class CameraSetupActivity : AppCompatActivity() {
     @Volatile private var detector: LogoAbsenceDetector? = null
     private var ts = 0.0
     private var lastPartial = false
+    /** Watch the lower-third band (a news ticker) instead of the corner bug. */
+    private var ticker = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,8 +74,10 @@ class CameraSetupActivity : AppCompatActivity() {
         saveBtn = findViewById(R.id.setupSave)
         val watch = findViewById<MaterialButton>(R.id.setupWatch)
         val cancel = findViewById<MaterialButton>(R.id.setupCancel)
-        findViewById<View>(R.id.setupHelp).setOnClickListener { Help.show(this, Help.BUG) }
+        findViewById<View>(R.id.setupHelp).setOnClickListener { Help.show(this, if (ticker) Help.TICKER else Help.BUG) }
         val settings = Settings(this)
+        ticker = settings.cameraTarget == "ticker"
+        if (ticker) findViewById<TextView>(R.id.setupTitle).text = "Camera setup — find the news ticker"
         zoom.value = settings.cameraZoom.coerceIn(1f, 4f)
         zoom.addOnChangeListener { _, v, _ -> camera?.setZoom(v); zoomLabel(v) }
         zoomLabel(zoom.value)
@@ -85,7 +89,7 @@ class CameraSetupActivity : AppCompatActivity() {
         }
         saveBtn.setOnClickListener {
             val t = template ?: return@setOnClickListener
-            runCatching { t.save(File(filesDir, AdHushService.LOGO_FILE)) }
+            runCatching { t.save(File(filesDir, if (ticker) AdHushService.TICKER_FILE else AdHushService.LOGO_FILE)) }
             settings.camera = true
             settings.cameraZoom = zoom.value
             AppLog.i("camera", "logo template saved: ${t.roi.corner} stability ${"%.2f".format(Locale.US, t.stability)} zoom ${"%.1f".format(Locale.US, zoom.value)}")
@@ -134,7 +138,7 @@ class CameraSetupActivity : AppCompatActivity() {
     private fun adoptTemplate(t: LogoTemplate?, how: String) {
         template = t
         if (t == null) { runOnUiThread { status.text = "press Watch first, then draw or accept a box"; saveBtn.isEnabled = false }; return }
-        val d = LogoAbsenceDetector(HANDHELD_LOGO_CONFIG, t); d.warmup(); detector = d
+        val d = if (ticker) LogoAbsenceDetector(HANDHELD_LOGO_CONFIG.copy(searchPx = 4), t, name = "ticker_absence", noun = "ticker") else LogoAbsenceDetector(HANDHELD_LOGO_CONFIG, t); d.warmup(); detector = d
         runOnUiThread { status.text = "$how: ${t.roi.corner}, stability ${"%.2f".format(Locale.US, t.stability)} — watch the score, then Save"; saveBtn.isEnabled = true }
     }
 
@@ -145,14 +149,16 @@ class CameraSetupActivity : AppCompatActivity() {
             if (elapsed >= 45) {
                 watching = false
                 val chosen = roi
-                adoptTemplate(if (chosen != null) finder.templateFor(chosen) else finder.result()?.also { roi = it.roi }, if (chosen != null) "your box" else "found")
+                val auto = if (ticker) finder.bandResult() else finder.result()
+                adoptTemplate(if (chosen != null) finder.templateFor(chosen) else auto?.also { roi = it.roi }, if (chosen != null) "your box" else "found")
             } else runOnUiThread { status.text = "watching $elapsed / 45 s · whole TV seen ${finder.frames} / ${finder.frames + finder.screenMisses + finder.partialFrames}" }
         }
         val det = detector
         var line = ""
         if (det != null) {
             det.observeFrame(gray, ts); ts += 0.25
-            line = if (det.active) "bug match ${"%.2f".format(Locale.US, det.lastScore)} — ${if (det.programPresent) "SEEN (a show is on)" else if (det.sighted) "GONE (a commercial?)" else "not seen yet"}" else "camera: ${det.describe()}"
+            val noun = if (ticker) "ticker" else "bug"
+            line = if (det.active) "$noun match ${"%.2f".format(Locale.US, det.lastScore)} — ${if (det.programPresent) "SEEN (a show is on)" else if (det.sighted) "GONE (a commercial?)" else "not seen yet"}" else "camera: ${det.describe()}"
         }
         val screen = det?.lastScreen ?: finder.lastScreen ?: Vision.findScreen(gray)
         val partial = screen != null && !Vision.screenComplete(screen, gray.w, gray.h)

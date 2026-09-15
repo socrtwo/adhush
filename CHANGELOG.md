@@ -3,6 +3,26 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.16.0] - 2026-09-15
+### Added
+- Android **method 7, Ask Claude** (ADR 0015): the last 40 seconds of words
+  go to Claude with one question — is a commercial playing? — and the
+  one-line answer is a vote strong enough to duck on its own. Haiku 4.5 by
+  default (Sonnet 5 / Opus 5 selectable), tie-breaker cadence by default
+  (ask only when the other methods are unsure or while ducked), a confident
+  answer saved as a script. Opt-in, API key in encrypted settings, text only
+  ever leaves the phone. **Test Claude with a sample** shows its answers.
+- Android **method 8, Local AI**: the same question answered by
+  Qwen2.5-0.5B running on the phone through MediaPipe's LLM Inference
+  (about 550 MB, downloaded once, resumable). Free and private.
+- Android camera: **the news ticker instead of the bug** — a target choice
+  under Channel bug; setup finds the lower-third band's edges and watches
+  it with the same sighting and whole-TV rules.
+- Android speech: a **better speech model** choice (Vosk medium, 128 MB).
+- Android: the status line and the Methods page show what each AI last
+  said; warnings when a judge has no words (speech and captions both off),
+  no key, or no model.
+
 ## [0.15.1] - 2026-09-15
 ### Added
 - `rs232_sharp`: **ducking** over the cable (`duck_level`, `normal_volume`,

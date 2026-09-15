@@ -21,5 +21,7 @@
     <color name="method_camera">#F9A825</color>
     <color name="method_speech">#8E24AA</color>
     <color name="method_captions">#D81B60</color>
+    <color name="method_claude">#C77C2E</color>
+    <color name="method_local">#3949AB</color>
     <color name="method_off">#9E9E9E</color>
 </resources>

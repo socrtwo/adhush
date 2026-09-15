@@ -270,6 +270,30 @@ class LogoFinder(
         return LogoTemplate(roi, box.w, box.h, edges, if (n == 0) 0.0 else stab / n, screenEdgeSum / frames)
     }
 
+    /**
+     * The news ticker instead of the bug (ADR 0015): on a news channel the
+     * lower third carries a chyron or ticker band whose top and bottom
+     * edges are horizontal lines that never move, while the text inside
+     * scrolls. Rows in the bottom part of the screen where a strong edge
+     * persists across most of the width are those lines; the band is the
+     * span between the outermost such rows. During a commercial the band is
+     * gone, and the mean edge map of the band correlates with nothing.
+     */
+    fun bandResult(bottomFraction: Double = 0.40, minRowStability: Double = 0.5, minRowFraction: Double = 0.5, pad: Int = 3): LogoTemplate? {
+        if (frames < 10) return null
+        val y0 = (height * (1 - bottomFraction)).toInt()
+        val lineRows = ArrayList<Int>()
+        for (y in y0 until height) {
+            var n = 0
+            for (x in 0 until width) if (strong[y * width + x].toDouble() / frames >= minRowStability) n++
+            if (n >= minRowFraction * width) lineRows.add(y)
+        }
+        if (lineRows.size < 2) return null
+        val top = max(0, lineRows.first() - pad); val bottom = min(height, lineRows.last() + pad + 1)
+        if (bottom - top < 6) return null
+        return templateFor(Roi(0.0, top.toDouble() / height, 1.0, (bottom - top).toDouble() / height))
+    }
+
     /** The template, or null when nothing persistent enough was seen. */
     fun result(): LogoTemplate? {
         if (frames < 10) return null
@@ -329,8 +353,14 @@ val HANDHELD_LOGO_CONFIG = LogoAbsenceConfig(absenceS = 2.5, redetectS = 0.0, bl
  * over [LogoAbsenceConfig.absenceS]. With no screen in view it is inert:
  * `active` is false and it casts no vote at all.
  */
-class LogoAbsenceDetector(private val cfg: LogoAbsenceConfig = LogoAbsenceConfig(), private val template: LogoTemplate) : Detector {
-    override val name = "logo_absence"
+class LogoAbsenceDetector(
+    private val cfg: LogoAbsenceConfig = LogoAbsenceConfig(),
+    private val template: LogoTemplate,
+    /** "logo_absence" for the corner bug; "ticker_absence" for a news channel's lower-third band (ADR 0015). */
+    override val name: String = "logo_absence",
+    /** What the status line calls the thing being watched. */
+    private val noun: String = "bug",
+) : Detector {
     private var screen: Box? = null
     private var nextDetectTs = -1.0
     private var score = 1.0
@@ -426,8 +456,8 @@ class LogoAbsenceDetector(private val cfg: LogoAbsenceConfig = LogoAbsenceConfig
         !active && inertReason == "no_screen" -> "no TV in view"
         !active && inertReason == "partial_screen" -> "whole TV not in view"
         !active && inertReason == "blurry" -> "picture blurred"
-        !sighted -> "looking for the bug"
-        absentSince != null -> "bug gone"
-        else -> "bug seen"
+        !sighted -> "looking for the $noun"
+        absentSince != null -> "$noun gone"
+        else -> "$noun seen"
     }
 }

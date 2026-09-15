@@ -102,6 +102,8 @@ data class Status(
     val teaching: Boolean = false,
     /** What the camera can see right now ("bug seen", "whole TV not in view", …); null without a camera. */
     val camera: String? = null,
+    /** What each AI judge last said, by detector name. */
+    val judges: Map<String, String> = emptyMap(),
     /** Seconds left of the quiet period after "Not an ad", 0 when none. */
     val quietS: Double = 0.0,
 )
@@ -148,11 +150,13 @@ class Engine(
 
     private val captions: TranscriptDetector? get() = detectors.firstOrNull { it is TranscriptDetector && it.name == "captions" } as TranscriptDetector?
 
-    /** Recognised words from the phone's speech engine; the transcript detector votes on the next audio tick. */
-    @Synchronized fun onWords(words: List<Word>) { val t = transcript ?: return; for (w in words) t.observeWord(w) }
+    private val judges: List<JudgeDetector> get() = detectors.filterIsInstance<JudgeDetector>()
 
-    /** Words read off the screen's caption band; the captions detector votes on the next audio tick. */
-    @Synchronized fun onCaptions(words: List<Word>) { val t = captions ?: return; for (w in words) t.observeWord(w) }
+    /** Recognised words from the phone's speech engine; the transcript detector and the judges see them. */
+    @Synchronized fun onWords(words: List<Word>) { for (w in words) { transcript?.observeWord(w); for (j in judges) j.observeWord(w) } }
+
+    /** Words read off the screen's caption band; the captions detector and the judges see them. */
+    @Synchronized fun onCaptions(words: List<Word>) { for (w in words) { captions?.observeWord(w); for (j in judges) j.observeWord(w) } }
 
     /** Repetition learning over the recent transcript and captions; how many new scripts were found. */
     @Synchronized fun learnScriptsFromTranscript(): Int = (transcript?.learnFromHistory() ?: 0) + (captions?.learnFromHistory() ?: 0)
@@ -171,6 +175,11 @@ class Engine(
         // The quiet period after "Not an ad": the evidence is still shown, but nothing acts on it.
         val decision = if (quiet) { fusion.reset(); MuteDecision(ts, false, 0.0, listOf("user:not_ad_quiet")) } else fusion.combine(votes, ts)
         lastDecision = decision
+        // The AI judges ask their question off this thread when the others are unsure; a learned script reloads the matchers.
+        for (j in judges) {
+            j.hint(ts, decision.confidence, controllerMuted)
+            if (j.scriptsDirty) { j.scriptsDirty = false; transcript?.refreshScripts(); captions?.refreshScripts() }
+        }
         if (override != Override.AUTO) return  // the user has taken the wheel
 
         val match = if (quiet) null else fingerprint?.activeMatch(ts)
@@ -297,6 +306,7 @@ class Engine(
         reasons = lastDecision?.reasons ?: emptyList(),
         adsLearned = store?.count() ?: 0,
         camera = logo?.describe(),
+        judges = judges.associate { it.name to it.describe() },
         quietS = max(0.0, quietUntil - lastTs),
     )
 
@@ -318,13 +328,15 @@ object Assembly {
         logo: LogoAbsenceDetector? = null,
         transcript: TranscriptDetector? = null,
         captions: TranscriptDetector? = null,
+        /** The AI judges (cloud and/or on the phone), each a detector in its own right. */
+        judges: List<JudgeDetector> = emptyList(),
         /** The audio methods can be switched off one by one; at least one method must remain. */
         silence: Boolean = true,
         loudness: Boolean = true,
         fingerprints: Boolean = true,
         notAdQuietS: Double = Engine.NOT_AD_QUIET_S,
     ): Engine {
-        val detectors = listOfNotNull<Detector>(if (silence) MicSilenceDetector() else null, if (loudness) LoudnessDetector() else null, logo, transcript, captions)
+        val detectors = listOfNotNull<Detector>(if (silence) MicSilenceDetector() else null, if (loudness) LoudnessDetector() else null, logo, transcript, captions) + judges
         require(detectors.isNotEmpty() || fingerprints) { "at least one method must be on" }
         val matcher = AudioMatcher(store, fpCfg)
         val fp = if (fingerprints) AudioFingerprintDetector(fpCfg, matcher) else null
@@ -332,6 +344,8 @@ object Assembly {
         var w = if (logo != null && "logo_absence" !in weights) weights + ("logo_absence" to LOGO_WEIGHT) else weights
         if (transcript != null && "transcript" !in w) w = w + ("transcript" to LOGO_WEIGHT)   // a known script mutes alone, like a missing logo
         if (captions != null && "captions" !in w) w = w + ("captions" to LOGO_WEIGHT)         // and so does a known script read off the screen
+        for (j in judges) if (j.name !in w) w = w + (j.name to LOGO_WEIGHT)                   // and an AI that says "commercial"
+        if (logo != null && logo.name !in w) w = w + (logo.name to LOGO_WEIGHT)               // the ticker detector under its own name
         val fusion = Fusion(fusionCfg, w, detectors.map { it.name } + listOfNotNull(fp?.name))
         return Engine(detectors, fusion, AdStateMachine(fusionCfg), controller, fp, if (fp != null) AudioLearner(store, matcher, fpCfg) else null, store, notAdQuietS)
     }

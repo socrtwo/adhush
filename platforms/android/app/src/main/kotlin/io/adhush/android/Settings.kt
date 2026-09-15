@@ -43,8 +43,24 @@ class Settings(context: Context) {
     /** Camera zoom ratio (1.0 = none) chosen on the setup screen; the service uses the same so the template fits. */
     var cameraZoom: Float get() = prefs.getFloat("camera_zoom", 1f); set(v) = prefs.edit().putFloat("camera_zoom", v).apply()
 
-    /** How many of the six methods are switched on. Zero means the app cannot work. */
-    val methodsOn: Int get() = listOf(silence, loudness, fingerprints, camera, speech, captions).count { it }
+    /** Method 7: ask Claude over the API (opt-in; text only ever leaves the phone). */
+    var judgeCloud: Boolean get() = prefs.getBoolean("judge_cloud", false); set(v) = prefs.edit().putBoolean("judge_cloud", v).apply()
+    var claudeKey: String get() = prefs.getString("claude_key", "") ?: ""; set(v) = prefs.edit().putString("claude_key", v).apply()
+    var claudeModel: String get() = prefs.getString("claude_model", "claude-haiku-4-5") ?: "claude-haiku-4-5"; set(v) = prefs.edit().putString("claude_model", v).apply()
+    /** "tie": ask only when the other methods are unsure or the set is ducked; "always": every ten seconds. */
+    var judgeMode: String get() = prefs.getString("judge_mode", "tie") ?: "tie"; set(v) = prefs.edit().putString("judge_mode", v).apply()
+    /** Method 8: a small language model on the phone. */
+    var judgeLocal: Boolean get() = prefs.getBoolean("judge_local", false); set(v) = prefs.edit().putBoolean("judge_local", v).apply()
+    var localModelUrl: String get() = prefs.getString("local_model_url", "") ?: ""; set(v) = prefs.edit().putString("local_model_url", v).apply()
+    /** The channel's name, for the judges' question ("MSNOW"). */
+    var channel: String get() = prefs.getString("channel", "") ?: ""; set(v) = prefs.edit().putString("channel", v).apply()
+    /** What the camera watches: "bug" (the corner logo) or "ticker" (a news channel's lower-third band). */
+    var cameraTarget: String get() = prefs.getString("camera_target", "bug") ?: "bug"; set(v) = prefs.edit().putString("camera_target", v).apply()
+    /** Which offline speech model: "small" (40 MB) or "medium" (128 MB, hears better). */
+    var speechModel: String get() = prefs.getString("speech_model", "small") ?: "small"; set(v) = prefs.edit().putString("speech_model", v).apply()
+
+    /** How many of the eight methods are switched on. Zero means the app cannot work. */
+    val methodsOn: Int get() = listOf(silence, loudness, fingerprints, camera, speech, captions, judgeCloud, judgeLocal).count { it }
     var irAddress: Int get() = prefs.getInt("ir_address", 1); set(v) = prefs.edit().putInt("ir_address", v).apply()
     var irVolumeUp: Int get() = prefs.getInt("ir_vol_up", 0x14); set(v) = prefs.edit().putInt("ir_vol_up", v).apply()
     var irVolumeDown: Int get() = prefs.getInt("ir_vol_down", 0x15); set(v) = prefs.edit().putInt("ir_vol_down", v).apply()
