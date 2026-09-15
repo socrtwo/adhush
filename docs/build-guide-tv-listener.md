@@ -65,6 +65,68 @@ that is on the same Wi-Fi, with **IP Control** switched on (Step 3).
    anywhere, and git ignores it, so the TV password you will type into it
    stays on the Pi.
 
+## Optional — put an SSD in the NESPi 4 cartridge (👨‍🔧 with an adult)
+
+Building the Pi into a Retroflag NESPi 4 case? Its front slot takes a
+"cartridge" that holds a 2.5-inch SATA SSD. AdHush does not need one: it
+stores only numbers, and a microSD card has room for years of them. But an
+SSD boots faster, shrugs off the thousands of tiny writes a box makes over
+a year, and is the part most likely to survive the case's POWER button
+cutting the power mid-write. If you have one, here is how to use it. Do
+this **after** Step 1 has worked from the microSD card, so you always have
+a card that boots. (The illustrated version is Step 2½ of
+`docs/print/AdHush-beginner-guide-listener-NESPi4.pdf`.)
+
+**You need:** a 2.5-inch **SATA** SSD, 7 mm thick (the normal laptop kind;
+120 GB is plenty). Not an M.2 or NVMe stick — those do not fit the
+cartridge. The cartridge shell comes in the case box.
+
+1. **Put the SSD in the cartridge.** Open the cartridge shell (the small
+   screws), slide the SSD onto the connector inside until it clicks, and
+   screw the shell shut. Push the cartridge into the slot behind the big
+   front flap. Nothing else to wire: the cartridge plugs into the Pi
+   through the case's own connection.
+2. **Copy the card onto the SSD.** With the Pi running from the microSD
+   card (Step 1 done, AdHush installed), open the menu → **Accessories →
+   SD Card Copier**. *Copy From Device:* the microSD card. *Copy To
+   Device:* the SSD (it shows up as a USB drive with the SSD's name). Tick
+   **New Partition UUIDs** and press **Start**. It takes a few minutes.
+   Everything comes along — AdHush, your settings file, and any breaks it
+   has learned.
+3. **Tell the Pi to boot from USB.** In the Terminal:
+
+   ```
+   sudo raspi-config
+   ```
+
+   Go to **Advanced Options → Boot Order → NVMe/USB Boot**, then Finish.
+   If it offers to update the bootloader, say yes. (Raspberry Pi 4 boards
+   made before late 2020 need this update once; a fresh Raspberry Pi OS
+   does it for you.)
+4. **Switch over.** Type `sudo poweroff`, wait for the green light to stop
+   blinking, press POWER, take the microSD card out of the slot on the
+   right side, and press POWER again. The Pi now starts from the SSD.
+   Keep the card somewhere safe: it is your spare.
+5. **Check.** Type `findmnt /` — it should say `/dev/sda2`, not
+   `/dev/mmcblk0p2`. Then carry on with Step 2 below.
+
+Two things to know:
+
+- The cartridge uses a USB 3.0 link, and USB 3.0 can put noise on 2.4 GHz
+  Wi-Fi. If the TV becomes "unreachable" now and then after adding the
+  SSD, join your router's 5 GHz network, or plug an Ethernet cable into
+  the back of the case — the surest fix.
+- With SAFE SHUTDOWN off, the POWER button cuts the power like pulling the
+  plug. The listener is meant to stay on, but when you do want it off,
+  type `sudo poweroff` first and press POWER when the green light has
+  stopped blinking.
+
+| Problem | Try |
+|---|---|
+| It still boots from the card | Take the card out; re-check Boot Order (step 3) |
+| Rainbow screen or "no boot device" | Reseat the cartridge, then the SSD inside it; put the card back to prove the Pi is fine |
+| Very slow or freezes with the SSD | A few USB-to-SATA bridges misbehave with the Pi 4. Ask an adult to search "Raspberry Pi 4 usb-storage quirks" for the one-line fix in `/boot/firmware/cmdline.txt` |
+
 ## Step 2 — Find the eyes and ears
 
 Type:
