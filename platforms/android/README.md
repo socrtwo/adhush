@@ -110,7 +110,7 @@ file.
 - **Material / remembered break** — the audio fingerprint (numbers, not a
   recording) of a break you bracketed with *Is an ad* and *Show's back*.
 
-## The eight methods
+## The nine methods
 
 | # | Method | What it uses | Can duck alone? |
 |---|---|---|---|
@@ -122,6 +122,7 @@ file.
 | 6 | On-screen captions | camera: the caption band read as text: scripts | yes |
 | 7 | Ask Claude | the words of 5 or 6 judged by Claude over the API (opt-in, paid) | yes |
 | 8 | Local AI | the words of 5 or 6 judged by a small model on the phone (free) | yes |
+| 9 | Break clock | the minute of the hour, learned from every confirmed break | no — tips the balance |
 
 **Not an ad** now does three things: restores the volume, tells every
 method it was wrong (the camera must see the bug again before it may call
@@ -302,3 +303,15 @@ buried under the room — fans louder than a TV at volume 4 — loudness says
 `ducked_buried` and goes inert, and the camera, the fingerprints and the AI
 judges carry the unmute. A duck level of 8–10 keeps the set audible to the
 mic and lets loudness time the unmute itself.
+
+## Manual duck and the remote (0.18.0)
+
+Four buttons on Home turn the TV down for 30, 60, 90 or 120 seconds and
+bring it back on their own, whatever the methods think; pressed while
+already ducked they extend, Show's back ends them early, nothing is learned.
+**Open the remote control** shows every key of the Sharp handset (through
+the network or the serial cable: `RCKY` codes; infrared knows only volume
+and mute) together with Start, Stop, Is an ad, Show's back, Not an ad and
+the timed ducks. While AdHush runs the keys go through its connection, since
+the Sharp allows one; otherwise the screen opens its own and closes it when
+it leaves the foreground (ADR 0017).

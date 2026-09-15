@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from adhush.control.base import ControlError, MuteController
+from adhush.control.remote_keys import SHARP_RCKY
 
 log = logging.getLogger(__name__)
 
@@ -102,6 +103,12 @@ class SharpRs232Controller(MuteController):
         if reply == "ERR" or not reply:
             raise ControlError(f"device rejected {command} {parameter}: {reply or 'timeout'}")
         return reply
+
+    def send_key(self, key: str) -> None:
+        code = SHARP_RCKY.get(key)
+        if code is None:
+            raise ControlError(f"unknown remote key '{key}'")
+        self._exchange("RCKY", str(code))
 
     # -- ducking ---------------------------------------------------------------
 

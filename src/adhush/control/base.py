@@ -31,5 +31,10 @@ class MuteController(ABC):
     def supports_discrete(self) -> bool:
         """True if mute()/unmute() are discrete commands rather than a toggle."""
 
+    def send_key(self, key: str) -> None:
+        """Press a remote-control key (a name from control.remote_keys) on the
+        set. Backends that only know mute raise ControlError."""
+        raise ControlError("this control backend cannot press remote keys")
+
     def close(self) -> None:
         """Release any device handle. Safe to call twice."""

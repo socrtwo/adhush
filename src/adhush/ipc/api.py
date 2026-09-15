@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from adhush.config import IpcConfig
+from adhush.control.base import ControlError
 from adhush.engine import Pipeline
 from adhush.ipc.protocol import Command, ProtocolError, encode_event, parse_command
 
@@ -254,6 +255,14 @@ class ApiServer:
             return {"ok": self._pipeline.show_back()}
         if command.type == "reject_ad":
             return {"ok": self._pipeline.reject_ad()}
+        if command.type == "duck_for":
+            return {"ok": self._pipeline.duck_for(float(command.seconds))}
+        if command.type == "remote":
+            try:
+                self._pipeline.press_key(command.key)
+            except ControlError as exc:
+                return {"ok": False, "error": str(exc)}
+            return {"ok": True, "key": command.key}
         if command.type == "shutdown":
             if self._on_shutdown is None:
                 return {"ok": False, "error": "shutdown not available on this core"}

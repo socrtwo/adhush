@@ -18,6 +18,10 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import io.adhush.core.AdState
 import io.adhush.core.Assembly
+import io.adhush.core.ClockDetector
+import io.adhush.core.FileClockStore
+import io.adhush.core.RemoteKey
+import io.adhush.core.press
 import io.adhush.core.ControlError
 import io.adhush.core.DuckController
 import io.adhush.core.HANDHELD_LOGO_CONFIG
@@ -110,6 +114,12 @@ class AdHushService : Service(), LifecycleOwner {
             ACTION_NOT_AD -> { io.execute { engine?.rejectAd(now()) }; return START_STICKY }
             ACTION_IS_AD -> { io.execute { engine?.confirmAd(now()) }; return START_STICKY }
             ACTION_SHOW_BACK -> { io.execute { engine?.showIsBack(now()); refresh() }; return START_STICKY }
+            ACTION_DUCK_FOR -> {
+                val seconds = intent.getIntExtra(EXTRA_SECONDS, 60).coerceIn(5, 600)
+                io.execute { if (engine?.duckFor(now(), seconds.toDouble()) == true) refresh() else main.post { update("could not duck (an override is on?)") } }
+                return START_STICKY
+            }
+            ACTION_KEY -> { intent.getStringExtra(EXTRA_KEY)?.let { k -> io.execute { pressKey(k) } }; return START_STICKY }
             ACTION_RESTORE -> { io.execute { runCatching { controller?.restore() }; refresh() }; return START_STICKY }
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_SURVEY -> {
@@ -170,6 +180,7 @@ class AdHushService : Service(), LifecycleOwner {
         val speechWanted = settings.speech && SpeechSource.isInstalled(this)
         val cloudWanted = settings.judgeCloud && settings.claudeKey.isNotBlank()
         val localWanted = settings.judgeLocal && LocalJudge.isInstalled(this)
+        val breakClock = if (settings.clock) ClockDetector(FileClockStore(File(filesDir, CLOCK_FILE))) else null   // not `clock`, the m:ss helper
         val scriptStore = if (speechWanted || captionsWanted || cloudWanted || localWanted) FileScriptStore(File(filesDir, SCRIPTS_FILE)).also { scripts = it } else null
         val transcript = if (speechWanted) scriptStore?.let { TranscriptDetector(it) } else null
         val captions = if (captionsWanted) scriptStore?.let { TranscriptDetector(it, name = "captions") } else null
@@ -189,7 +200,7 @@ class AdHushService : Service(), LifecycleOwner {
         }
         val eng = try {
             Assembly.engine(NetworkedController(ctl), store, logo = logo, transcript = transcript, captions = captions, judges = judges,
-                silence = settings.silence, loudness = settings.loudness, fingerprints = settings.fingerprints)
+                silence = settings.silence, loudness = settings.loudness, fingerprints = settings.fingerprints, clock = breakClock)
         } catch (e: IllegalArgumentException) {
             update("no method is switched on — turn one on under Methods"); runCatching { ctl.close() }; controller = null; stopSelf(); return
         }
@@ -202,6 +213,7 @@ class AdHushService : Service(), LifecycleOwner {
             cloud = cloudWanted, cloudNoKey = settings.judgeCloud && !cloudWanted,
             local = localJudge != null, localNoModel = settings.judgeLocal && !LocalJudge.isInstalled(this),
             judgesDeaf = judges.isNotEmpty() && !speechWanted && !captionsWanted,
+            clock = breakClock != null,
         )
         io.execute {
             try {
@@ -397,12 +409,24 @@ class AdHushService : Service(), LifecycleOwner {
 
     // -- notification ---------------------------------------------------------
 
+    /** A remote-control key through the live connection (ADR 0017); the Sharp allows one, so it must be this one while running. */
+    private fun pressKey(name: String) {
+        val key = RemoteKey.of(name) ?: return
+        val c = controller
+        try {
+            if (c is SharpController) { if (!c.client.press(key)) main.post { update("the set did not accept ${key.label}") } }
+            else main.post { update("remote keys need the network or the serial cable; infrared knows only volume and mute") }
+        } catch (e: ControlError) { main.post { update("remote ${key.label} failed: ${e.message}") } }
+    }
+
     private fun describe(s: Status): String {
+        if (s.timedS > 0.0) return "DUCKED — for ${s.timedS.toInt()} s more (manual) · ${s.adsLearned} learned"
         if (s.teaching) return "TEACHING — ducked; press Show's back when the show returns · ${s.adsLearned} learned"
         val state = if (s.override != CoreOverride.AUTO) "override: ${s.override.wire}" else if (s.muted) "DUCKED — ad" else if (s.quietS > 0.0) "SHOW (you said not an ad; ${s.quietS.toInt()} s of quiet)" else if (s.state == AdState.PROGRAM) "SHOW" else s.state.wire.uppercase()
         val cam = s.camera?.let { " · camera: $it" } ?: ""
         val ai = s.judges.entries.joinToString("") { (k, v) -> " · ${if (k == "judge_claude") "Claude" else "local AI"}: $v" }
-        return "$state · ${"%.2f".format(s.confidence)}$cam$ai · ${s.adsLearned} learned"
+        val clk = s.clock?.let { " · clock $it" } ?: ""
+        return "$state · ${"%.2f".format(s.confidence)}$cam$ai$clk · ${s.adsLearned} learned"
     }
 
     private fun refresh() { lastStatus?.let { update(describe(it)) } }
@@ -466,6 +490,7 @@ class AdHushService : Service(), LifecycleOwner {
         val local: Boolean = false, val localNoModel: Boolean = false,
         /** An AI judge is on but neither speech nor captions feed it words. */
         val judgesDeaf: Boolean = false,
+        val clock: Boolean = false,
     )
 
     companion object {
@@ -485,6 +510,11 @@ class AdHushService : Service(), LifecycleOwner {
         const val ACTION_CAMERA_SETUP = "io.adhush.android.CAMERA_SETUP"
         const val ACTION_LEARN_SCRIPTS = "io.adhush.android.LEARN_SCRIPTS"
         const val ACTION_TEST = "io.adhush.android.TEST"
+        const val ACTION_DUCK_FOR = "io.adhush.android.DUCK_FOR"
+        const val EXTRA_SECONDS = "seconds"
+        const val ACTION_KEY = "io.adhush.android.KEY"
+        const val EXTRA_KEY = "key"
+        const val CLOCK_FILE = "clock.tsv"
         const val BROADCAST_TEST = "io.adhush.android.TEST_LINE"
         const val SCRIPTS_FILE = "scripts.tsv"
         const val REPEAT_LEARN_MS = 10 * 60 * 1000L

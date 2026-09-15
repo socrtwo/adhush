@@ -61,8 +61,11 @@ class Settings(context: Context) {
     /** Which offline speech model: "small" (40 MB) or "medium" (128 MB, hears better). */
     var speechModel: String get() = prefs.getString("speech_model", "small") ?: "small"; set(v) = prefs.edit().putString("speech_model", v).apply()
 
-    /** How many of the eight methods are switched on. Zero means the app cannot work. */
-    val methodsOn: Int get() = listOf(silence, loudness, fingerprints, camera, speech, captions, judgeCloud, judgeLocal).count { it }
+    /** Method 9: the break clock, a learned minute-of-hour prior (ADR 0017). On by default; inert until it has learned. */
+    var clock: Boolean get() = prefs.getBoolean("clock", true); set(v) = prefs.edit().putBoolean("clock", v).apply()
+
+    /** How many of the nine methods are switched on. Zero means the app cannot work. */
+    val methodsOn: Int get() = listOf(silence, loudness, fingerprints, camera, speech, captions, judgeCloud, judgeLocal, clock).count { it }
     var irAddress: Int get() = prefs.getInt("ir_address", 1); set(v) = prefs.edit().putInt("ir_address", v).apply()
     var irVolumeUp: Int get() = prefs.getInt("ir_vol_up", 0x14); set(v) = prefs.edit().putInt("ir_vol_up", v).apply()
     var irVolumeDown: Int get() = prefs.getInt("ir_vol_down", 0x15); set(v) = prefs.edit().putInt("ir_vol_down", v).apply()

@@ -150,3 +150,23 @@ def test_null_controller_records() -> None:
     controller.mute()
     controller.unmute()
     assert [a for _, a in controller.actions] == ["mute", "unmute"]
+
+
+class TestRemoteKeys:
+    def test_rs232_presses_a_key_by_rcky_code(self) -> None:
+        from adhush.control.remote_keys import KEY_NAMES, SHARP_RCKY
+        from adhush.control.rs232_sharp import SharpRs232Controller
+
+        link = FakeLink([b"OK\r"])
+        controller = SharpRs232Controller({}, link=link)
+        controller.send_key("power")
+        assert link.written[-1] == b"RCKY12  \r"
+        with pytest.raises(ControlError, match="unknown remote key"):
+            controller.send_key("warp")
+        assert "vol_up" in KEY_NAMES and SHARP_RCKY["vol_up"] == 33
+
+    def test_backends_without_keys_say_so(self) -> None:
+        from adhush.control import NullController
+
+        with pytest.raises(ControlError, match="cannot press"):
+            NullController().send_key("power")

@@ -26,6 +26,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".CameraSetupActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".RemoteActivity" android:exported="false" android:label="AdHush remote" />
         <service
             android:name=".AdHushService"
             android:exported="false"

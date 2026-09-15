@@ -313,3 +313,56 @@ class TestStaticFrontEnd:
 
         root = resolve_web_root("platforms/web")
         assert root is not None and (root / "manifest.webmanifest").is_file()
+
+
+class TestTimedDuckAndRemote:
+    """ADR 0017: a timed manual duck through the API, and remote keys."""
+
+    def test_command_validation(self) -> None:
+        assert parse_command('{"type": "duck_for", "seconds": 60}').seconds == 60
+        with pytest.raises(ProtocolError, match="1..600"):
+            parse_command('{"type": "duck_for", "seconds": 0}')
+        with pytest.raises(ProtocolError, match="number"):
+            parse_command('{"type": "duck_for", "seconds": "soon"}')
+        assert parse_command('{"type": "remote", "key": "power"}').key == "power"
+        with pytest.raises(ProtocolError, match="remote key"):
+            parse_command('{"type": "remote", "key": "self_destruct"}')
+
+    def test_timed_duck_mutes_now_and_restores_on_its_own(self) -> None:
+        import numpy as np
+
+        from adhush.events import FrameEvent
+
+        pipeline, controller, machine = _pipeline()
+        frame = np.full((48, 64), 128, dtype=np.uint8)
+        ts = 0.0
+        for _ in range(5):
+            pipeline.process(FrameEvent(ts=ts, frame=frame))
+            ts += 0.1
+        assert pipeline.duck_for(30.0)
+        assert machine.state is AdState.AD and controller.actions[-1][1] == "mute"
+        assert 29.0 <= pipeline.status()["timed_s"] <= 30.5
+        assert pipeline.status()["teaching"] is False
+        while ts < 29.5:
+            pipeline.process(FrameEvent(ts=ts, frame=frame))
+            ts += 0.1
+        assert controller.actions[-1][1] == "mute", "still ducked at 29 s"
+        while ts < 32.0:
+            pipeline.process(FrameEvent(ts=ts, frame=frame))
+            ts += 0.1
+        assert controller.actions[-1][1] == "unmute" and machine.state is not AdState.AD
+        assert pipeline.transitions[-1].reasons == ("user:timed_end",)
+        # Pressed again during the recovery pause it still ducks; Show's back ends it early.
+        assert pipeline.duck_for(60.0) and controller.actions[-1][1] == "mute"
+        assert pipeline.show_back() and controller.actions[-1][1] == "unmute"
+
+    def test_remote_key_reaches_the_controller_or_reports_why_not(self) -> None:
+        pipeline, controller, _ = _pipeline()
+        server = _serve(pipeline)
+        try:
+            status, body = _post(server, {"type": "remote", "key": "power"})
+            assert status == 200 and body["ok"] is False and "remote keys" in body["error"]
+            status, body = _post(server, {"type": "duck_for", "seconds": 30})
+            assert status == 200 and body["ok"] is True and controller.actions[-1][1] == "mute"
+        finally:
+            server.close()

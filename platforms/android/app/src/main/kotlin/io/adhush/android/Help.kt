@@ -94,6 +94,19 @@ object Help {
         "Same rules as the bug: the whole TV must be in view, the band must have been seen once before its absence counts, and it must be gone for 2.5 seconds. " +
         "It works on channels that keep a ticker up through the whole show; some shows drop it for interviews, which would read as a commercial — then use the bug instead.")
 
+    val CLOCK = Topic("Method 9 — the break clock",
+        "Cable news runs to a format clock: the breaks land at roughly the same minutes every hour, but the clock is not published and it is not exact, so nothing is hard-coded. " +
+        "Instead the app keeps a score for each minute of the hour. Every break the other methods or you confirm marks the minutes it covered; every minute the app watches counts as watched.\n\n" +
+        "Once a minute has been watched in three different hours it starts to vote: a break in most of those hours is a strong vote, never a break is a vote for the show. " +
+        "It is a light vote — on its own it can never duck — but when Loudness or Quiet gaps are halfway sure, the clock tips the balance. " +
+        "The status line shows what it thinks of the current minute. It is on by default and stays quiet until it has learned.")
+
+    val TIMED = Topic("Manual duck and the remote",
+        "The four buttons turn the TV down for exactly that long — 30, 60, 90 or 120 seconds — whatever the methods think, then bring it back up on their own. " +
+        "Pressed while the TV is already ducked, they keep it down for that long instead. Show's back ends one early. Nothing is learned from a manual duck.\n\n" +
+        "The remote control page has every button of the TV's own remote (through the network or the serial cable — infrared knows only volume and mute) plus Start, Stop, Is an ad, Show's back, Not an ad and the four timed ducks, " +
+        "so one screen does it all. When AdHush is running, the keys go through its connection; the Sharp allows only one.")
+
     val METHODS = Topic("Choosing methods",
         "Any mix of the eight methods can be on, but AT LEAST ONE must be on or the app has nothing to go on and will refuse to start.\n\n" +
         "Quiet gaps and loudness jumps are hints: two of them have to agree before the TV is ducked. Remembered breaks, the channel bug or ticker, spoken words, captions, and the two AI judges are each strong enough to duck on their own.\n\n" +
@@ -104,7 +117,7 @@ object Help {
         "Test TV talks to the set the way the app does when a commercial comes on: it asks the volume, mutes and unmutes, ducks and restores, and prints every byte it sent and got back. " +
         "If the sound dips twice, the connection works. It uses whatever connection is chosen on the TV page — network, serial cable or infrared.")
 
-    val ALL = listOf(METHODS, BUG, TICKER, SCRIPT, DUCK, TEACH, TEST, SILENCE, LOUDNESS, FINGERPRINTS, CAMERA, SPEECH, CAPTIONS, CLAUDE, LOCAL)
+    val ALL = listOf(METHODS, BUG, TICKER, SCRIPT, DUCK, TEACH, TIMED, TEST, SILENCE, LOUDNESS, FINGERPRINTS, CAMERA, SPEECH, CAPTIONS, CLAUDE, LOCAL, CLOCK)
 
     fun show(context: Context, topic: Topic) {
         MaterialAlertDialogBuilder(context).setTitle(topic.title).setMessage(topic.body).setPositiveButton("Got it", null).show()

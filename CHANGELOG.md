@@ -3,6 +3,22 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.18.0] - 2026-09-15
+### Added
+- **Method 9, the break clock** (ADR 0017): learns which minutes of the
+  hour the breaks land on from every confirmed break, votes once a minute
+  has been watched in three hours, never ducks alone. Phone and Python;
+  `[detect.clock]`, `clock.tsv`.
+- **Timed manual duck**: 30, 60, 90 or 120 seconds, then back up on its
+  own; works from any state, extends when already ducked, "Show's back"
+  ends it, nothing is learned. Home page, the remote, the web page
+  (`duck_for` IPC command; `timed_s` in status).
+- **Remote control**: every key of the Sharp handset through the control
+  port (`RCKY`), on a phone screen that also carries Start, Stop, Is an
+  ad, Show's back, Not an ad and the timed ducks; the same grid on the web
+  page (`remote` IPC command, `send_key` on controllers,
+  `commands.remote_key` in the Sharp profile).
+
 ## [0.17.0] - 2026-09-15
 ### Added
 - **Three sizes of local AI** on Android (method 8): Qwen 2.5 0.5B

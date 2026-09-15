@@ -106,6 +106,10 @@ data class Status(
     val judges: Map<String, String> = emptyMap(),
     /** Seconds left of the quiet period after "Not an ad", 0 when none. */
     val quietS: Double = 0.0,
+    /** Seconds left of a timed manual duck, 0 when none. */
+    val timedS: Double = 0.0,
+    /** What the break clock thinks of this minute; null without the clock. */
+    val clock: String? = null,
 )
 
 /**
@@ -124,8 +128,13 @@ class Engine(
     private val store: FingerprintStore? = null,
     /** After "Not an ad", no automatic duck for this long: the user's word outranks the detectors for a while. */
     private val notAdQuietS: Double = NOT_AD_QUIET_S,
+    /** Wall-clock seconds, for the break clock; media time is not enough to know the minute of the hour. */
+    private val wallClock: () -> Double = { System.currentTimeMillis() / 1000.0 },
 ) {
-    private enum class Source { FUSION, FINGERPRINT, USER }
+    private enum class Source { FUSION, FINGERPRINT, USER, TIMED }
+    /** A timed manual duck ends at this media time (ADR 0017). */
+    private var timedUntil: Double? = null
+    private var adStartWall = 0.0
     private var quietUntil = -1.0
     private var lastTs = 0.0
 
@@ -163,11 +172,14 @@ class Engine(
 
     private val logo: LogoAbsenceDetector? get() = detectors.firstOrNull { it is LogoAbsenceDetector } as LogoAbsenceDetector?
 
+    private val clock: ClockDetector? get() = detectors.firstOrNull { it is ClockDetector } as ClockDetector?
+
     @Synchronized fun onAudio(block: AudioBlock) {
         for (d in detectors) d.observeAudio(block)
         fingerprint?.observeAudio(block)
         val ts = block.ts
         lastTs = ts
+        clock?.tick(wallClock())
         // An inert detector (the camera with no whole screen in view) casts no vote and leaves the normaliser alone.
         val voting = detectors.filter { it.voting }
         val votes = voting.map { it.vote(ts) } + (fingerprint?.vote(ts)?.let { listOf(it) } ?: emptyList())
@@ -180,6 +192,7 @@ class Engine(
             j.hint(ts, decision.confidence, controllerMuted)
             if (j.scriptsDirty) { j.scriptsDirty = false; transcript?.refreshScripts(); captions?.refreshScripts() }
         }
+        timedUntil?.let { if (ts >= it) { endTimed(ts); return } }
         if (override != Override.AUTO) return  // the user has taken the wheel
 
         val match = if (quiet) null else fingerprint?.activeMatch(ts)
@@ -197,12 +210,14 @@ class Engine(
         when (action) {
             Action.MUTE -> {
                 drive(true, ts)
-                adStartTs = ts; adSource = source; activeAdId = match?.adId
+                adStartTs = ts; adSource = source; activeAdId = match?.adId; adStartWall = wallClock()
             }
             Action.UNMUTE -> {
                 drive(false, ts)
                 val start = adStartTs; val src = adSource; val adId = activeAdId
                 adStartTs = null; adSource = null; activeAdId = null; userHold = false
+                // The break clock learns every real break; a timed manual duck teaches nothing.
+                if (start != null && src != null && src != Source.TIMED) clock?.learn(adStartWall, wallClock())
                 if (start != null && learner != null && fingerprint != null) {
                     val duration = ts - start
                     when (src) {
@@ -212,7 +227,7 @@ class Engine(
                             learner.learnMaterial(start, ts, fingerprint.audioBetween(start, ts))?.let { fingerprint.holdOffAfterLearning(ts) }
                             transcript?.learnWindow(start, ts)   // the words of the break are a script too
                         }
-                        null -> {}
+                        Source.TIMED, null -> {}
                     }
                 }
                 fingerprint?.abortMatch()
@@ -251,10 +266,34 @@ class Engine(
     }
 
     /**
+     * A timed manual duck (ADR 0017): turn the set down now and back up after
+     * [seconds], whatever the detectors say in between; nothing is learned.
+     * Pressed while already ducked, it keeps the duck for that long instead.
+     */
+    @Synchronized fun duckFor(now: Double, seconds: Double): Boolean {
+        if (override != Override.AUTO) return false
+        if (machine.state == AdState.AD) { timedUntil = now + seconds; adSource = Source.TIMED; userHold = true; emit(); return true }
+        val action = machine.userMute(now) ?: return false
+        timedUntil = now + seconds
+        userHold = true
+        apply(action, now, 1.0, listOf("user:timed ${seconds.toInt()}"), Source.TIMED, null)
+        return true
+    }
+
+    private fun endTimed(now: Double): Boolean {
+        timedUntil = null
+        val action = machine.cancelAd(now) ?: return false
+        apply(action, now, 0.0, listOf("user:timed_end"), Source.TIMED, null)
+        fusion.reset()
+        return true
+    }
+
+    /**
      * "▶ Show's back": in teach mode, restore and learn the bracketed break. On an
      * automatic duck that overran, just restore — nothing is learned or forgotten.
      */
     @Synchronized fun showIsBack(now: Double): Boolean {
+        if (timedUntil != null) return endTimed(now)
         if (userHold) {
             val action = machine.cancelAd(now) ?: return false
             apply(action, now, 0.0, listOf("user:show_back"), Source.USER, null)
@@ -269,6 +308,7 @@ class Engine(
         val adId = activeAdId; val src = adSource
         val action = machine.cancelAd(now)
         if (action == null) return false
+        timedUntil = null
         drive(false, now)
         adStartTs = null; adSource = null; activeAdId = null; userHold = false
         if (src == Source.FINGERPRINT && adId != null) learner?.forget(adId)
@@ -284,6 +324,7 @@ class Engine(
     /** The user touched the remote: leave AD without learning or forgetting anything. */
     @Synchronized fun standDown(now: Double): Boolean {
         val action = machine.cancelAd(now) ?: return false
+        timedUntil = null
         controllerMuted = false   // the controller already stood down on its own
         for (d in detectors) d.audioDucked(now, false)
         adStartTs = null; adSource = null; activeAdId = null; userHold = false
@@ -320,6 +361,8 @@ class Engine(
         camera = logo?.describe(),
         judges = judges.associate { it.name to it.describe() },
         quietS = max(0.0, quietUntil - lastTs),
+        timedS = timedUntil?.let { max(0.0, it - lastTs) } ?: 0.0,
+        clock = clock?.describe(),
     )
 
     fun close() { runCatching { controller.close() } }
@@ -347,8 +390,11 @@ object Assembly {
         loudness: Boolean = true,
         fingerprints: Boolean = true,
         notAdQuietS: Double = Engine.NOT_AD_QUIET_S,
+        /** The break clock (ADR 0017); a default-weight vote that tips the balance, never ducks alone. */
+        clock: ClockDetector? = null,
+        wallClock: () -> Double = { System.currentTimeMillis() / 1000.0 },
     ): Engine {
-        val detectors = listOfNotNull<Detector>(if (silence) MicSilenceDetector() else null, if (loudness) LoudnessDetector() else null, logo, transcript, captions) + judges
+        val detectors = listOfNotNull<Detector>(if (silence) MicSilenceDetector() else null, if (loudness) LoudnessDetector() else null, logo, transcript, captions, clock) + judges
         require(detectors.isNotEmpty() || fingerprints) { "at least one method must be on" }
         val matcher = AudioMatcher(store, fpCfg)
         val fp = if (fingerprints) AudioFingerprintDetector(fpCfg, matcher) else null
@@ -359,7 +405,7 @@ object Assembly {
         for (j in judges) if (j.name !in w) w = w + (j.name to LOGO_WEIGHT)                   // and an AI that says "commercial"
         if (logo != null && logo.name !in w) w = w + (logo.name to LOGO_WEIGHT)               // the ticker detector under its own name
         val fusion = Fusion(fusionCfg, w, detectors.map { it.name } + listOfNotNull(fp?.name))
-        return Engine(detectors, fusion, AdStateMachine(fusionCfg), controller, fp, if (fp != null) AudioLearner(store, matcher, fpCfg) else null, store, notAdQuietS)
+        return Engine(detectors, fusion, AdStateMachine(fusionCfg), controller, fp, if (fp != null) AudioLearner(store, matcher, fpCfg) else null, store, notAdQuietS, wallClock)
     }
 
     const val LOGO_WEIGHT = 3 * Fusion.DEFAULT_WEIGHT

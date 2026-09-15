@@ -23,5 +23,6 @@
     <color name="method_captions">#D81B60</color>
     <color name="method_claude">#C77C2E</color>
     <color name="method_local">#3949AB</color>
+    <color name="method_clock">#5D4037</color>
     <color name="method_off">#9E9E9E</color>
 </resources>

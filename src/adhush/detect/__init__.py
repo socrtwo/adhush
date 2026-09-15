@@ -7,6 +7,7 @@ import logging
 from adhush.config import DetectConfig, FingerprintConfig
 from adhush.detect.base import Detector
 from adhush.detect.black_frame import BlackFrameDetector
+from adhush.detect.clock import ClockDetector
 from adhush.detect.fingerprint import FingerprintDetector
 from adhush.detect.logo_absence import LogoAbsenceDetector
 from adhush.detect.loudness import LoudnessDetector
@@ -25,6 +26,7 @@ _REGISTRY: dict[str, type[Detector]] = {
     LogoAbsenceDetector.name: LogoAbsenceDetector,
     SceneCutDetector.name: SceneCutDetector,
     FingerprintDetector.name: FingerprintDetector,
+    ClockDetector.name: ClockDetector,
 }
 
 
@@ -59,6 +61,8 @@ def build_detectors(
             detectors.append(LoudnessDetector(config.loudness))
         elif cls is SceneCutDetector:
             detectors.append(SceneCutDetector(config.scene_cut))
+        elif cls is ClockDetector:
+            detectors.append(ClockDetector(config.clock))
         elif cls is LogoAbsenceDetector:
             logo = LogoAbsenceDetector(config.logo_absence)
             if logo.calibrated:

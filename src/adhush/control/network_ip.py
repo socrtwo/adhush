@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from adhush.control.base import ControlError, MuteController
+from adhush.control.remote_keys import SHARP_RCKY
 
 log = logging.getLogger(__name__)
 
@@ -343,6 +344,14 @@ class NetworkIpController(MuteController):
         if status >= 400:
             raise ControlError(f"tv rejected {name}: HTTP {status}")
         return reply
+
+    def send_key(self, key: str) -> None:
+        code = SHARP_RCKY.get(key)
+        if code is None:
+            raise ControlError(f"unknown remote key '{key}'")
+        if "remote_key" not in self._commands:
+            raise ControlError("network_ip remote keys need a commands.remote_key in the profile")
+        self._run("remote_key", code=code)
 
     # -- ducking ---------------------------------------------------------------
 

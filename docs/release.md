@@ -1,11 +1,11 @@
-# Release 0.17.0 — what runs where
+# Release 0.18.0 — what runs where
 
 The honest platform matrix for this release. "Core" is the Python engine
 (`adhush run`); "UI" is what you look at and tap.
 
 | Platform | Core runs here? | Always running | Always-on-top mini window | How to get it |
 |---|---|---|---|---|
-| **Windows** | yes | `adhush service install` (Task Scheduler, at logon) | `adhush overlay` (Tk) — also the Mini window button in Chrome/Edge | `pip install adhush-0.17.0-py3-none-any.whl` |
+| **Windows** | yes | `adhush service install` (Task Scheduler, at logon) | `adhush overlay` (Tk) — also the Mini window button in Chrome/Edge | `pip install adhush-0.18.0-py3-none-any.whl` |
 | **macOS** | yes | `adhush service install` (launchd agent) | `adhush overlay` (Tk); Mini window in Chrome/Edge | wheel; tkinter ships with python.org Python |
 | **Linux / Raspberry Pi** | yes (reference) | desktop: `adhush service install` (systemd --user); headless box: `scripts/install-pi.sh` | `adhush overlay` (Tk; `apt install python3-tk`) | wheel or `pip install -e .` |
 | **ChromeOS** | yes, in the Linux container | `adhush service install` inside the container | Chrome's Mini window (Document Picture-in-Picture) floats above everything; the Tk overlay works inside the container's window | wheel in Crostini, then open the served page in Chrome |
@@ -26,6 +26,12 @@ and keeps going until you stop it. Stopping is deliberate and explicit:
 
 Closing the mini window with the right-click menu's *Hide* does not stop the
 core. Only ■ does.
+
+## New in 0.18.0
+
+The break clock (method 9, a learned minute-of-hour prior), timed manual
+ducks (30/60/90/120 s) and a remote control with every TV key and every
+AdHush control on one screen — phone, web page and Python core (ADR 0017).
 
 ## New in 0.17.0
 
@@ -51,7 +57,7 @@ the Python listener and the phone, and three sizes of local AI on Android
 
 ```
 python -m build                       # dist/adhush-0.17.0-py3-none-any.whl, .tar.gz
-(cd platforms/web && zip -r ../../dist/adhush-web-0.17.0.zip .)
+(cd platforms/web && zip -r ../../dist/adhush-web-0.18.0.zip .)
 ```
 
 Pushing a `v*` tag runs `.github/workflows/release.yml`, which does the same

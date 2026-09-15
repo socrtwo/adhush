@@ -220,6 +220,8 @@ class SharpIpClient(private val transport: AquosTransport) {
         return "OK" in reply
     }
 
+    /** RCKY: a remote-control key by its two-digit code (see [RemoteKey]). */
+    fun remoteKey(code: Int): Boolean { require(code in 0..99); return expectOk("RCKY", code.toString()) }
     fun muteOn(): Boolean = expectOk("MUTE", "1")
     fun muteOff(): Boolean = expectOk("MUTE", "2")
     fun setVolume(level: Int): Boolean { require(level in 0..60); return expectOk("VOLM", level.toString()) }
@@ -245,7 +247,7 @@ class MemoryDuckPersistence : DuckPersistence {
  * not the duck level and stands down.
  */
 class SharpController(
-    private val client: SharpIpClient,
+    val client: SharpIpClient,
     private val persistence: DuckPersistence,
     val duckLevel: Int = 4,
     var normalVolume: Int = 20,

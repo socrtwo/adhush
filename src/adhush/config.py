@@ -9,7 +9,8 @@ from typing import Any
 
 PHASE1_DETECTORS = ("black_frame", "silence", "loudness")
 PHASE2_DETECTORS = ("logo_absence", "scene_cut", "fingerprint")
-IMPLEMENTED_DETECTORS = PHASE1_DETECTORS + PHASE2_DETECTORS
+PHASE3_DETECTORS = ("clock",)
+IMPLEMENTED_DETECTORS = PHASE1_DETECTORS + PHASE2_DETECTORS + PHASE3_DETECTORS
 KNOWN_DETECTORS = IMPLEMENTED_DETECTORS + ("aspect_change", "caption_gap")
 KNOWN_CAPTURE_BACKENDS = (
     "hdmi_uvc",
@@ -111,6 +112,17 @@ class SceneCutConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ClockConfig:
+    """The break clock (ADR 0017): a learned minute-of-hour prior."""
+
+    file: str = "data/clock.tsv"
+    min_hours: int = 3  # a minute votes once watched in this many distinct hours
+    full_fraction: float = 0.6  # this fraction of watched hours being a break = certainty
+    min_break_s: float = 15.0
+    max_break_s: float = 300.0
+
+
+@dataclass(frozen=True, slots=True)
 class DetectConfig:
     enabled: tuple[str, ...] = IMPLEMENTED_DETECTORS
     black_frame: BlackFrameConfig = field(default_factory=BlackFrameConfig)
@@ -118,6 +130,7 @@ class DetectConfig:
     loudness: LoudnessConfig = field(default_factory=LoudnessConfig)
     logo_absence: LogoAbsenceConfig = field(default_factory=LogoAbsenceConfig)
     scene_cut: SceneCutConfig = field(default_factory=SceneCutConfig)
+    clock: ClockConfig = field(default_factory=ClockConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,6 +299,7 @@ _SILENCE_DEFAULTS = SilenceConfig()
 _LOUDNESS_DEFAULTS = LoudnessConfig()
 _LOGO_DEFAULTS = LogoAbsenceConfig()
 _SCENE_DEFAULTS = SceneCutConfig()
+_CLOCK_DEFAULTS = ClockConfig()
 _FUSION_DEFAULTS = FusionConfig()
 _CONTROL_DEFAULTS = ControlConfig()
 _FP_DEFAULTS = FingerprintConfig()
@@ -351,6 +365,7 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
     loud = det.get("loudness", {})
     logo = det.get("logo_absence", {})
     scene = det.get("scene_cut", {})
+    clk = det.get("clock", {})
     detect = DetectConfig(
         enabled=enabled,
         black_frame=BlackFrameConfig(
@@ -386,7 +401,16 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
             low_cpm=float(scene.get("low_cpm", _SCENE_DEFAULTS.low_cpm)),
             high_cpm=float(scene.get("high_cpm", _SCENE_DEFAULTS.high_cpm)),
         ),
+        clock=ClockConfig(
+            file=str(clk.get("file", _CLOCK_DEFAULTS.file)),
+            min_hours=int(clk.get("min_hours", _CLOCK_DEFAULTS.min_hours)),
+            full_fraction=float(clk.get("full_fraction", _CLOCK_DEFAULTS.full_fraction)),
+            min_break_s=float(clk.get("min_break_s", _CLOCK_DEFAULTS.min_break_s)),
+            max_break_s=float(clk.get("max_break_s", _CLOCK_DEFAULTS.max_break_s)),
+        ),
     )
+    if not 0.0 < detect.clock.full_fraction <= 1.0 or detect.clock.min_hours < 1:
+        raise ConfigError("clock requires 0 < full_fraction <= 1 and min_hours >= 1")
     if detect.scene_cut.low_cpm >= detect.scene_cut.high_cpm:
         raise ConfigError("scene_cut requires low_cpm < high_cpm")
 

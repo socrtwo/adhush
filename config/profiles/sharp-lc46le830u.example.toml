@@ -52,6 +52,10 @@ expect = "OK"
 [network_ip.commands.volume_query]
 send = "VOLM?   \r"           # the LC-46LE830U answers with the number
 
+[network_ip.commands.remote_key]
+send = "RCKY{code:<4}\r"     # a remote-control key by code (p. 59); the web page's remote
+expect = "OK"
+
 [network_ip.commands.mute_on]
 send = "MUTE1   \r"
 expect = "OK"

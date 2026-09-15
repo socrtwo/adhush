@@ -65,6 +65,10 @@ detectors about every duck; loudness measures the drop and compensates, or
 goes inert when the ducked set is buried under the room; silence is inert
 while ducked. Three sizes of local AI on the phone.
 
+## Phase 10 — the clock, the hand, the remote (done, 0.18.0)
+ADR 0017: a learned minute-of-hour prior as method 9, timed manual ducks,
+and a remote with every TV key and every AdHush control on one screen.
+
 ## Beyond the roadmap
 Candidates, in no particular order: in-browser WASM detectors (the rest of the
 Phase 4 remainder), an iOS on-device core following ADR 0007, an audio delay line for retroactive

@@ -247,3 +247,34 @@ class TestDuckCompensation:
         assert detector.vote(1.0).confidence == 0.0
         detector.audio_ducked(1.0, False)
         assert detector.voting
+
+
+class TestBreakClock:
+    """ADR 0017: a learned minute-of-hour prior that never mutes alone."""
+
+    def test_learns_break_minutes_and_votes_only_where_watched(self, tmp_path: Path) -> None:
+        from adhush.config import ClockConfig
+        from adhush.detect.clock import ClockDetector
+
+        cfg = ClockConfig(file=str(tmp_path / "clock.tsv"), min_hours=3, full_fraction=0.6)
+        clock = ClockDetector(cfg)
+        for hour in range(5):  # five hours watched; a :20-:22 break in four of them
+            for minute in range(60):
+                clock.tick(hour * 3600 + minute * 60 + 1)
+            if hour < 4:
+                clock.learn(hour * 3600 + 20 * 60, hour * 3600 + 22 * 60)
+        clock.tick(5 * 3600 + 20 * 60 + 5)
+        assert clock.voting
+        vote = clock.vote(0.0)
+        assert vote.confidence == 1.0 and vote.reason.startswith("clock minute=20")
+        clock.tick(5 * 3600 + 40 * 60)
+        assert clock.voting and clock.vote(0.0).confidence == 0.0
+        assert clock.break_minutes() == [20, 21]
+        clock.learn(0.0, 5.0)  # implausible: teaches nothing
+        clock.learn(0.0, 900.0)
+        again = ClockDetector(cfg)  # the file round-trips
+        again.tick(6 * 3600 + 20 * 60)
+        assert again.voting and again.vote(0.0).confidence > 0.9  # 4 breaks in 7 hours
+        fresh = ClockDetector(ClockConfig(file=""))
+        fresh.tick(50 * 60)
+        assert not fresh.voting and fresh.vote(0.0).reason.startswith("clock_learning")

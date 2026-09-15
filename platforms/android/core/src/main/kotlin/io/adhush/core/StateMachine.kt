@@ -19,6 +19,19 @@ class AdStateMachine(private val cfg: FusionConfig) {
     val muted: Boolean get() = state == AdState.AD
     val muteDwellS: Double get() = cfg.muteDwellMs / 1000.0
 
+    /**
+     * The user pressed a button that must mute now: from any state but AD,
+     * including the RECOVERY pause after a duck that just ended (ADR 0017).
+     */
+    fun userMute(now: Double): Action? {
+        if (state == AdState.AD) return null
+        state = AdState.AD
+        adEnteredTs = now
+        recoveryUntil = null
+        muteDwell.reset(); unmuteDwell.reset(); fpUnmuteDwell.reset()
+        return Action.MUTE
+    }
+
     fun update(
         decision: MuteDecision,
         promote: Boolean = false,

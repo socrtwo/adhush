@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from adhush.capture.base import CaptureSource
 from adhush.control.base import ControlError, MuteController
 from adhush.detect.base import Detector
+from adhush.detect.clock import ClockDetector
 from adhush.detect.fingerprint import FingerprintDetector
 from adhush.detect.fusion import Fusion
 from adhush.detect.logo_absence import LogoAbsenceDetector
@@ -62,6 +63,7 @@ class Pipeline:
         learner: Learner | None = None,
         matcher: Matcher | None = None,
         hears_room: bool = False,
+        wall_clock: Callable[[], float] | None = None,
     ) -> None:
         self._detectors = detectors
         self._fusion = fusion
@@ -76,6 +78,12 @@ class Pipeline:
             (d for d in detectors if isinstance(d, FingerprintDetector)), None
         )
         self._logos = [d for d in detectors if isinstance(d, LogoAbsenceDetector)]
+        # The break clock needs wall time; a replay has none, so it stays inert there.
+        self._wall_clock = wall_clock
+        self._clocks = [d for d in detectors if isinstance(d, ClockDetector)]
+        self._ad_start_wall: float | None = None
+        # A timed manual duck ends at this media time (ADR 0017).
+        self._timed_until: float | None = None
         self._next_decision_ts: float | None = None
         self._ad_start_est: float | None = None
         self._mute_match: Match | None = None
@@ -122,6 +130,13 @@ class Pipeline:
     def _decide(self, ts: float) -> None:
         with self._lock:
             self._last_ts = ts
+            if self._wall_clock is not None and self._clocks:
+                wall = self._wall_clock()
+                for clock in self._clocks:
+                    clock.tick(wall)
+            if self._timed_until is not None and ts >= self._timed_until:
+                self._end_timed()
+                return
             # An inert detector (the camera with no whole screen in view, a logo
             # never yet sighted) casts no vote and leaves the normalizer alone.
             votes = [d.vote(ts) for d in self._detectors if d.voting]
@@ -161,6 +176,7 @@ class Pipeline:
 
             reasons = decision.reasons
             if action is Action.MUTE:
+                self._ad_start_wall = self._wall_clock() if self._wall_clock else None
                 if promote and match is not None:
                     self._mute_match = match
                     self._ad_start_est = match.est_start_ts
@@ -221,6 +237,11 @@ class Pipeline:
         confirm, self._confirm_current = self._confirm_current, False
         reject, self._reject_current = self._reject_current, False
         self._user_hold = False
+        wall_start, self._ad_start_wall = self._ad_start_wall, None
+        # The break clock learns every real break (a timed duck sets reject).
+        if not reject and wall_start is not None and self._wall_clock is not None:
+            for clock in self._clocks:
+                clock.learn(wall_start, self._wall_clock())
         if self._learner is None or self._fp is None or start is None or reject:
             return
         duration = ts - start
@@ -265,7 +286,11 @@ class Pipeline:
                 "state": self._machine.state.value,
                 "muted": self._machine.muted,
                 "override": self._override,
-                "teaching": self._user_hold,
+                "teaching": self._user_hold and self._timed_until is None,
+                "timed_s": max(0.0, self._timed_until - self._last_ts)
+                if self._timed_until is not None
+                else 0.0,
+                "clock": self._clocks[0].describe() if self._clocks else None,
                 "quiet_s": max(0.0, self._quiet_until - self._last_ts),
                 "camera": self._logos[0].describe(self._last_ts) if self._logos else None,
                 "trace": self._trace,
@@ -285,6 +310,11 @@ class Pipeline:
     def set_trace(self, enabled: bool) -> None:
         with self._lock:
             self._trace = enabled
+
+    def press_key(self, key: str) -> None:
+        """Press a remote-control key on the set through the control backend."""
+        with self._lock:
+            self._controller.send_key(key)
 
     def set_override(self, mode: str) -> None:
         """Pin the controller to mute/unmute, or return it to the machine."""
@@ -329,11 +359,59 @@ class Pipeline:
             )
             return True
 
+    def duck_for(self, seconds: float) -> bool:
+        """A timed manual duck (ADR 0017): mute now and restore after
+        ``seconds`` whatever the detectors say in between; nothing is learned.
+        Pressed while already muted, it keeps the mute for that long instead."""
+        with self._lock:
+            if self._override != "auto":
+                return False
+            if self._machine.state is AdState.AD:
+                self._timed_until = self._last_ts + seconds
+                self._user_hold = True
+                self._emit("status", self.status())
+                return True
+            action = self._machine.user_mute(self._last_ts)
+            if action is None:
+                return False
+            self._timed_until = self._last_ts + seconds
+            self._user_hold = True
+            self._mute_match = None
+            self._ad_start_est = self._last_ts
+            self._record(
+                Transition(
+                    ts=self._last_ts,
+                    action=action,
+                    confidence=1.0,
+                    reasons=("user:timed", f"seconds={seconds:.0f}"),
+                )
+            )
+            return True
+
+    def _end_timed(self) -> bool:
+        """The timed duck ran out (or "Show's back" ended it): restore, learn nothing."""
+        self._timed_until = None
+        self._reject_current = True  # skips learning in _finish_ad
+        action = self._machine.cancel_ad(self._last_ts)
+        if action is None:
+            self._reject_current = False
+            return False
+        self._record(
+            Transition(
+                ts=self._last_ts, action=action, confidence=0.0, reasons=("user:timed_end",)
+            )
+        )
+        self._finish_ad(self._last_ts)
+        self._fusion.reset()
+        return True
+
     def show_back(self) -> bool:
         """"▶ Show's back". In teach mode: restore and learn the bracketed
         break. On an automatic mute that overran: just restore, learning and
         forgetting nothing. Either way the detectors are told it is program."""
         with self._lock:
+            if self._timed_until is not None:
+                return self._end_timed()
             teaching = self._user_hold
             if not teaching:
                 self._reject_current = True  # stand down: no learning
@@ -364,6 +442,7 @@ class Pipeline:
         with self._lock:
             match = self._mute_match
             self._reject_current = True
+            self._timed_until = None
             for detector in self._detectors:
                 detector.user_says_program(self._last_ts)
             self._quiet_until = self._last_ts + self._machine.not_ad_quiet_s

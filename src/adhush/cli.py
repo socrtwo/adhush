@@ -52,7 +52,12 @@ ROOM_BACKENDS = frozenset({"camera", "microphone"})
 
 
 def _build_pipeline(
-    config: Config, controller: NullController | None, *, video: bool, audio: bool
+    config: Config,
+    controller: NullController | None,
+    *,
+    video: bool,
+    audio: bool,
+    live: bool = False,
 ) -> Pipeline:
     fp_active = (
         video and config.fingerprint.enabled and "fingerprint" in config.detect.enabled
@@ -87,6 +92,7 @@ def _build_pipeline(
         learner=learner if config.fingerprint.learn else None,
         matcher=matcher,
         hears_room=config.capture.backend in ROOM_BACKENDS,
+        wall_clock=time.time if live else None,  # the break clock only learns from real time
     )
 
 
@@ -99,7 +105,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     with source:
         caps = source.caps()
-        pipeline = _build_pipeline(config, None, video=caps.video, audio=caps.audio)
+        pipeline = _build_pipeline(config, None, video=caps.video, audio=caps.audio, live=True)
         print(f"adhush {__version__}: running on {config.capture.backend} "
               f"(video={caps.video} audio={caps.audio}), control={config.control.backend}")
         api = None

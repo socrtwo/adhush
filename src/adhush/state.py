@@ -118,6 +118,19 @@ class AdStateMachine:
             self.state = AdState.PROGRAM
         return None
 
+    def user_mute(self, now: float) -> Action | None:
+        """The user pressed a button that must mute now: from any state but AD,
+        including the RECOVERY pause after a mute that just ended (ADR 0017)."""
+        if self.state is AdState.AD:
+            return None
+        self.state = AdState.AD
+        self._ad_entered_ts = now
+        self._recovery_until = None
+        self._mute_dwell.reset()
+        self._unmute_dwell.reset()
+        self._fp_unmute_dwell.reset()
+        return Action.MUTE
+
     def cancel_ad(self, now: float) -> Action | None:
         """User/API rejection: leave AD (or clear suspicion) immediately."""
         if self.state is AdState.AD:
