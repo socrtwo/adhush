@@ -47,8 +47,10 @@ class RemoteActivity : AppCompatActivity() {
         findViewById<Button>(R.id.rIsAd).setOnClickListener { serviceAction(AdHushService.ACTION_IS_AD) }
         findViewById<Button>(R.id.rShowBack).setOnClickListener { serviceAction(AdHushService.ACTION_SHOW_BACK) }
         findViewById<Button>(R.id.rNotAd).setOnClickListener { serviceAction(AdHushService.ACTION_NOT_AD) }
-        for ((id, secs) in listOf(R.id.rDuck30 to 30, R.id.rDuck60 to 60, R.id.rDuck90 to 90, R.id.rDuck120 to 120))
+        for ((id, secs) in listOf(R.id.rDuck30 to 30, R.id.rDuck60 to 60, R.id.rDuck90 to 90, R.id.rDuck120 to 120, R.id.rDuck150 to 150,
+                R.id.rDuck180 to 180, R.id.rDuck210 to 210, R.id.rDuck240 to 240, R.id.rDuck270 to 270, R.id.rDuck300 to 300))
             findViewById<Button>(id).setOnClickListener { serviceAction(AdHushService.ACTION_DUCK_FOR) { it.putExtra(AdHushService.EXTRA_SECONDS, secs) } }
+        findViewById<Button>(R.id.rDuckMore).setOnClickListener { serviceAction(AdHushService.ACTION_DUCK_MORE) }
         val grid = findViewById<GridLayout>(R.id.keys)
         for (key in LAYOUT) {
             val b = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle)
@@ -82,6 +84,7 @@ class RemoteActivity : AppCompatActivity() {
 
     private fun serviceAction(action: String, extras: (Intent) -> Unit = {}) {
         if (AdHushService.running == null && action != AdHushService.ACTION_STOP) { say("not running — press Start first"); return }
+        if (action == AdHushService.ACTION_DUCK_MORE) say("+30 s")
         ContextCompat.startForegroundService(this, Intent(this, AdHushService::class.java).setAction(action).also(extras))
     }
 

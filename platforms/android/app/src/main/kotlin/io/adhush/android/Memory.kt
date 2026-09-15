@@ -3,7 +3,9 @@ package io.adhush.android
 import android.content.Context
 import io.adhush.core.FileClockStore
 import io.adhush.core.FileFingerprintStore
+import io.adhush.core.FileJingleStore
 import io.adhush.core.FileScriptStore
+import io.adhush.core.Jingle
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -20,7 +22,7 @@ import java.util.zip.ZipOutputStream
 object Memory {
     const val ZIP = "adhush-memory.zip"
     private const val ADS = "ads.tsv"
-    private val FILES = listOf(ADS, AdHushService.SCRIPTS_FILE, AdHushService.CLOCK_FILE)
+    private val FILES = listOf(ADS, AdHushService.SCRIPTS_FILE, AdHushService.CLOCK_FILE, AdHushService.JINGLES_FILE)
 
     fun export(context: Context): File {
         val dir = File(context.filesDir, "share"); dir.mkdirs()
@@ -49,7 +51,7 @@ object Memory {
                 e = z.nextEntry
             }
         }
-        var ads = 0; var scripts = 0; var clock = false
+        var ads = 0; var scripts = 0; var clock = false; var jingles = 0
         File(tmp, ADS).takeIf { it.isFile }?.let { f ->
             val theirs = FileFingerprintStore(f)
             val mine = FileFingerprintStore(File(context.filesDir, ADS))
@@ -70,12 +72,25 @@ object Memory {
             val theirs = FileClockStore(f).load()
             if (theirs != null) {
                 val store = FileClockStore(File(context.filesDir, AdHushService.CLOCK_FILE))
-                val mine = store.load() ?: Pair(IntArray(60), IntArray(60))
-                store.save(IntArray(60) { mine.first[it] + theirs.first[it] }, IntArray(60) { mine.second[it] + theirs.second[it] })
+                val mine = store.load() ?: io.adhush.core.ClockCounts()
+                store.save(io.adhush.core.ClockCounts(
+                    IntArray(60) { mine.breaks[it] + theirs.breaks[it] },
+                    IntArray(60) { mine.seen[it] + theirs.seen[it] },
+                    IntArray(mine.lengths.size) { mine.lengths[it] + theirs.lengths[it] },
+                ))
                 clock = true
             }
         }
+        File(tmp, AdHushService.JINGLES_FILE).takeIf { it.isFile }?.let { f ->
+            val theirs = FileJingleStore(f).load()
+            val store = FileJingleStore(File(context.filesDir, AdHushService.JINGLES_FILE))
+            val mine = ArrayList(store.load())
+            val known = HashSet(mine.map { it.blocks })
+            var nextId = (mine.maxOfOrNull { it.id } ?: 0) + 1
+            for (j in theirs) if (known.add(j.blocks)) { mine.add(Jingle(nextId++, j.kind, j.blocks, j.hits, j.falseHits, j.createdTs)); jingles++ }
+            if (jingles > 0) store.save(mine)
+        }
         tmp.deleteRecursively()
-        return "imported $ads new breaks and $scripts new scripts" + (if (clock) ", and merged the break clock" else "")
+        return "imported $ads new breaks, $scripts new scripts and $jingles jingles" + (if (clock) ", and merged the break clock" else "")
     }
 }

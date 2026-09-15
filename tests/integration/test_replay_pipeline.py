@@ -10,7 +10,7 @@ from pathlib import Path
 
 from adhush.capture.file_replay import FileReplaySource, write_fixture
 from adhush.cli import main
-from adhush.config import DetectConfig, FusionConfig, LoudnessConfig
+from adhush.config import ClockConfig, DetectConfig, FusionConfig, JingleConfig, LoudnessConfig
 from adhush.control import NullController
 from adhush.detect import build_detectors
 from adhush.detect.fusion import Fusion
@@ -30,7 +30,12 @@ TIMELINE: Timeline = [
 MUTE_TOLERANCE_S = 4.0
 UNMUTE_TOLERANCE_S = 2.5  # tighter: late unmute is the worse failure
 
-DETECT_CFG = DetectConfig(loudness=LoudnessConfig(window_s=1.5, baseline_s=30.0))
+# Learned memory stays in-process: replays must never write data/*.tsv.
+DETECT_CFG = DetectConfig(
+    loudness=LoudnessConfig(window_s=1.5, baseline_s=30.0),
+    clock=ClockConfig(file=""),
+    jingle=JingleConfig(file=""),
+)
 FUSION_CFG = FusionConfig()  # example-config defaults
 
 
@@ -53,7 +58,7 @@ def _run(tmp_path: Path, *, video: bool, audio: bool):
 def test_av_replay_detects_both_ad_pods(tmp_path: Path) -> None:
     transitions, labels, controller, detectors = _run(tmp_path, video=True, audio=True)
     # logo_absence (uncalibrated) and fingerprint (no store) are dropped.
-    assert {d.name for d in detectors} == {"black_frame", "silence", "loudness", "scene_cut", "clock"}
+    assert {d.name for d in detectors} == {"black_frame", "silence", "loudness", "scene_cut", "clock", "jingle"}
     assert len(labels) == 2
 
     mute, unmute = evaluate_onsets(
@@ -80,7 +85,7 @@ def test_av_replay_detects_both_ad_pods(tmp_path: Path) -> None:
 
 def test_audio_only_replay_still_works_with_reduced_set(tmp_path: Path) -> None:
     transitions, labels, _, detectors = _run(tmp_path, video=False, audio=True)
-    assert {d.name for d in detectors} == {"silence", "loudness", "clock"}
+    assert {d.name for d in detectors} == {"silence", "loudness", "clock", "jingle"}
 
     mute, unmute = evaluate_onsets(
         transitions,
@@ -111,7 +116,8 @@ def test_program_material_with_lone_pause_never_mutes(tmp_path: Path) -> None:
     assert controller.actions == []
 
 
-def test_cli_replay_reports_separate_onset_scores(tmp_path: Path, capsys) -> None:
+def test_cli_replay_reports_separate_onset_scores(tmp_path: Path, capsys, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)  # the default config learns into ./data; keep that out of the repo
     frames, frame_ts, samples, labels = synthesize(TIMELINE)
     fixture = tmp_path / "broadcast.npz"
     write_fixture(fixture, frames=frames, frame_ts=frame_ts, audio=samples, audio_rate=RATE)

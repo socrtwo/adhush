@@ -110,6 +110,12 @@ data class Status(
     val timedS: Double = 0.0,
     /** What the break clock thinks of this minute; null without the clock. */
     val clock: String? = null,
+    /** While ducked: the clock's guess at how much of the break is left, or null while it is still learning lengths. */
+    val breakLeftS: Double? = null,
+    /** What the jingle detector knows; null without it. */
+    val jingles: String? = null,
+    /** The ad badge last read off the screen during stream learning; null without the reader. */
+    val badge: String? = null,
 )
 
 /**
@@ -174,6 +180,13 @@ class Engine(
 
     private val clock: ClockDetector? get() = detectors.firstOrNull { it is ClockDetector } as ClockDetector?
 
+    private val jingle: JingleDetector? get() = detectors.firstOrNull { it is JingleDetector } as JingleDetector?
+
+    private val badge: BadgeDetector? get() = detectors.firstOrNull { it is BadgeDetector } as BadgeDetector?
+
+    /** Words read off the corners of the phone's own screen during stream learning (ADR 0020). */
+    @Synchronized fun onBadgeText(ts: Double, text: String) { badge?.observeText(ts, text) }
+
     @Synchronized fun onAudio(block: AudioBlock) {
         for (d in detectors) d.observeAudio(block)
         fingerprint?.observeAudio(block)
@@ -200,7 +213,8 @@ class Engine(
         val promote = fpHold && (machine.state == AdState.PROGRAM || machine.state == AdState.SUSPECT_AD)
         // A user hold behaves like a fingerprint hold with no programme evidence: only the ceiling ends it.
         // A fingerprint hold ends early when the logo is visibly back — presence is proof of programme.
-        val programEvidence = !userHold && (logo?.programPresent == true)
+        // A fingerprint hold ends early when the logo is visibly back, or the channel's closing sting was heard.
+        val programEvidence = !userHold && (logo?.programPresent == true || jingle?.programPresent == true || badge?.programPresent == true)
         val action = machine.update(decision, promote = promote, fpHold = fpHold || userHold, programEvidence = programEvidence) ?: return
         val reasons = if (promote) listOf("fingerprint:promote ad=${match!!.adId} dur=${match.durationS.toInt()}") + decision.reasons else decision.reasons
         apply(action, ts, decision.confidence, reasons, if (promote) Source.FINGERPRINT else Source.FUSION, match)
@@ -211,13 +225,14 @@ class Engine(
             Action.MUTE -> {
                 drive(true, ts)
                 adStartTs = ts; adSource = source; activeAdId = match?.adId; adStartWall = wallClock()
+                machine.ceilingS = clock?.ceilingS(machine.hardMaxS) ?: machine.hardMaxS
             }
             Action.UNMUTE -> {
                 drive(false, ts)
                 val start = adStartTs; val src = adSource; val adId = activeAdId
                 adStartTs = null; adSource = null; activeAdId = null; userHold = false
-                // The break clock learns every real break; a timed manual duck teaches nothing.
-                if (start != null && src != null && src != Source.TIMED) clock?.learn(adStartWall, wallClock())
+                // The break clock and the jingle detector learn every real break; a timed manual duck teaches nothing.
+                if (start != null && src != null && src != Source.TIMED) { clock?.learn(adStartWall, wallClock()); jingle?.learnBreak(start, ts) }
                 if (start != null && learner != null && fingerprint != null) {
                     val duration = ts - start
                     when (src) {
@@ -277,6 +292,16 @@ class Engine(
         timedUntil = now + seconds
         userHold = true
         apply(action, now, 1.0, listOf("user:timed ${seconds.toInt()}"), Source.TIMED, null)
+        return true
+    }
+
+    /** "+30 s": lengthen a running duck (timed or automatic) by [seconds]; not ducked, it starts a timed duck of that length. */
+    @Synchronized fun extendDuck(now: Double, seconds: Double): Boolean {
+        if (machine.state != AdState.AD) return duckFor(now, seconds)
+        val until = timedUntil
+        timedUntil = (if (until != null && until > now) until else now) + seconds
+        adSource = Source.TIMED; userHold = true
+        emit()
         return true
     }
 
@@ -363,6 +388,9 @@ class Engine(
         quietS = max(0.0, quietUntil - lastTs),
         timedS = timedUntil?.let { max(0.0, it - lastTs) } ?: 0.0,
         clock = clock?.describe(),
+        breakLeftS = if (controllerMuted && timedUntil == null) adStartTs?.let { clock?.remainingS(lastTs - it) } else null,
+        jingles = jingle?.describe(),
+        badge = badge?.describe(),
     )
 
     fun close() { runCatching { controller.close() } }
@@ -392,9 +420,13 @@ object Assembly {
         notAdQuietS: Double = Engine.NOT_AD_QUIET_S,
         /** The break clock (ADR 0017); a default-weight vote that tips the balance, never ducks alone. */
         clock: ClockDetector? = null,
+        /** The channel's break jingles (ADR 0020); an opener heard live ducks alone, like a missing logo. */
+        jingle: JingleDetector? = null,
+        /** The ad badge read off the phone's own screen during stream learning (ADR 0020). */
+        badge: BadgeDetector? = null,
         wallClock: () -> Double = { System.currentTimeMillis() / 1000.0 },
     ): Engine {
-        val detectors = listOfNotNull<Detector>(if (silence) MicSilenceDetector() else null, if (loudness) LoudnessDetector() else null, logo, transcript, captions, clock) + judges
+        val detectors = listOfNotNull<Detector>(if (silence) MicSilenceDetector() else null, if (loudness) LoudnessDetector() else null, logo, transcript, captions, clock, jingle, badge) + judges
         require(detectors.isNotEmpty() || fingerprints) { "at least one method must be on" }
         val matcher = AudioMatcher(store, fpCfg)
         val fp = if (fingerprints) AudioFingerprintDetector(fpCfg, matcher) else null
@@ -404,6 +436,8 @@ object Assembly {
         if (captions != null && "captions" !in w) w = w + ("captions" to LOGO_WEIGHT)         // and so does a known script read off the screen
         for (j in judges) if (j.name !in w) w = w + (j.name to LOGO_WEIGHT)                   // and an AI that says "commercial"
         if (logo != null && logo.name !in w) w = w + (logo.name to LOGO_WEIGHT)               // the ticker detector under its own name
+        if (jingle != null && jingle.name !in w) w = w + (jingle.name to LOGO_WEIGHT)         // the channel's own sting opens a break
+        if (badge != null && badge.name !in w) w = w + (badge.name to LOGO_WEIGHT)             // the player says "AD" in so many words
         val fusion = Fusion(fusionCfg, w, detectors.map { it.name } + listOfNotNull(fp?.name))
         return Engine(detectors, fusion, AdStateMachine(fusionCfg), controller, fp, if (fp != null) AudioLearner(store, matcher, fpCfg) else null, store, notAdQuietS, wallClock)
     }

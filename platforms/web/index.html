@@ -89,6 +89,15 @@
       <button onclick="command({type:'duck_for', seconds:120})">120 s</button>
     </div>
     <div class="row">
+      <button onclick="command({type:'duck_for', seconds:150})">150 s</button>
+      <button onclick="command({type:'duck_for', seconds:180})">180 s</button>
+      <button onclick="command({type:'duck_for', seconds:210})">210 s</button>
+      <button onclick="command({type:'duck_for', seconds:240})">240 s</button>
+      <button onclick="command({type:'duck_for', seconds:270})">270 s</button>
+      <button onclick="command({type:'duck_for', seconds:300})">300 s</button>
+      <button onclick="command({type:'duck_for', seconds:30, extend:true})" title="Add 30 seconds to the running duck">+30 s</button>
+    </div>
+    <div class="row">
       <button onclick="openMini()" title="Small always-on-top window">▣ Mini window</button>
       <button class="danger" onclick="stopCore()" title="Shut the core down">■ Stop AdHush</button>
     </div>
@@ -155,6 +164,8 @@ function render(status) {
       + (status.camera ? ' · camera: ' + status.camera : '')
       + (status.quiet_s > 0 ? ' · you said not an ad: ' + Math.round(status.quiet_s) + ' s of quiet' : '')
       + (status.timed_s > 0 ? ' · manual duck: ' + Math.round(status.timed_s) + ' s left' : '')
+      + (status.break_left_s != null ? ' · about ' + Math.round(status.break_left_s) + ' s of the break left' : '')
+      + (status.jingles ? ' · jingles: ' + status.jingles : '')
       + (status.clock ? ' · clock: ' + status.clock : '')
     : '';
   for (const mode of ['auto', 'mute', 'unmute'])

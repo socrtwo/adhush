@@ -77,6 +77,11 @@ spots before the first evening at the TV; the memory moves between phones.
 ADR 0019: PyInstaller one-file binaries for Windows, macOS and Linux (x64,
 arm64), a Raspberry Pi bundle, the iOS web app as a PWA, `adhush init`.
 
+## Phase 13 — what the peer projects knew (done, 0.21.0)
+ADR 0020: the break jingle as method 10 (AdVent), the ad badge during
+stream learning, learned break lengths as the mute ceiling (DTC), manual
+ducks to 300 s with an extendable countdown (Mx5-MuteTimer).
+
 ## Beyond the roadmap
 An audio-only fingerprint matcher for the Python listener (the phone's
 `AudioMatcher` ported), so a memory learned from a stream or on a phone is

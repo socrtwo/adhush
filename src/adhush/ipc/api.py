@@ -258,6 +258,8 @@ class ApiServer:
         if command.type == "reject_ad":
             return {"ok": self._pipeline.reject_ad()}
         if command.type == "duck_for":
+            if command.extend:
+                return {"ok": self._pipeline.extend_duck(float(command.seconds))}
             return {"ok": self._pipeline.duck_for(float(command.seconds))}
         if command.type == "remote":
             try:

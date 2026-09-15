@@ -85,8 +85,13 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.notAd).setOnClickListener { serviceAction(AdHushService.ACTION_NOT_AD) }
         findViewById<Button>(R.id.isAd).setOnClickListener { serviceAction(AdHushService.ACTION_IS_AD) }
         findViewById<Button>(R.id.showBack).setOnClickListener { serviceAction(AdHushService.ACTION_SHOW_BACK) }
-        for ((id, secs) in listOf(R.id.duck30 to 30, R.id.duck60 to 60, R.id.duck90 to 90, R.id.duck120 to 120))
+        for ((id, secs) in DUCK_BUTTONS)
             findViewById<Button>(id).setOnClickListener { serviceAction(AdHushService.ACTION_DUCK_FOR) { it.putExtra(AdHushService.EXTRA_SECONDS, secs) } }
+        findViewById<Button>(R.id.duckMore).setOnClickListener { serviceAction(AdHushService.ACTION_DUCK_MORE) }
+        findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).apply {
+            inflateMenu(R.menu.toolbar)
+            setOnMenuItemClickListener { item -> if (item.itemId == R.id.action_remote) { save(); startActivity(Intent(this@MainActivity, RemoteActivity::class.java)); true } else false }
+        }
         findViewById<Button>(R.id.openRemote).setOnClickListener { save(); startActivity(Intent(this, RemoteActivity::class.java)) }
         findViewById<Button>(R.id.survey).setOnClickListener { save(); if (checkBeforeStart()) startWithPermissions(AdHushService.ACTION_SURVEY) }
         findViewById<Button>(R.id.share).setOnClickListener { shareSurvey() }
@@ -107,10 +112,10 @@ class MainActivity : AppCompatActivity() {
             R.id.infoCamera to Help.CAMERA, R.id.infoSpeech to Help.SPEECH, R.id.infoCaptions to Help.CAPTIONS,
             R.id.infoTeach to Help.TEACH, R.id.infoTest to Help.TEST, R.id.infoTv to Help.DUCK,
             R.id.infoClaude to Help.CLAUDE, R.id.infoLocal to Help.LOCAL,
-            R.id.infoClock to Help.CLOCK, R.id.infoManual to Help.TIMED, R.id.infoStream to Help.STREAM,
+            R.id.infoClock to Help.CLOCK, R.id.infoManual to Help.TIMED, R.id.infoStream to Help.STREAM, R.id.infoJingle to Help.JINGLE,
         )
         for ((id, topic) in info) findViewById<View>(id).setOnClickListener { Help.show(this, topic) }
-        for (id in listOf(R.id.silence, R.id.loudness, R.id.fingerprints, R.id.camera, R.id.speech, R.id.captions, R.id.judgeCloud, R.id.judgeLocal, R.id.clockOn))
+        for (id in listOf(R.id.silence, R.id.loudness, R.id.fingerprints, R.id.camera, R.id.speech, R.id.captions, R.id.judgeCloud, R.id.judgeLocal, R.id.clockOn, R.id.jinglesOn))
             findViewById<CompoundButton>(id).setOnCheckedChangeListener { _, _ -> methodsNote() }
         findViewById<android.widget.RadioGroup>(R.id.cameraTarget).setOnCheckedChangeListener { _, id ->
             findViewById<Button>(R.id.cameraSetup).text = if (id == R.id.targetTicker) "Camera setup — find the news ticker (in colour)" else "Camera setup — find the bug (in colour)"
@@ -141,7 +146,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun methodsNote() {
-        val ids = listOf(R.id.silence, R.id.loudness, R.id.fingerprints, R.id.camera, R.id.speech, R.id.captions, R.id.judgeCloud, R.id.judgeLocal, R.id.clockOn)
+        val ids = listOf(R.id.silence, R.id.loudness, R.id.fingerprints, R.id.camera, R.id.speech, R.id.captions, R.id.judgeCloud, R.id.judgeLocal, R.id.clockOn, R.id.jinglesOn)
         val n = ids.count { findViewById<CompoundButton>(it).isChecked }
         val onlyClock = n == 1 && findViewById<CompoundButton>(R.id.clockOn).isChecked
         val ai = findViewById<CompoundButton>(R.id.judgeCloud).isChecked || findViewById<CompoundButton>(R.id.judgeLocal).isChecked
@@ -150,7 +155,7 @@ class MainActivity : AppCompatActivity() {
             n == 0 -> "⚠ Nothing is switched on. The app cannot work with no method — turn on at least one."
             ai && !words -> "⚠ An AI judge is on but has no words to read: turn on Spoken words or On-screen captions too."
             onlyClock -> "⚠ Only the break clock is on. It never ducks alone — it tips the balance for the others. Turn on at least one more."
-            else -> "$n of 9 methods on. At least one must be on. A coloured dot means that method is running right now."
+            else -> "$n of 10 methods on. At least one must be on. A coloured dot means that method is running right now."
         }
     }
 
@@ -175,11 +180,11 @@ class MainActivity : AppCompatActivity() {
         val on = mapOf(
             "silence" to (r?.silence == true), "loudness" to (r?.loudness == true), "fingerprints" to (r?.fingerprints == true),
             "camera" to (r?.logo == true), "speech" to (r?.speech == true), "captions" to (r?.captions == true),
-            "claude" to (r?.cloud == true), "local" to (r?.local == true), "clock" to (r?.clock == true), "stream" to (r?.stream == true),
+            "claude" to (r?.cloud == true), "local" to (r?.local == true), "clock" to (r?.clock == true), "stream" to (r?.stream == true), "jingle" to (r?.jingle == true),
         )
-        val colours = mapOf("silence" to R.color.method_silence, "loudness" to R.color.method_loudness, "fingerprints" to R.color.method_fingerprints, "camera" to R.color.method_camera, "speech" to R.color.method_speech, "captions" to R.color.method_captions, "claude" to R.color.method_claude, "local" to R.color.method_local, "clock" to R.color.method_clock, "stream" to R.color.method_stream)
-        val chips = mapOf("silence" to R.id.chipSilence, "loudness" to R.id.chipLoudness, "fingerprints" to R.id.chipFingerprints, "camera" to R.id.chipCamera, "speech" to R.id.chipSpeech, "captions" to R.id.chipCaptions, "claude" to R.id.chipClaude, "local" to R.id.chipLocal, "clock" to R.id.chipClock, "stream" to R.id.chipStream)
-        val dots = mapOf("silence" to R.id.dotSilence, "loudness" to R.id.dotLoudness, "fingerprints" to R.id.dotFingerprints, "camera" to R.id.dotCamera, "speech" to R.id.dotSpeech, "captions" to R.id.dotCaptions, "claude" to R.id.dotClaude, "local" to R.id.dotLocal, "clock" to R.id.dotClock, "stream" to R.id.dotStream)
+        val colours = mapOf("silence" to R.color.method_silence, "loudness" to R.color.method_loudness, "fingerprints" to R.color.method_fingerprints, "camera" to R.color.method_camera, "speech" to R.color.method_speech, "captions" to R.color.method_captions, "claude" to R.color.method_claude, "local" to R.color.method_local, "clock" to R.color.method_clock, "stream" to R.color.method_stream, "jingle" to R.color.method_jingle)
+        val chips = mapOf("silence" to R.id.chipSilence, "loudness" to R.id.chipLoudness, "fingerprints" to R.id.chipFingerprints, "camera" to R.id.chipCamera, "speech" to R.id.chipSpeech, "captions" to R.id.chipCaptions, "claude" to R.id.chipClaude, "local" to R.id.chipLocal, "clock" to R.id.chipClock, "stream" to R.id.chipStream, "jingle" to R.id.chipJingle)
+        val dots = mapOf("silence" to R.id.dotSilence, "loudness" to R.id.dotLoudness, "fingerprints" to R.id.dotFingerprints, "camera" to R.id.dotCamera, "speech" to R.id.dotSpeech, "captions" to R.id.dotCaptions, "claude" to R.id.dotClaude, "local" to R.id.dotLocal, "clock" to R.id.dotClock, "stream" to R.id.dotStream, "jingle" to R.id.dotJingle)
         for ((k, chipId) in chips) {
             val active = running && on[k] == true
             val c = ContextCompat.getColor(this, if (active) colours[k]!! else R.color.method_off)
@@ -361,6 +366,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<CompoundButton>(R.id.judgeCloud).isChecked = settings.judgeCloud
         findViewById<CompoundButton>(R.id.judgeLocal).isChecked = settings.judgeLocal
         findViewById<CompoundButton>(R.id.clockOn).isChecked = settings.clock
+        findViewById<CompoundButton>(R.id.jinglesOn).isChecked = settings.jingles
+        findViewById<CompoundButton>(R.id.badgeOn).isChecked = settings.badge
         findViewById<EditText>(R.id.claudeKey).setText(settings.claudeKey)
         findViewById<EditText>(R.id.channel).setText(settings.channel)
         findViewById<android.widget.RadioGroup>(R.id.claudeModel).check(when (settings.claudeModel) { "claude-sonnet-5" -> R.id.modelSonnet; "claude-opus-5" -> R.id.modelOpus; else -> R.id.modelHaiku })
@@ -395,6 +402,8 @@ class MainActivity : AppCompatActivity() {
         settings.judgeCloud = findViewById<CompoundButton>(R.id.judgeCloud).isChecked
         settings.judgeLocal = findViewById<CompoundButton>(R.id.judgeLocal).isChecked
         settings.clock = findViewById<CompoundButton>(R.id.clockOn).isChecked
+        settings.jingles = findViewById<CompoundButton>(R.id.jinglesOn).isChecked
+        settings.badge = findViewById<CompoundButton>(R.id.badgeOn).isChecked
         settings.claudeKey = findViewById<EditText>(R.id.claudeKey).text.toString().trim()
         settings.channel = findViewById<EditText>(R.id.channel).text.toString().trim()
         settings.claudeModel = when (findViewById<android.widget.RadioGroup>(R.id.claudeModel).checkedRadioButtonId) { R.id.modelSonnet -> "claude-sonnet-5"; R.id.modelOpus -> "claude-opus-5"; else -> "claude-haiku-4-5" }
@@ -526,11 +535,16 @@ class MainActivity : AppCompatActivity() {
         else log("microphone permission is required")
     }
 
-    companion object { const val ACTION_USB = "io.adhush.android.USB_PERMISSION" }
+    companion object {
+        const val ACTION_USB = "io.adhush.android.USB_PERMISSION"
+        /** The timed ducks: 30-second steps up to a five-minute break. */
+        val DUCK_BUTTONS = listOf(R.id.duck30 to 30, R.id.duck60 to 60, R.id.duck90 to 90, R.id.duck120 to 120, R.id.duck150 to 150,
+            R.id.duck180 to 180, R.id.duck210 to 210, R.id.duck240 to 240, R.id.duck270 to 270, R.id.duck300 to 300)
+    }
 
     /** Control actions need a running service; the notification and tile go through the same door. */
     private fun serviceAction(action: String, extras: (Intent) -> Unit = {}) {
-        val control = action in listOf(AdHushService.ACTION_NOT_AD, AdHushService.ACTION_IS_AD, AdHushService.ACTION_SHOW_BACK, AdHushService.ACTION_LEARN_SCRIPTS, AdHushService.ACTION_TEST, AdHushService.ACTION_DUCK_FOR)
+        val control = action in listOf(AdHushService.ACTION_NOT_AD, AdHushService.ACTION_IS_AD, AdHushService.ACTION_SHOW_BACK, AdHushService.ACTION_LEARN_SCRIPTS, AdHushService.ACTION_TEST, AdHushService.ACTION_DUCK_FOR, AdHushService.ACTION_DUCK_MORE)
         if (control && AdHushService.running == null) { log("not running — press Start first"); return }
         ContextCompat.startForegroundService(this, Intent(this, AdHushService::class.java).setAction(action).also(extras))
     }

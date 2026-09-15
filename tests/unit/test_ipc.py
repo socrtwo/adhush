@@ -366,3 +366,25 @@ class TestTimedDuckAndRemote:
             assert status == 200 and body["ok"] is True and controller.actions[-1][1] == "mute"
         finally:
             server.close()
+
+
+def test_plus_thirty_extends_a_duck_and_starts_one_when_not_ducked() -> None:
+    """ADR 0020: "+30 s" adds to a running mute; on a quiet set it is a timed mute."""
+    import numpy as np
+
+    from adhush.events import FrameEvent
+
+    pipeline, controller, _ = _pipeline()
+    frame = np.full((48, 64), 128, dtype=np.uint8)
+    ts = 0.0
+    for _ in range(5):
+        pipeline.process(FrameEvent(ts=ts, frame=frame))
+        ts += 0.1
+    assert pipeline.extend_duck(30.0) and controller.actions[-1][1] == "mute"
+    while ts < 10.0:
+        pipeline.process(FrameEvent(ts=ts, frame=frame))
+        ts += 0.1
+    assert 19.0 <= pipeline.status()["timed_s"] <= 21.0
+    assert pipeline.extend_duck(30.0)
+    assert 49.0 <= pipeline.status()["timed_s"] <= 51.0
+    assert parse_command('{"type": "duck_for", "seconds": 30, "extend": true}').extend is True

@@ -1,6 +1,7 @@
 package io.adhush.core
 
 import java.io.File
+import kotlin.math.max
 import kotlin.math.min
 
 /**
@@ -13,28 +14,37 @@ import kotlin.math.min
  * break, scaled so that [ClockConfig.fullFraction] reads as certainty. It is a
  * default-weight vote: on its own it can never duck, it tips the balance.
  */
+/** What the clock keeps: breaks per minute, hours seen per minute, and break lengths in 30-second bins (ADR 0020). */
+class ClockCounts(val breaks: IntArray = IntArray(60), val seen: IntArray = IntArray(60), val lengths: IntArray = IntArray(ClockDetector.LENGTH_BINS))
+
 interface ClockStore {
-    /** (breaks per minute, hours seen per minute), or null when nothing is stored. */
-    fun load(): Pair<IntArray, IntArray>?
-    fun save(breaks: IntArray, seen: IntArray)
+    fun load(): ClockCounts?
+    fun save(counts: ClockCounts)
 }
 
 class FileClockStore(private val file: File? = null) : ClockStore {
-    override fun load(): Pair<IntArray, IntArray>? {
+    override fun load(): ClockCounts? {
         val f = file?.takeIf { it.isFile } ?: return null
-        val breaks = IntArray(60); val seen = IntArray(60)
+        val c = ClockCounts()
         f.forEachLine { line ->
             val p = line.split('\t')
-            if (p[0] == "m" && p.size >= 4) { val m = p[1].toIntOrNull() ?: return@forEachLine; if (m in 0..59) { breaks[m] = p[2].toInt(); seen[m] = p[3].toInt() } }
+            when {
+                p[0] == "m" && p.size >= 4 -> { val m = p[1].toIntOrNull() ?: return@forEachLine; if (m in 0..59) { c.breaks[m] = p[2].toInt(); c.seen[m] = p[3].toInt() } }
+                p[0] == "d" && p.size >= 3 -> { val b = p[1].toIntOrNull() ?: return@forEachLine; if (b in c.lengths.indices) c.lengths[b] = p[2].toInt() }
+            }
         }
-        return Pair(breaks, seen)
+        return c
     }
 
-    override fun save(breaks: IntArray, seen: IntArray) {
+    override fun save(counts: ClockCounts) {
         val f = file ?: return
         f.parentFile?.mkdirs()
         val tmp = File(f.path + ".tmp")
-        tmp.bufferedWriter().use { w -> w.write("# adhush clock v1\tminute\tbreaks\thours_seen\n"); for (m in 0 until 60) w.write("m\t$m\t${breaks[m]}\t${seen[m]}\n") }
+        tmp.bufferedWriter().use { w ->
+            w.write("# adhush clock v2\tminute\tbreaks\thours_seen | d\t30s-bin\tbreaks\n")
+            for (m in 0 until 60) w.write("m\t$m\t${counts.breaks[m]}\t${counts.seen[m]}\n")
+            for (b in counts.lengths.indices) w.write("d\t$b\t${counts.lengths[b]}\n")
+        }
         if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
     }
 }
@@ -53,11 +63,15 @@ class ClockDetector(private val store: ClockStore, private val cfg: ClockConfig 
     override val name = "clock"
     private val breaks = IntArray(60)
     private val seen = IntArray(60)
+    /** Break lengths in 30-second bins (DTC: breaks are built from 30-second units, up to six minutes). */
+    private val lengths = IntArray(LENGTH_BINS)
     private var minute = -1
     private var lastKey = Long.MIN_VALUE   // hour * 60 + minute of the last tick
     private var hourOfLastSave = Long.MIN_VALUE
 
-    init { store.load()?.let { (b, s) -> b.copyInto(breaks); s.copyInto(seen) } }
+    init { store.load()?.let { c -> c.breaks.copyInto(breaks); c.seen.copyInto(seen); c.lengths.copyInto(lengths) } }
+
+    private fun persist() = store.save(ClockCounts(breaks, seen, lengths))
 
     override fun warmup() {}   // what it learned is kept across sessions
     override fun observeAudio(block: AudioBlock) {}
@@ -70,7 +84,7 @@ class ClockDetector(private val store: ClockStore, private val cfg: ClockConfig 
         lastKey = key
         seen[minute] = min(seen[minute] + 1, MAX_COUNT)
         val hour = key / 60
-        if (hour != hourOfLastSave) { hourOfLastSave = hour; store.save(breaks, seen) }
+        if (hour != hourOfLastSave) { hourOfLastSave = hour; persist() }
     }
 
     /** A confirmed break from [startWall] to [endWall] (wall-clock seconds). */
@@ -79,8 +93,29 @@ class ClockDetector(private val store: ClockStore, private val cfg: ClockConfig 
         if (dur < cfg.minBreakS || dur > cfg.maxBreakS) return
         val first = (startWall / 60.0).toLong(); val last = ((endWall - 1.0) / 60.0).toLong()
         for (k in first..last) { val m = (k % 60).toInt(); breaks[m] = min(breaks[m] + 1, MAX_COUNT) }
-        store.save(breaks, seen)
+        val bin = min(LENGTH_BINS - 1, (dur / LENGTH_BIN_S).toInt())
+        lengths[bin] = min(lengths[bin] + 1, MAX_COUNT)
+        persist()
     }
+
+    /** How many break lengths have been learned. */
+    val lengthSamples: Int get() = lengths.sum()
+
+    /** The break length at a percentile of what this channel has shown, or null before [MIN_LENGTH_SAMPLES]. */
+    fun lengthAt(percentile: Double): Double? {
+        val n = lengthSamples
+        if (n < MIN_LENGTH_SAMPLES) return null
+        val target = percentile * n
+        var acc = 0
+        for (b in lengths.indices) { acc += lengths[b]; if (acc >= target) return (b + 1) * LENGTH_BIN_S }
+        return LENGTH_BINS * LENGTH_BIN_S
+    }
+
+    /** A ceiling for this channel's breaks: a little over the longest usual one, never above [hardMaxS] nor below 90 s. */
+    fun ceilingS(hardMaxS: Double): Double = lengthAt(0.9)?.let { (it + 30.0).coerceIn(90.0, hardMaxS) } ?: hardMaxS
+
+    /** "About this long to go" from the typical length, or null while still learning. */
+    fun remainingS(elapsedS: Double): Double? = lengthAt(0.75)?.let { max(0.0, it - elapsedS) }
 
     /** Inert until this minute has been watched in enough hours: no dilution while learning. */
     override val voting: Boolean get() = minute >= 0 && seen[minute] >= cfg.minHours
@@ -104,5 +139,10 @@ class ClockDetector(private val store: ClockStore, private val cfg: ClockConfig 
     /** The whole hour as text, for a log or a page: minutes that are usually a break. */
     fun breakMinutes(): List<Int> = (0 until 60).filter { seen[it] >= cfg.minHours && fraction(it) >= cfg.fullFraction }
 
-    companion object { const val MAX_COUNT = 100_000 }
+    companion object {
+        const val MAX_COUNT = 100_000
+        const val LENGTH_BIN_S = 30.0
+        const val LENGTH_BINS = 12
+        const val MIN_LENGTH_SAMPLES = 5
+    }
 }

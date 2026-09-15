@@ -23,6 +23,7 @@ from adhush.detect.base import Detector
 from adhush.detect.clock import ClockDetector
 from adhush.detect.fingerprint import FingerprintDetector
 from adhush.detect.fusion import Fusion
+from adhush.detect.jingle import JingleDetector
 from adhush.detect.logo_absence import LogoAbsenceDetector
 from adhush.events import AdSegment, AudioEvent, FrameEvent, MuteDecision
 from adhush.fingerprint.learner import Learner
@@ -81,6 +82,7 @@ class Pipeline:
         # The break clock needs wall time; a replay has none, so it stays inert there.
         self._wall_clock = wall_clock
         self._clocks = [d for d in detectors if isinstance(d, ClockDetector)]
+        self._jingles = [d for d in detectors if isinstance(d, JingleDetector)]
         self._ad_start_wall: float | None = None
         # A timed manual duck ends at this media time (ADR 0017).
         self._timed_until: float | None = None
@@ -161,8 +163,10 @@ class Pipeline:
             )
             # A user hold behaves like a fingerprint hold with no program
             # evidence: only "Show's back" or the ceiling ends it.
-            program_evidence = not self._user_hold and any(
-                d.program_present for d in self._logos
+            # The logo visibly back, or the channel's closing sting heard: the program is on.
+            program_evidence = not self._user_hold and (
+                any(d.program_present for d in self._logos)
+                or any(d.program_present for d in self._jingles)
             )
 
             action = self._machine.update(
@@ -177,6 +181,10 @@ class Pipeline:
             reasons = decision.reasons
             if action is Action.MUTE:
                 self._ad_start_wall = self._wall_clock() if self._wall_clock else None
+                self._machine.ceiling_s = (
+                    self._clocks[0].ceiling_s(self._machine.hard_max_s)
+                    if self._clocks else self._machine.hard_max_s
+                )
                 if promote and match is not None:
                     self._mute_match = match
                     self._ad_start_est = match.est_start_ts
@@ -238,10 +246,13 @@ class Pipeline:
         reject, self._reject_current = self._reject_current, False
         self._user_hold = False
         wall_start, self._ad_start_wall = self._ad_start_wall, None
-        # The break clock learns every real break (a timed duck sets reject).
+        # The break clock and the jingle detector learn every real break (a timed duck sets reject).
         if not reject and wall_start is not None and self._wall_clock is not None:
             for clock in self._clocks:
                 clock.learn(wall_start, self._wall_clock())
+        if not reject and start is not None:
+            for jingle in self._jingles:
+                jingle.learn_break(start, ts)
         if self._learner is None or self._fp is None or start is None or reject:
             return
         duration = ts - start
@@ -291,6 +302,8 @@ class Pipeline:
                 if self._timed_until is not None
                 else 0.0,
                 "clock": self._clocks[0].describe() if self._clocks else None,
+                "jingles": self._jingles[0].describe() if self._jingles else None,
+                "break_left_s": self._break_left(),
                 "quiet_s": max(0.0, self._quiet_until - self._last_ts),
                 "camera": self._logos[0].describe(self._last_ts) if self._logos else None,
                 "trace": self._trace,
@@ -386,6 +399,27 @@ class Pipeline:
                     reasons=("user:timed", f"seconds={seconds:.0f}"),
                 )
             )
+            return True
+
+    def _break_left(self) -> float | None:
+        """While muted by the detectors: the clock's guess at what is left of the break."""
+        if not self._machine.muted or self._timed_until is not None or not self._clocks:
+            return None
+        entered = self._machine.ad_entered_ts
+        if entered is None:
+            return None
+        return self._clocks[0].remaining_s(self._last_ts - entered)
+
+    def extend_duck(self, seconds: float) -> bool:
+        """"+30 s": lengthen a running mute (timed or automatic) by ``seconds``;
+        not muted, it starts a timed mute of that length."""
+        with self._lock:
+            if self._machine.state is not AdState.AD:
+                return self.duck_for(seconds)
+            base = self._timed_until if self._timed_until and self._timed_until > self._last_ts else self._last_ts
+            self._timed_until = base + seconds
+            self._user_hold = True
+            self._emit("status", self.status())
             return True
 
     def _end_timed(self) -> bool:

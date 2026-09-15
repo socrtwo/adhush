@@ -42,6 +42,7 @@ class Command:
     mode: str = ""  # override
     enabled: bool = False  # set_trace
     seconds: int = 0  # duck_for
+    extend: bool = False  # duck_for: add to a running mute instead of replacing it
     key: str = ""  # remote
 
 
@@ -96,5 +97,6 @@ def parse_command(raw: str | bytes) -> Command:
         mode=mode,
         enabled=bool(message.get("enabled", False)),
         seconds=seconds,
+        extend=bool(message.get("extend", False)),
         key=key,
     )

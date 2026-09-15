@@ -11,7 +11,7 @@ from adhush.util.resources import bundled
 
 PHASE1_DETECTORS = ("black_frame", "silence", "loudness")
 PHASE2_DETECTORS = ("logo_absence", "scene_cut", "fingerprint")
-PHASE3_DETECTORS = ("clock",)
+PHASE3_DETECTORS = ("clock", "jingle")
 IMPLEMENTED_DETECTORS = PHASE1_DETECTORS + PHASE2_DETECTORS + PHASE3_DETECTORS
 KNOWN_DETECTORS = IMPLEMENTED_DETECTORS + ("aspect_change", "caption_gap")
 KNOWN_CAPTURE_BACKENDS = (
@@ -125,6 +125,22 @@ class ClockConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class JingleConfig:
+    """Break jingles (ADR 0020): the channel's own sting into and out of every break."""
+
+    file: str = "data/jingles.tsv"
+    sample_interval_s: float = 0.5
+    jingle_s: float = 3.0  # AdVent: three seconds is enough to recognise a sting
+    candidate_s: float = 6.0  # a candidate keeps a wider window than the sting
+    min_agreement: float = 0.72  # aligned chroma-bit agreement; 0.5 is chance
+    promote_hits: int = 3  # distinct breaks a candidate must open before it votes
+    hold_s: float = 20.0  # an opener's vote lasts this long
+    close_hold_s: float = 10.0  # a closer counts as program evidence this long
+    history_s: float = 400.0
+    max_candidates: int = 80
+
+
+@dataclass(frozen=True, slots=True)
 class DetectConfig:
     enabled: tuple[str, ...] = IMPLEMENTED_DETECTORS
     black_frame: BlackFrameConfig = field(default_factory=BlackFrameConfig)
@@ -133,6 +149,7 @@ class DetectConfig:
     logo_absence: LogoAbsenceConfig = field(default_factory=LogoAbsenceConfig)
     scene_cut: SceneCutConfig = field(default_factory=SceneCutConfig)
     clock: ClockConfig = field(default_factory=ClockConfig)
+    jingle: JingleConfig = field(default_factory=JingleConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -302,6 +319,7 @@ _LOUDNESS_DEFAULTS = LoudnessConfig()
 _LOGO_DEFAULTS = LogoAbsenceConfig()
 _SCENE_DEFAULTS = SceneCutConfig()
 _CLOCK_DEFAULTS = ClockConfig()
+_JINGLE_DEFAULTS = JingleConfig()
 _FUSION_DEFAULTS = FusionConfig()
 _CONTROL_DEFAULTS = ControlConfig()
 _FP_DEFAULTS = FingerprintConfig()
@@ -370,6 +388,7 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
     logo = det.get("logo_absence", {})
     scene = det.get("scene_cut", {})
     clk = det.get("clock", {})
+    jng = det.get("jingle", {})
     detect = DetectConfig(
         enabled=enabled,
         black_frame=BlackFrameConfig(
@@ -411,6 +430,18 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
             full_fraction=float(clk.get("full_fraction", _CLOCK_DEFAULTS.full_fraction)),
             min_break_s=float(clk.get("min_break_s", _CLOCK_DEFAULTS.min_break_s)),
             max_break_s=float(clk.get("max_break_s", _CLOCK_DEFAULTS.max_break_s)),
+        ),
+        jingle=JingleConfig(
+            file=str(jng.get("file", _JINGLE_DEFAULTS.file)),
+            sample_interval_s=float(jng.get("sample_interval_s", _JINGLE_DEFAULTS.sample_interval_s)),
+            jingle_s=float(jng.get("jingle_s", _JINGLE_DEFAULTS.jingle_s)),
+            candidate_s=float(jng.get("candidate_s", _JINGLE_DEFAULTS.candidate_s)),
+            min_agreement=float(jng.get("min_agreement", _JINGLE_DEFAULTS.min_agreement)),
+            promote_hits=int(jng.get("promote_hits", _JINGLE_DEFAULTS.promote_hits)),
+            hold_s=float(jng.get("hold_s", _JINGLE_DEFAULTS.hold_s)),
+            close_hold_s=float(jng.get("close_hold_s", _JINGLE_DEFAULTS.close_hold_s)),
+            history_s=float(jng.get("history_s", _JINGLE_DEFAULTS.history_s)),
+            max_candidates=int(jng.get("max_candidates", _JINGLE_DEFAULTS.max_candidates)),
         ),
     )
     if not 0.0 < detect.clock.full_fraction <= 1.0 or detect.clock.min_hours < 1:

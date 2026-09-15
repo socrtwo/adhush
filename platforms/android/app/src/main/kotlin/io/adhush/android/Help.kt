@@ -102,9 +102,9 @@ object Help {
         "The status line shows what it thinks of the current minute. It is on by default and stays quiet until it has learned.")
 
     val TIMED = Topic("Manual duck and the remote",
-        "The four buttons turn the TV down for exactly that long — 30, 60, 90 or 120 seconds — whatever the methods think, then bring it back up on their own. " +
-        "Pressed while the TV is already ducked, they keep it down for that long instead. Show's back ends one early. Nothing is learned from a manual duck.\n\n" +
-        "The remote control page has every button of the TV's own remote (through the network or the serial cable — infrared knows only volume and mute) plus Start, Stop, Is an ad, Show's back, Not an ad and the four timed ducks, " +
+        "The buttons turn the TV down for exactly that long — 30 seconds to five minutes in 30-second steps — whatever the methods think, then bring it back up on their own. " +
+        "Pressed while the TV is already ducked, they keep it down for that long instead; +30 s adds half a minute to whatever is running, on the Home page, the remote and the notification, which counts down. Show's back ends one early. Nothing is learned from a manual duck.\n\n" +
+        "The remote control page has every button of the TV's own remote (through the network or the serial cable — infrared knows only volume and mute) plus Start, Stop, Is an ad, Show's back, Not an ad and the timed ducks with +30 s, " +
         "so one screen does it all. When AdHush is running, the keys go through its connection; the Sharp allows only one.")
 
     val STREAM = Topic("Learn from a stream",
@@ -112,7 +112,13 @@ object Help {
         "Every break it recognises (quiet gap, loudness jump, a known script, an AI judge) is remembered when it ends, and ✓ / ▶ on the notification teach by hand. No TV is touched.\n\n" +
         "What it learns lands in the same memory the TV mode uses, so when you Stop and press the normal Start by the TV, those spots are already known. The stream's own inserted ads never air on cable; they simply never match. " +
         "The break clock does not learn from a stream: streams run about half a minute behind cable.\n\n" +
-        "Share this phone's memory (card 3) zips the breaks, scripts and clock; Import memory from a file merges another phone's, skipping what is already known. Stop AdHush before importing.")
+        "With Read the player's AD badge on, the phone also reads the four corners of its own screen once a second: streaming players draw \"AD\", \"Ad 1 of 3\" or a countdown there during a break, which is as good as being told. A badge in view is a near-certain break; the badge gone is the show. Whole words only, so a caption saying \"already\" never counts.\n\n" +
+        "Share this phone's memory (card 3) zips the breaks, scripts, clock and jingles; Import memory from a file merges another phone's, skipping what is already known. Stop AdHush before importing.")
+
+    val JINGLE = Topic("Method 10 — break jingles",
+        "A channel plays the same short sting going into and out of every break — a few notes, a whoosh, the show's own bumper. Instead of remembering each commercial, this method remembers the sting: one fingerprint covers every break on that channel for good.\n\n" +
+        "Nothing is typed in. Every break the app ends (by any method, or by your ✓ and ▶) teaches the seconds around its start and its end as candidates. A candidate that turns out to open three different breaks is promoted; from then on, hearing it ducks the set the moment the break starts, and hearing the closing sting brings the show back at once.\n\n" +
+        "Not an ad after a jingle duck counts against that jingle; enough wrong calls demote it. Stream learning teaches jingles too, from clean audio. The idea comes from the AdVent project, which measured that three seconds of a sting is enough to recognise it.")
 
     val METHODS = Topic("Choosing methods",
         "Any mix of the eight methods can be on, but AT LEAST ONE must be on or the app has nothing to go on and will refuse to start.\n\n" +
@@ -124,7 +130,7 @@ object Help {
         "Test TV talks to the set the way the app does when a commercial comes on: it asks the volume, mutes and unmutes, ducks and restores, and prints every byte it sent and got back. " +
         "If the sound dips twice, the connection works. It uses whatever connection is chosen on the TV page — network, serial cable or infrared.")
 
-    val ALL = listOf(METHODS, BUG, TICKER, SCRIPT, DUCK, TEACH, TIMED, TEST, SILENCE, LOUDNESS, FINGERPRINTS, CAMERA, SPEECH, CAPTIONS, CLAUDE, LOCAL, CLOCK, STREAM)
+    val ALL = listOf(METHODS, BUG, TICKER, SCRIPT, DUCK, TEACH, TIMED, TEST, SILENCE, LOUDNESS, FINGERPRINTS, CAMERA, SPEECH, CAPTIONS, CLAUDE, LOCAL, CLOCK, JINGLE, STREAM)
 
     fun show(context: Context, topic: Topic) {
         MaterialAlertDialogBuilder(context).setTitle(topic.title).setMessage(topic.body).setPositiveButton("Got it", null).show()

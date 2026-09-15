@@ -3,6 +3,29 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.21.0] - 2026-09-15
+### Added
+- **Method 10, break jingles** (ADR 0020, after AdVent): the channel's own
+  sting into and out of every break is learned from the breaks the
+  detectors already end — three breaks opened by the same three seconds of
+  sound promote it — and then ducks the set the moment it is heard, ahead
+  of every other method. A closer heard while ducked counts as the
+  programme coming back. Python core (`jingle`, on in the listener example)
+  and the phone; `jingles.tsv` travels with the shared memory.
+- **The ad badge** during stream learning on Android: ML Kit reads the
+  corners of the player once a second and "Ad", "Ad 1 of 3", "AD 0:15" or
+  "Your video will resume" is ground truth for the break.
+- **Learned break lengths**: the break clock keeps a histogram of how long
+  this channel's breaks run; a mute's ceiling becomes the 90th percentile
+  plus 30 s once five breaks are known, and the status line shows "about
+  m:ss left" during an automatic duck.
+- **A countdown you can extend**: manual ducks of 150, 180, 210, 240, 270
+  and 300 s next to the 30–120 s ones, a `+30 s` button (phone Home, the
+  remote, the notification, the web page, IPC `duck_for` with
+  `extend: true`) and a live `m:ss left` on the status line. `+30 s` on an
+  automatic duck holds it as a timed one.
+- A remote-control icon in the toolbar of every phone screen.
+
 ## [0.20.0] - 2026-09-15
 ### Added
 - **A release for every platform** (ADR 0019): one-file binaries of the

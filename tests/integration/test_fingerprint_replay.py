@@ -12,9 +12,11 @@ from pathlib import Path
 from adhush.capture.file_replay import FileReplaySource, write_fixture
 from adhush.cli import main
 from adhush.config import (
+    ClockConfig,
     DetectConfig,
     FingerprintConfig,
     FusionConfig,
+    JingleConfig,
     LogoAbsenceConfig,
     LoudnessConfig,
     RoiConfig,
@@ -57,6 +59,8 @@ def _detect_cfg(template: Path) -> DetectConfig:
     return DetectConfig(
         loudness=LoudnessConfig(window_s=1.5, baseline_s=30.0),
         logo_absence=LogoAbsenceConfig(roi=ROI, absence_frames=8, template=str(template)),
+        clock=ClockConfig(file=""),
+        jingle=JingleConfig(file=""),
     )
 
 
@@ -80,7 +84,7 @@ def test_second_airing_is_promoted_and_muted_for_learned_duration(tmp_path: Path
         )
         assert {d.name for d in detectors} == {
             "black_frame", "silence", "loudness", "logo_absence", "scene_cut", "fingerprint",
-            "clock",
+            "clock", "jingle",
         }
         fusion = Fusion(FUSION_CFG, {}, [d.name for d in detectors])
         pipeline = Pipeline(
@@ -148,6 +152,10 @@ template = "{tmp_path / 'logo.npz'}"
 [detect.loudness]
 window_s = 1.5
 baseline_s = 30.0
+[detect.clock]
+file = "{tmp_path / 'clock.tsv'}"
+[detect.jingle]
+file = "{tmp_path / 'jingles.tsv'}"
 [fingerprint]
 store = "{tmp_path / 'ads.sqlite'}"
 audio_min_agreement = 0.6

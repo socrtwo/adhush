@@ -2,6 +2,7 @@
 truth synthesized through the file_replay path, plus targeted edge cases."""
 
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 
@@ -278,3 +279,90 @@ class TestBreakClock:
         fresh = ClockDetector(ClockConfig(file=""))
         fresh.tick(50 * 60)
         assert not fresh.voting and fresh.vote(0.0).reason.startswith("clock_learning")
+
+
+class TestJingle:
+    """ADR 0020: the channel's own sting, learned from three breaks, then recognised."""
+
+    OPENER: ClassVar[list[list[int]]] = [[0, 2, 4, 7, 9, 11], [1, 3, 5, 6, 8, 10], [0, 1, 4, 5, 8, 9], [2, 3, 6, 7, 10, 11], [0, 3, 6, 9, 1, 4], [2, 5, 8, 11, 7, 10]]
+    CLOSER: ClassVar[list[list[int]]] = [[0, 1, 2, 3, 4, 5], [6, 7, 8, 9, 10, 11], [0, 2, 4, 6, 8, 10], [1, 3, 5, 7, 9, 11], [0, 1, 6, 7, 2, 8], [3, 4, 9, 10, 5, 11]]
+
+    @staticmethod
+    def _chord(semitones: list[int], t0: float, n: int) -> np.ndarray:
+        t = t0 + np.arange(n) / RATE
+        v = sum(np.sin(2 * np.pi * 440.0 * 2 ** (s / 12.0) * t) for s in semitones)
+        return (0.15 * v / len(semitones)).astype(np.float32)
+
+    class _Feed:
+        def __init__(self, det: "JingleDetector") -> None:  # noqa: F821
+            self.det, self.ts = det, 0.0
+
+        def block(self, samples: np.ndarray) -> None:
+            self.det.observe_audio(AudioEvent(ts=self.ts, samples=samples, sample_rate=RATE))
+            self.ts += len(samples) / RATE
+
+    def _sting(self, f: "_Feed", steps: list[list[int]]) -> None:
+        for c in steps:
+            for _ in range(5):
+                f.block(self._chord(c, f.ts, RATE // 10))
+
+    def _programme(self, f: "_Feed", seconds: float, rng: np.random.Generator) -> None:
+        left = seconds
+        while left > 0:
+            c = list(rng.permutation(12)[:6])
+            for _ in range(5):
+                f.block(self._chord(c, f.ts, RATE // 10))
+            left -= 0.5
+
+    def test_learns_and_recognises_a_channel_sting(self, tmp_path: Path) -> None:
+        from adhush.config import JingleConfig
+        from adhush.detect.jingle import JingleDetector
+
+        cfg = JingleConfig(file=str(tmp_path / "jingles.tsv"))
+        det = JingleDetector(cfg)
+        det.warmup()
+        f = self._Feed(det)
+        rng = np.random.default_rng(11)
+        for k in range(3):
+            self._programme(f, 15.0, rng)
+            self._sting(f, self.OPENER)
+            start = f.ts + 1.0
+            self._programme(f, 25.0, rng)
+            self._sting(f, self.CLOSER)
+            end = f.ts - 1.5
+            det.learn_break(start, end)
+            self._programme(f, 8.0, rng)
+            if k < 2:
+                assert not det.promoted(), det.describe()
+        assert sorted(j.kind for j in det.promoted()) == ["close", "open"], det.describe()
+        self._programme(f, 10.0, rng)
+        assert det.vote(f.ts).confidence == 0.0
+        self._sting(f, self.OPENER)
+        vote = det.vote(f.ts)
+        assert vote.confidence == 1.0 and vote.reason.startswith("jingle_open"), vote.reason
+        self._programme(f, 25.0, rng)
+        assert det.vote(f.ts).confidence == 0.0
+        assert not det.program_present
+        self._sting(f, self.CLOSER)
+        assert det.program_present
+        again = JingleDetector(cfg)  # the file round-trips
+        assert len(again.promoted()) == 2
+        # "Not an ad" after a jingle-driven mute counts against it.
+        self._sting(f, self.OPENER)
+        assert det.vote(f.ts).confidence == 1.0
+        det.user_says_program(f.ts)
+        assert det.vote(f.ts).confidence == 0.0
+
+    def test_clock_learns_break_lengths(self, tmp_path: Path) -> None:
+        from adhush.config import ClockConfig
+        from adhush.detect.clock import ClockDetector
+
+        clock = ClockDetector(ClockConfig(file=str(tmp_path / "clock.tsv")))
+        assert clock.ceiling_s(240.0) == 240.0 and clock.remaining_s(10.0) is None
+        for i in range(6):
+            clock.learn(i * 3600.0, i * 3600.0 + 125.0 + i * 5)
+        assert clock.length_samples == 6
+        assert 180.0 <= clock.ceiling_s(240.0) <= 210.0
+        assert 60.0 <= clock.remaining_s(60.0) <= 120.0  # type: ignore[operator]
+        assert clock.remaining_s(600.0) == 0.0
+        assert ClockDetector(ClockConfig(file=str(tmp_path / "clock.tsv"))).length_samples == 6

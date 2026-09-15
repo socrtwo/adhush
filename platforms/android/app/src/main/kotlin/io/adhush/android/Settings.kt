@@ -64,8 +64,13 @@ class Settings(context: Context) {
     /** Method 9: the break clock, a learned minute-of-hour prior (ADR 0017). On by default; inert until it has learned. */
     var clock: Boolean get() = prefs.getBoolean("clock", true); set(v) = prefs.edit().putBoolean("clock", v).apply()
 
-    /** How many of the nine methods are switched on. Zero means the app cannot work. */
-    val methodsOn: Int get() = listOf(silence, loudness, fingerprints, camera, speech, captions, judgeCloud, judgeLocal, clock).count { it }
+    /** Method 10: the channel's break jingles (ADR 0020). On by default; inert until three breaks share a sting. */
+    var jingles: Boolean get() = prefs.getBoolean("jingles", true); set(v) = prefs.edit().putBoolean("jingles", v).apply()
+    /** Stream learning reads the player's "AD" badge off the screen (ADR 0020). */
+    var badge: Boolean get() = prefs.getBoolean("badge", true); set(v) = prefs.edit().putBoolean("badge", v).apply()
+
+    /** How many of the ten methods are switched on. Zero means the app cannot work. */
+    val methodsOn: Int get() = listOf(silence, loudness, fingerprints, camera, speech, captions, judgeCloud, judgeLocal, clock, jingles).count { it }
     var irAddress: Int get() = prefs.getInt("ir_address", 1); set(v) = prefs.edit().putInt("ir_address", v).apply()
     var irVolumeUp: Int get() = prefs.getInt("ir_vol_up", 0x14); set(v) = prefs.edit().putInt("ir_vol_up", v).apply()
     var irVolumeDown: Int get() = prefs.getInt("ir_vol_down", 0x15); set(v) = prefs.edit().putInt("ir_vol_down", v).apply()

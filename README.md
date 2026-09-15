@@ -10,9 +10,9 @@ RS-232, network API, or the host's own audio mixer.
 **Status: twelve roadmap phases in, running in real living rooms.** The
 Python core (Windows, macOS, Linux, ChromeOS, Raspberry Pi) captures from
 HDMI-UVC, screen grab, a camera at the screen, a microphone or line-in, runs
-six detectors plus a learned break clock, fuses their votes, and drives the
+six detectors plus a learned break clock and the channel's break jingle, fuses their votes, and drives the
 set over RS-232, IP, HDMI-CEC, infrared, a network blaster, the host's own
-mixer or a relay. The Android app (a phone by the TV, no cables) has nine
+mixer or a relay. The Android app (a phone by the TV, no cables) has ten
 methods including offline speech, on-device and cloud AI judges, the channel
 bug or a news ticker through the camera, and can learn a channel's
 commercials from its live stream before the first evening at the TV. Both
@@ -68,7 +68,8 @@ JSON label file (`[{"start_ts": 16.0, "duration_s": 30.0}, ...]`).
 ## Keep it running, see it at a glance
 
 `adhush run` with `[ipc] enabled` serves the web app and opens the
-always-on-top mini window (✗ ✓ ▶ ■, timed ducks, and a full TV remote).
+always-on-top mini window (✗ ✓ ▶ ■, timed ducks of 30 s to 5 min with
+`+30 s`, and a full TV remote).
 Phones and tablets open `http://<core-host>:8675/` and add it to the home
 screen. Which platform gets what is in `docs/release.md`.
 
@@ -125,10 +126,11 @@ compensate with state verification where available.
 ## Android app
 
 `platforms/android` is the phone by the TV: the detector core ported to
-Kotlin, nine methods (quiet gaps, loudness, remembered breaks, the channel
+Kotlin, ten methods (quiet gaps, loudness, remembered breaks, the channel
 bug or a news ticker through the camera, offline speech and on-screen
 captions matched against learned scripts, Claude and an on-device language
-model as judges, and a learned break clock), ducking a Sharp over Wi-Fi, a
+model as judges, a learned break clock that also learns how long breaks
+run, and the channel's break jingle), ducking a Sharp over Wi-Fi, a
 USB serial cable or infrared. It teaches itself from a channel's live
 stream, moves its memory between phones, and carries a full remote. See
 `platforms/android/README.md` and the guides in `docs/print/`.

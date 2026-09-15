@@ -9,6 +9,9 @@ package io.adhush.core
 class AdStateMachine(private val cfg: FusionConfig) {
     var state = AdState.PROGRAM
         private set
+    /** The longest a break may keep the set ducked; the engine lowers it to what the channel's breaks usually run (ADR 0020). */
+    var ceilingS: Double = cfg.maxMuteS
+    val hardMaxS: Double get() = cfg.maxMuteS
     private val muteDwell = DwellTimer(cfg.muteDwellMs / 1000.0)
     private val unmuteDwell = DwellTimer(cfg.unmuteDwellMs / 1000.0)
     private val fpUnmuteDwell = DwellTimer(cfg.fpUnmuteDwellMs / 1000.0)
@@ -70,7 +73,7 @@ class AdStateMachine(private val cfg: FusionConfig) {
             }
             AdState.AD -> {
                 val entered = adEnteredTs!!
-                if (now - entered >= cfg.maxMuteS) return leaveAd(now)
+                if (now - entered >= ceilingS) return leaveAd(now)
                 if (fpHold) {
                     unmuteDwell.reset()
                     if (fpUnmuteDwell.update(programEvidence, now)) return leaveAd(now)

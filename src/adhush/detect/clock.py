@@ -20,6 +20,9 @@ from adhush.detect.base import Detector
 from adhush.events import DetectorVote
 
 _MAX_COUNT = 100_000
+_LENGTH_BIN_S = 30.0
+_LENGTH_BINS = 12
+_MIN_LENGTH_SAMPLES = 5
 
 
 class ClockDetector(Detector):
@@ -29,6 +32,8 @@ class ClockDetector(Detector):
         self._cfg = config
         self._breaks = [0] * 60
         self._seen = [0] * 60
+        # Break lengths in 30-second bins (DTC: breaks come in 30-second units, up to six minutes).
+        self._lengths = [0] * _LENGTH_BINS
         self._minute = -1
         self._last_key: int | None = None
         self._hour_of_last_save: int | None = None
@@ -49,6 +54,10 @@ class ClockDetector(Detector):
                 m = int(parts[1])
                 if 0 <= m < 60:
                     self._breaks[m], self._seen[m] = int(parts[2]), int(parts[3])
+            elif parts[0] == "d" and len(parts) >= 3:
+                b = int(parts[1])
+                if 0 <= b < _LENGTH_BINS:
+                    self._lengths[b] = int(parts[2])
 
     def _save(self) -> None:
         path = self._path()
@@ -56,8 +65,9 @@ class ClockDetector(Detector):
             return
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(path.suffix + ".tmp")
-        lines = ["# adhush clock v1\tminute\tbreaks\thours_seen"]
+        lines = ["# adhush clock v2\tminute\tbreaks\thours_seen | d\t30s-bin\tbreaks"]
         lines += [f"m\t{m}\t{self._breaks[m]}\t{self._seen[m]}" for m in range(60)]
+        lines += [f"d\t{b}\t{self._lengths[b]}" for b in range(_LENGTH_BINS)]
         tmp.write_text("\n".join(lines) + "\n")
         tmp.replace(path)
 
@@ -85,7 +95,40 @@ class ClockDetector(Detector):
         for key in range(first, last + 1):
             m = key % 60
             self._breaks[m] = min(self._breaks[m] + 1, _MAX_COUNT)
+        b = min(_LENGTH_BINS - 1, int(duration / _LENGTH_BIN_S))
+        self._lengths[b] = min(self._lengths[b] + 1, _MAX_COUNT)
         self._save()
+
+    # -- break lengths (ADR 0020) ---------------------------------------------
+
+    @property
+    def length_samples(self) -> int:
+        return sum(self._lengths)
+
+    def length_at(self, percentile: float) -> float | None:
+        """The break length at a percentile of what this channel has shown."""
+        n = self.length_samples
+        if n < _MIN_LENGTH_SAMPLES:
+            return None
+        target = percentile * n
+        acc = 0
+        for b, count in enumerate(self._lengths):
+            acc += count
+            if acc >= target:
+                return (b + 1) * _LENGTH_BIN_S
+        return _LENGTH_BINS * _LENGTH_BIN_S
+
+    def ceiling_s(self, hard_max_s: float) -> float:
+        """A little over the longest usual break, never above the hard ceiling nor under 90 s."""
+        p90 = self.length_at(0.9)
+        if p90 is None:
+            return hard_max_s
+        return max(90.0, min(hard_max_s, p90 + 30.0))
+
+    def remaining_s(self, elapsed_s: float) -> float | None:
+        """"About this long to go", from the typical length; None while still learning."""
+        p75 = self.length_at(0.75)
+        return None if p75 is None else max(0.0, p75 - elapsed_s)
 
     # -- voting --------------------------------------------------------------
 

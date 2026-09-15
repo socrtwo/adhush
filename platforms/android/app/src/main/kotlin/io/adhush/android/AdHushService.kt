@@ -21,8 +21,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import io.adhush.core.AdState
 import io.adhush.core.Assembly
+import io.adhush.core.BadgeDetector
 import io.adhush.core.ClockDetector
 import io.adhush.core.FileClockStore
+import io.adhush.core.FileJingleStore
+import io.adhush.core.JingleDetector
 import io.adhush.core.RemoteKey
 import io.adhush.core.press
 import io.adhush.core.ControlError
@@ -81,6 +84,7 @@ class AdHushService : Service(), LifecycleOwner {
     private var stream: StreamSource? = null
     private var projection: MediaProjection? = null
     private var streamStore: FileFingerprintStore? = null
+    private var badgeReader: BadgeReader? = null
     private var streamAdsAtStart = 0
     private var streamScriptsAtStart = 0
     private val io = Executors.newSingleThreadExecutor()
@@ -130,6 +134,7 @@ class AdHushService : Service(), LifecycleOwner {
                 return START_STICKY
             }
             ACTION_KEY -> { intent.getStringExtra(EXTRA_KEY)?.let { k -> io.execute { pressKey(k) } }; return START_STICKY }
+            ACTION_DUCK_MORE -> { io.execute { if (engine?.extendDuck(now(), 30.0) == true) refresh() }; return START_STICKY }
             ACTION_RESTORE -> { io.execute { runCatching { controller?.restore() }; refresh() }; return START_STICKY }
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_SURVEY -> {
@@ -191,6 +196,7 @@ class AdHushService : Service(), LifecycleOwner {
         val cloudWanted = settings.judgeCloud && settings.claudeKey.isNotBlank()
         val localWanted = settings.judgeLocal && LocalJudge.isInstalled(this)
         val breakClock = if (settings.clock) ClockDetector(FileClockStore(File(filesDir, CLOCK_FILE))) else null   // not `clock`, the m:ss helper
+        val jingle = if (settings.jingles) JingleDetector(FileJingleStore(File(filesDir, JINGLES_FILE))) else null
         val scriptStore = if (speechWanted || captionsWanted || cloudWanted || localWanted) FileScriptStore(File(filesDir, SCRIPTS_FILE)).also { scripts = it } else null
         val transcript = if (speechWanted) scriptStore?.let { TranscriptDetector(it) } else null
         val captions = if (captionsWanted) scriptStore?.let { TranscriptDetector(it, name = "captions") } else null
@@ -198,7 +204,7 @@ class AdHushService : Service(), LifecycleOwner {
         val judges = makeJudges(scriptStore, cloudWanted, localWanted)
         val eng = try {
             Assembly.engine(NetworkedController(ctl), store, logo = logo, transcript = transcript, captions = captions, judges = judges,
-                silence = settings.silence, loudness = settings.loudness, fingerprints = settings.fingerprints, clock = breakClock)
+                silence = settings.silence, loudness = settings.loudness, fingerprints = settings.fingerprints, clock = breakClock, jingle = jingle)
         } catch (e: IllegalArgumentException) {
             update("no method is switched on — turn one on under Methods"); runCatching { ctl.close() }; controller = null; stopSelf(); return
         }
@@ -211,7 +217,7 @@ class AdHushService : Service(), LifecycleOwner {
             cloud = cloudWanted, cloudNoKey = settings.judgeCloud && !cloudWanted,
             local = localJudge != null, localNoModel = settings.judgeLocal && !LocalJudge.isInstalled(this),
             judgesDeaf = judges.isNotEmpty() && !speechWanted && !captionsWanted,
-            clock = breakClock != null,
+            clock = breakClock != null, jingle = jingle != null,
         )
         io.execute {
             try {
@@ -447,8 +453,10 @@ class AdHushService : Service(), LifecycleOwner {
         val scriptStore = FileScriptStore(File(filesDir, SCRIPTS_FILE)).also { scripts = it }
         val transcript = if (speechWanted) TranscriptDetector(scriptStore) else null
         val judges = makeJudges(scriptStore, cloudWanted, localWanted)
+        val jingle = if (settings.jingles) JingleDetector(FileJingleStore(File(filesDir, JINGLES_FILE))) else null
+        val badge = if (settings.badge) BadgeDetector() else null
         val eng = Assembly.engine(VirtualController(), store, transcript = transcript, judges = judges,
-            silence = settings.silence, loudness = settings.loudness, fingerprints = true)
+            silence = settings.silence, loudness = settings.loudness, fingerprints = true, jingle = jingle, badge = badge)
         eng.addListener { s -> lastStatus = s; main.post { update(describeStream(s)) } }
         engine = eng
         streamAdsAtStart = store.count(); streamScriptsAtStart = scriptStore.count()
@@ -456,12 +464,16 @@ class AdHushService : Service(), LifecycleOwner {
             silence = settings.silence, loudness = settings.loudness, fingerprints = true,
             logo = false, logoNotSetUp = false, speech = speechWanted, speechNoModel = settings.speech && !speechWanted,
             captions = false, control = "none", cloud = cloudWanted, local = localWanted,
-            judgesDeaf = judges.isNotEmpty() && !speechWanted, stream = true,
+            judgesDeaf = judges.isNotEmpty() && !speechWanted, stream = true, jingle = jingle != null,
         )
         if (speechWanted) startSpeech(eng, scriptStore)
         val s = StreamSource(mp) { block -> eng.onAudio(block); speech?.feed(block) }
         try { s.start() } catch (e: Exception) { AppLog.e("stream", "capture failed to start", e); update("playback capture failed: ${e.message}"); stopSelf(); return }
         stream = s
+        if (badge != null) {
+            try { badgeReader = BadgeReader(mp, this, { ts, text -> eng.onBadgeText(ts, text) }, { stream?.mediaTime ?: 0.0 }).also { it.start() } }
+            catch (e: Exception) { AppLog.w("badge", "screen reader failed to start: ${e.message}") }
+        }
         main.postDelayed(ticker, POLL_MS)
         AppLog.i("stream", "learning from the phone's playback")
         update("STREAM LEARNING · play the channel's live stream in Chrome and leave it playing")
@@ -473,7 +485,9 @@ class AdHushService : Service(), LifecycleOwner {
         val newScripts = (scripts?.count() ?: 0) - streamScriptsAtStart
         val state = if (s.teaching) "teaching — press Show's back when the show returns" else if (s.muted) "commercial (learning)" else "show"
         val ai = s.judges.entries.joinToString("") { (k, v) -> " · ${if (k == "judge_claude") "Claude" else "local AI"}: $v" }
-        return "STREAM LEARNING · ${clock(t)} listened · $state$ai · +$breaks breaks · +$newScripts scripts"
+        val bdg = s.badge?.let { " · badge: $it" } ?: ""
+        val jng = s.jingles?.let { " · jingles: $it" } ?: ""
+        return "STREAM LEARNING · ${clock(t)} listened · $state$bdg$ai$jng · +$breaks breaks · +$newScripts scripts"
     }
 
     override fun onDestroy() {
@@ -481,6 +495,7 @@ class AdHushService : Service(), LifecycleOwner {
         emergencyRestore = null
         mic?.stop(); mic = null            // before the speech engine, which it feeds
         stream?.stop(); stream = null
+        badgeReader?.close(); badgeReader = null
         projection?.stop(); projection = null
         streamStore = null
         camera?.stop(); camera = null
@@ -517,13 +532,19 @@ class AdHushService : Service(), LifecycleOwner {
     }
 
     private fun describe(s: Status): String {
-        if (s.timedS > 0.0) return "DUCKED — for ${s.timedS.toInt()} s more (manual) · ${s.adsLearned} learned"
+        if (s.timedS > 0.0) return "DUCKED — ${clock(s.timedS)} left (manual; +30 s on the notification) · ${s.adsLearned} learned"
         if (s.teaching) return "TEACHING — ducked; press Show's back when the show returns · ${s.adsLearned} learned"
+        val left = s.breakLeftS   // local: no smart cast on a property from another module
+        if (s.muted && s.override == CoreOverride.AUTO && left != null) {
+            val cam = s.camera?.let { " · camera: $it" } ?: ""
+            return "DUCKED — ad · about ${clock(left)} left$cam · ${s.adsLearned} learned"
+        }
         val state = if (s.override != CoreOverride.AUTO) "override: ${s.override.wire}" else if (s.muted) "DUCKED — ad" else if (s.quietS > 0.0) "SHOW (you said not an ad; ${s.quietS.toInt()} s of quiet)" else if (s.state == AdState.PROGRAM) "SHOW" else s.state.wire.uppercase()
         val cam = s.camera?.let { " · camera: $it" } ?: ""
         val ai = s.judges.entries.joinToString("") { (k, v) -> " · ${if (k == "judge_claude") "Claude" else "local AI"}: $v" }
         val clk = s.clock?.let { " · clock $it" } ?: ""
-        return "$state · ${"%.2f".format(s.confidence)}$cam$ai$clk · ${s.adsLearned} learned"
+        val jng = s.jingles?.let { if (it.startsWith("learning")) "" else " · jingles: $it" } ?: ""
+        return "$state · ${"%.2f".format(s.confidence)}$cam$ai$clk$jng · ${s.adsLearned} learned"
     }
 
     private fun refresh() { lastStatus?.let { update(describe(it)) } }
@@ -555,6 +576,7 @@ class AdHushService : Service(), LifecycleOwner {
             .addAction(action(2, ACTION_IS_AD, getString(R.string.action_is_ad)))
             .addAction(action(4, ACTION_SHOW_BACK, getString(R.string.action_show_back)))
             .addAction(action(1, ACTION_NOT_AD, getString(R.string.action_not_ad)))
+            .addAction(action(5, ACTION_DUCK_MORE, "+30 s"))
             .build()
     }
 
@@ -592,6 +614,7 @@ class AdHushService : Service(), LifecycleOwner {
         val clock: Boolean = false,
         /** Stream learning: hearing the phone's own playback, no TV (ADR 0018). */
         val stream: Boolean = false,
+        val jingle: Boolean = false,
     )
 
     companion object {
@@ -619,6 +642,8 @@ class AdHushService : Service(), LifecycleOwner {
         const val ACTION_STREAM_START = "io.adhush.android.STREAM_START"
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
+        const val ACTION_DUCK_MORE = "io.adhush.android.DUCK_MORE"
+        const val JINGLES_FILE = "jingles.tsv"
         const val BROADCAST_TEST = "io.adhush.android.TEST_LINE"
         const val SCRIPTS_FILE = "scripts.tsv"
         const val REPEAT_LEARN_MS = 10 * 60 * 1000L

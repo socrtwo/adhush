@@ -110,7 +110,7 @@ file.
 - **Material / remembered break** — the audio fingerprint (numbers, not a
   recording) of a break you bracketed with *Is an ad* and *Show's back*.
 
-## The nine methods
+## The ten methods
 
 | # | Method | What it uses | Can duck alone? |
 |---|---|---|---|
@@ -122,7 +122,8 @@ file.
 | 6 | On-screen captions | camera: the caption band read as text: scripts | yes |
 | 7 | Ask Claude | the words of 5 or 6 judged by Claude over the API (opt-in, paid) | yes |
 | 8 | Local AI | the words of 5 or 6 judged by a small model on the phone (free) | yes |
-| 9 | Break clock | the minute of the hour, learned from every confirmed break | no — tips the balance |
+| 9 | Break clock | the minute of the hour and how long breaks run, learned from every confirmed break | no — tips the balance; caps how long a duck may hold |
+| 10 | Break jingle | microphone: the channel's sting into (and out of) every break, learned from three breaks | yes |
 
 **Not an ad** now does three things: restores the volume, tells every
 method it was wrong (the camera must see the bug again before it may call
@@ -306,22 +307,44 @@ mic and lets loudness time the unmute itself.
 
 ## Manual duck and the remote (0.18.0)
 
-Four buttons on Home turn the TV down for 30, 60, 90 or 120 seconds and
-bring it back on their own, whatever the methods think; pressed while
-already ducked they extend, Show's back ends them early, nothing is learned.
-**Open the remote control** shows every key of the Sharp handset (through
+Ten buttons on Home turn the TV down for 30 s to 5 min in 30-s steps and
+bring it back on their own, whatever the methods think; **+30 s** (also on
+the notification and the remote) adds to a running duck, and on a duck the
+methods started it holds that one as a timed duck instead. The status line
+counts down; Show's back ends a timed duck early; nothing is learned.
+During an automatic duck the status line says "about m:ss left" once the
+break clock has seen five breaks on this channel (0.21.0).
+**Open the remote control** (also the remote icon in the toolbar of every
+screen) shows every key of the Sharp handset (through
 the network or the serial cable: `RCKY` codes; infrared knows only volume
 and mute) together with Start, Stop, Is an ad, Show's back, Not an ad and
 the timed ducks. While AdHush runs the keys go through its connection, since
 the Sharp allows one; otherwise the screen opens its own and closes it when
 it leaves the foreground (ADR 0017).
 
+## Break jingles (0.21.0)
+
+Method 10 listens for the channel's own sting. Every break the other
+methods end cuts two six-second candidates from the audio history — around
+the moment the break started and the moment it ended — and compares them
+with the candidates already kept. The same three seconds heard at the start
+of three different breaks becomes a known **opener**, and from then on
+hearing it ducks the set at once, before loudness or the bug can react. A
+known **closer** heard while ducked counts as the show being back. **Not an
+ad** counts against the opener that fired and demotes it when it has been
+wrong as often as right. A channel with no sting never promotes anything.
+The learned stings live in `jingles.tsv` and travel with the shared memory.
+
 ## Learn from a stream (0.19.0)
 
 On Android 10+, **Methods → Learn from a stream → Start** asks for the
 "record or cast" permission and then the phone hears its own playback: open
 the channel's live stream in Chrome and leave it playing. The engine runs
-without a TV, fingerprints on, speech and the AI judges as configured, and
+without a TV, fingerprints on, speech and the AI judges as configured,
+**Read the ad badge** on by default (the player's corners are read once a
+second with ML Kit; "Ad", "Ad 1 of 3", "AD 0:15" or "Your video will
+resume" is the strongest evidence there is, and its absence while the
+reader still scans counts as the show), and
 every break it ends is learned into the same `ads.tsv` and `scripts.tsv`
 the TV mode uses; ✓ / ▶ on the notification teach by hand. Players that
 block capture give silence and the status line says so. **Share this

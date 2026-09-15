@@ -35,6 +35,9 @@ class Action(Enum):
 
 class AdStateMachine:
     def __init__(self, config: FusionConfig) -> None:
+        # The longest a break may keep the set muted; the engine lowers it to
+        # what the channel's breaks usually run (ADR 0020).
+        self.ceiling_s: float = config.max_mute_s
         self._cfg = config
         self.state = AdState.PROGRAM
         self._mute_dwell = DwellTimer(config.mute_dwell_ms / 1000.0)
@@ -100,7 +103,7 @@ class AdStateMachine:
 
         if self.state is AdState.AD:
             assert self._ad_entered_ts is not None
-            if now - self._ad_entered_ts >= self._cfg.max_mute_s:
+            if now - self._ad_entered_ts >= self.ceiling_s:
                 return self._leave_ad(now)
             if fp_hold:
                 self._unmute_dwell.reset()
@@ -117,6 +120,10 @@ class AdStateMachine:
         if now >= self._recovery_until:
             self.state = AdState.PROGRAM
         return None
+
+    @property
+    def hard_max_s(self) -> float:
+        return self._cfg.max_mute_s
 
     def user_mute(self, now: float) -> Action | None:
         """The user pressed a button that must mute now: from any state but AD,

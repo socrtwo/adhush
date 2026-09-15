@@ -9,9 +9,9 @@ import kotlin.test.assertTrue
 /** ADR 0017: the break clock, timed manual ducks, and the remote keys. */
 class ClockAndTimedDuckTest {
     private class MemStore : ClockStore {
-        var saved: Pair<IntArray, IntArray>? = null; var saves = 0
+        var saved: ClockCounts? = null; var saves = 0
         override fun load() = saved
-        override fun save(breaks: IntArray, seen: IntArray) { saved = Pair(breaks.copyOf(), seen.copyOf()); saves++ }
+        override fun save(counts: ClockCounts) { saved = ClockCounts(counts.breaks.copyOf(), counts.seen.copyOf(), counts.lengths.copyOf()); saves++ }
     }
 
     @Test fun `the clock learns the minutes breaks land on and votes only where it has watched enough`() {
@@ -33,9 +33,9 @@ class ClockAndTimedDuckTest {
         val fresh = ClockDetector(MemStore()); fresh.tick(50 * 60.0)
         assertFalse(fresh.voting)
         // Implausible "breaks" teach nothing.
-        val before = store.saved!!.first.copyOf()
+        val before = store.saved!!.breaks.copyOf()
         c.learn(0.0, 5.0); c.learn(0.0, 900.0)
-        assertTrue(before.contentEquals(store.saved!!.first))
+        assertTrue(before.contentEquals(store.saved!!.breaks))
     }
 
     @Test fun `the clock file round-trips`() {
@@ -71,7 +71,7 @@ class ClockAndTimedDuckTest {
         assertFalse(ctl.muted, "restored after 30 s")
         assertEquals(listOf("user:timed_end"), engine.transitions.last().reasons)
         assertEquals(0, store.count(), "a timed duck is not a learned break")
-        assertEquals(0, clockStore.saved?.first?.sum() ?: 0, "nor does it teach the clock")
+        assertEquals(0, clockStore.saved?.breaks?.sum() ?: 0, "nor does it teach the clock")
         assertEquals(0.0, engine.status().timedS)
         // Pressed again at once (still in the recovery pause) it still ducks; Show's back ends it early.
         assertTrue(engine.duckFor(ts, 60.0), "duck during recovery"); assertTrue(ctl.muted); tick(5); assertTrue(engine.showIsBack(ts)); assertFalse(ctl.muted)

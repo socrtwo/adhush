@@ -9,6 +9,7 @@ from adhush.detect.base import Detector
 from adhush.detect.black_frame import BlackFrameDetector
 from adhush.detect.clock import ClockDetector
 from adhush.detect.fingerprint import FingerprintDetector
+from adhush.detect.jingle import JingleDetector
 from adhush.detect.logo_absence import LogoAbsenceDetector
 from adhush.detect.loudness import LoudnessDetector
 from adhush.detect.scene_cut import SceneCutDetector
@@ -27,6 +28,7 @@ _REGISTRY: dict[str, type[Detector]] = {
     SceneCutDetector.name: SceneCutDetector,
     FingerprintDetector.name: FingerprintDetector,
     ClockDetector.name: ClockDetector,
+    JingleDetector.name: JingleDetector,
 }
 
 
@@ -63,6 +65,8 @@ def build_detectors(
             detectors.append(SceneCutDetector(config.scene_cut))
         elif cls is ClockDetector:
             detectors.append(ClockDetector(config.clock))
+        elif cls is JingleDetector:
+            detectors.append(JingleDetector(config.jingle))
         elif cls is LogoAbsenceDetector:
             logo = LogoAbsenceDetector(config.logo_absence)
             if logo.calibrated:
