@@ -108,16 +108,18 @@ class TestBundledResources:
 
         from adhush.util.resources import bundled, frozen, self_command
 
-        (tmp_path / "platforms" / "web").mkdir(parents=True)
-        (tmp_path / "platforms" / "web" / "index.html").write_text("<html>")
+        bundle = tmp_path / "bundle"  # what PyInstaller unpacks; cwd has no platforms/web
+        (bundle / "platforms" / "web").mkdir(parents=True)
+        (bundle / "platforms" / "web" / "index.html").write_text("<html>")
+        monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(sys, "frozen", True, raising=False)
-        monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+        monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
         assert frozen()
-        assert bundled("platforms/web") == tmp_path / "platforms" / "web"
+        assert bundled("platforms/web") == bundle / "platforms" / "web"
         assert self_command() == [sys.executable]
         from adhush.ipc.api import resolve_web_root
 
-        assert resolve_web_root("platforms/web") == tmp_path / "platforms" / "web"
+        assert resolve_web_root("platforms/web") == bundle / "platforms" / "web"
 
     def test_init_writes_a_config_and_the_profiles(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
         from adhush.cli import main

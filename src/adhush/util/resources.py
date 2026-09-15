@@ -25,7 +25,7 @@ def repo_root() -> Path:
 
 def bundled(relative: str) -> Path:
     """A shipped file or directory by its repository-relative path."""
-    base = Path(sys._MEIPASS) if frozen() else repo_root()
+    base = Path(str(getattr(sys, "_MEIPASS", ""))) if frozen() else repo_root()
     return base / relative
 
 
