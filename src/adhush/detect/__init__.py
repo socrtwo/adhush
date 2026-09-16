@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from adhush.config import DetectConfig, FingerprintConfig
+from adhush.detect.aspect_change import AspectChangeDetector
 from adhush.detect.base import Detector
 from adhush.detect.black_frame import BlackFrameDetector
 from adhush.detect.clock import ClockDetector
@@ -29,6 +30,7 @@ _REGISTRY: dict[str, type[Detector]] = {
     FingerprintDetector.name: FingerprintDetector,
     ClockDetector.name: ClockDetector,
     JingleDetector.name: JingleDetector,
+    AspectChangeDetector.name: AspectChangeDetector,
 }
 
 
@@ -67,6 +69,8 @@ def build_detectors(
             detectors.append(ClockDetector(config.clock))
         elif cls is JingleDetector:
             detectors.append(JingleDetector(config.jingle))
+        elif cls is AspectChangeDetector:
+            detectors.append(AspectChangeDetector(config.aspect_change))
         elif cls is LogoAbsenceDetector:
             logo = LogoAbsenceDetector(config.logo_absence)
             if logo.calibrated:

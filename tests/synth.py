@@ -32,11 +32,15 @@ FP_TONE_HZ = (523.0, 659.0, 784.0, 988.0, 1175.0)
 FP_AMP = 0.30
 
 # kind: program | boundary | ad (flat, loud) | ad_fp (textured, repeatable)
+#       | ad_43 (an ad in 4:3: black pillars either side, otherwise "ad")
+PILLAR_W = WIDTH // 8  # 12.5 % each side: 16:9 becomes 4:3
 Timeline = list[tuple[str, float]]
 
 
 def _segment_audio(kind: str, n: int, rng: np.random.Generator) -> npt.NDArray[np.float32]:
     t = np.arange(n, dtype=np.float64) / RATE
+    if kind in ("ad", "ad_43"):
+        kind = "ad"
     if kind == "program":
         samples = PROGRAM_AMP * np.sin(2 * np.pi * PROGRAM_TONE_HZ * t)
     elif kind == "ad":
@@ -80,8 +84,11 @@ def _segment_frames(kind: str, n_frames: int) -> npt.NDArray[np.uint8]:
             tile = rng.integers(0, 256, (HEIGHT // 8, WIDTH // 8), dtype=np.uint8)
             frames[i] = np.kron(tile, np.ones((8, 8), dtype=np.uint8))
         return frames
-    luma = {"program": PROGRAM_LUMA, "boundary": BOUNDARY_LUMA, "ad": AD_LUMA}[kind]
+    luma = {"program": PROGRAM_LUMA, "boundary": BOUNDARY_LUMA, "ad": AD_LUMA, "ad_43": AD_LUMA}[kind]
     frames = np.full((n_frames, HEIGHT, WIDTH), luma, dtype=np.uint8)
+    if kind == "ad_43":
+        frames[:, :, :PILLAR_W] = 0
+        frames[:, :, WIDTH - PILLAR_W :] = 0
     if kind == "program":
         draw_logo(frames)
     return frames
@@ -120,7 +127,7 @@ def synthesize(
         else:
             if pod_start is None:
                 pod_start = now
-            pod_has_ad = pod_has_ad or kind in ("ad", "ad_fp")
+            pod_has_ad = pod_has_ad or kind in ("ad", "ad_fp", "ad_43")
 
         n_frames = round(duration * FPS)
         if video and n_frames:

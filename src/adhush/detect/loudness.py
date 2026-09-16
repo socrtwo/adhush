@@ -23,6 +23,14 @@ original scale. If the ducked set is buried under the room (the level sits
 near the silence gate, or what the microphone hears is spectrally flat noise —
 fans, not a broadcast), no offset can recover it: the detector goes inert
 until the volume is back, and says so in its reason.
+
+Crest factor (ADR 0021, after beepscore's analysis): commercials are
+mastered with heavy compression, so their peak-to-RMS ratio sits several dB
+under the programme's even when their loudness does not. The detector keeps
+the crest factor over the same short-term window against the same slow
+baseline, and a drop adds up to half a vote — never a whole one, so a music
+bed inside the programme cannot mute by itself, but a spot mixed no hotter
+than the show still shows.
 """
 
 from __future__ import annotations
@@ -53,6 +61,8 @@ _DUCK_HEADROOM_DB = 6.0
 # …or the audio heard during the settle window is flat noise (the silence
 # detector's own test for "room, not broadcast").
 _BURIED_FLATNESS = 0.2
+# A full crest-factor drop is worth this much of a vote (ADR 0021).
+_CREST_SHARE = 0.5
 
 
 def _k_weights(n_samples: int, rate: int) -> npt.NDArray[np.float64]:
@@ -71,10 +81,12 @@ class LoudnessDetector(Detector):
         self._cfg = config
         self._weights: npt.NDArray[np.float64] | None = None
         self._weights_key: tuple[int, int] | None = None
-        # (duration_s, weighted mean-square) blocks covering the short-term window
-        self._window: deque[tuple[float, float]] = deque()
+        # (duration_s, weighted mean-square, crest_db) blocks covering the short-term window
+        self._window: deque[tuple[float, float, float]] = deque()
         self._window_dur = 0.0
         self._baseline_lufs: float | None = None
+        self._baseline_crest: float | None = None
+        self._last_crest = 0.0
         self._observed_s = 0.0
         self._ungated_s = 0.0  # consecutive seconds with the short-term value above the gate
         self._elevated_s = 0.0  # consecutive seconds spent above baseline + delta/2
@@ -95,6 +107,8 @@ class LoudnessDetector(Detector):
         self._window.clear()
         self._window_dur = 0.0
         self._baseline_lufs = None
+        self._baseline_crest = None
+        self._last_crest = 0.0
         self._observed_s = 0.0
         self._ungated_s = 0.0
         self._elevated_s = 0.0
@@ -145,6 +159,23 @@ class LoudnessDetector(Detector):
         return self._baseline_lufs
 
     @property
+    def crest_db(self) -> float:
+        """Peak-to-RMS ratio over the short-term window, in dB."""
+        return self._last_crest
+
+    @property
+    def baseline_crest_db(self) -> float | None:
+        return self._baseline_crest
+
+    @staticmethod
+    def block_crest_db(samples: npt.NDArray[np.float32]) -> float:
+        x = samples.astype(np.float64)
+        rms = float(np.sqrt(np.mean(np.square(x)))) if len(x) else 0.0
+        if rms <= 0.0:
+            return 0.0
+        return 20.0 * math.log10(float(np.max(np.abs(x))) / rms)
+
+    @property
     def _warm(self) -> bool:
         # Baseline needs several windows of program before deltas mean anything.
         return self._baseline_lufs is not None and self._observed_s >= 4 * self._cfg.window_s
@@ -166,15 +197,17 @@ class LoudnessDetector(Detector):
 
     def observe_audio(self, event: AudioEvent) -> None:
         ms = self._weighted_ms(event.samples, event.sample_rate)
-        self._window.append((event.duration, ms))
+        self._window.append((event.duration, ms, self.block_crest_db(event.samples)))
         self._window_dur += event.duration
         while self._window_dur > self._cfg.window_s and len(self._window) > 1:
-            dur, _ = self._window.popleft()
+            dur, _, _ = self._window.popleft()
             self._window_dur -= dur
         self._observed_s += event.duration
 
-        total = sum(d * m for d, m in self._window)
+        total = sum(d * m for d, m, _ in self._window)
         mean_ms = total / self._window_dur if self._window_dur > 0 else 0.0
+        if self._window_dur > 0:
+            self._last_crest = sum(d * c for d, _, c in self._window) / self._window_dur
         raw = -70.0 if mean_ms <= 0.0 else -0.691 + 10.0 * math.log10(mean_ms)
         now = event.ts + event.duration
         if self._settle_until is not None:
@@ -196,6 +229,7 @@ class LoudnessDetector(Detector):
             # filling with start-up silence reads low and would freeze it there.
             if self._ungated_s >= self._cfg.window_s:
                 self._baseline_lufs = self._last_short_term
+                self._baseline_crest = self._last_crest
             return
         # Freeze the baseline while loudness is elevated (suspected ad) — unless
         # it has been elevated longer than any ad pod, which means the baseline
@@ -208,6 +242,8 @@ class LoudnessDetector(Detector):
             self._elevated_s = 0.0
         alpha = min(1.0, event.duration / self._cfg.baseline_s)
         self._baseline_lufs += alpha * (self._last_short_term - self._baseline_lufs)
+        if self._baseline_crest is not None:
+            self._baseline_crest += alpha * (self._last_crest - self._baseline_crest)
 
     def vote(self, ts: float) -> DetectorVote:
         if self._frozen is not None:
@@ -222,10 +258,16 @@ class LoudnessDetector(Detector):
             return self._vote(ts, 0.0, f"gated st_lufs={self._last_short_term:.1f}")
         delta = self._last_short_term - self._baseline_lufs
         confidence = max(0.0, min(1.0, delta / (self._cfg.delta_lufs * _FULL_CONF_FACTOR)))
+        crest = ""
+        if self._cfg.crest_drop_db > 0.0 and self._baseline_crest is not None:
+            drop = self._baseline_crest - self._last_crest
+            crest_conf = max(0.0, min(1.0, drop / (self._cfg.crest_drop_db * _FULL_CONF_FACTOR)))
+            confidence = min(1.0, confidence + _CREST_SHARE * crest_conf)
+            crest = f" crest_db={self._last_crest:.1f} crest_drop_db={drop:.1f}"
         duck = f" duck_offset_db={self._offset_db:.1f}" if self._ducked else ""
         return self._vote(
             ts,
             confidence,
             f"loudness delta_lufs={delta:.2f} st_lufs={self._last_short_term:.1f}"
-            f" baseline_lufs={self._baseline_lufs:.1f}{duck}",
+            f" baseline_lufs={self._baseline_lufs:.1f}{crest}{duck}",
         )

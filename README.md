@@ -10,7 +10,7 @@ RS-232, network API, or the host's own audio mixer.
 **Status: twelve roadmap phases in, running in real living rooms.** The
 Python core (Windows, macOS, Linux, ChromeOS, Raspberry Pi) captures from
 HDMI-UVC, screen grab, a camera at the screen, a microphone or line-in, runs
-six detectors plus a learned break clock and the channel's break jingle, fuses their votes, and drives the
+seven detectors plus a learned break clock and the channel's break jingle, fuses their votes, and drives the
 set over RS-232, IP, HDMI-CEC, infrared, a network blaster, the host's own
 mixer or a relay. The Android app (a phone by the TV, no cables) has ten
 methods including offline speech, on-device and cloud AI judges, the channel
@@ -89,11 +89,11 @@ screen. Which platform gets what is in `docs/release.md`.
 | Detector | Signal |
 |---|---|
 | `logo_absence` | Network bug vanishes from a configured ROI (typically lower right) |
-| `loudness` | Short-term LUFS jumps above rolling program baseline |
+| `loudness` | Short-term LUFS jumps above rolling program baseline; a crest-factor drop (a spot compressed flat) adds half a vote |
 | `black_frame` | Black/near-black runs at pod boundaries |
 | `silence` | Audio gaps at pod boundaries |
 | `scene_cut` | Shot-change rate spike |
-| `aspect_change` | Letterbox/pillarbox transition |
+| `aspect_change` | Letterbox/pillarbox transition: the active picture's shape leaves the programme's (HDMI and screen paths) |
 | `caption_gap` | Closed-caption stream discontinuity |
 | `fingerprint` | Perceptual video + audio hash match against previously seen ads |
 

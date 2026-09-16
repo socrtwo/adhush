@@ -1,7 +1,9 @@
 package io.adhush.core
 
+import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.min
+import kotlin.math.sqrt
 
 /** Ported verbatim from config.LoudnessConfig; the values encode validated tuning. */
 data class LoudnessConfig(
@@ -10,6 +12,8 @@ data class LoudnessConfig(
     val baselineS: Double = 120.0,
     /** Elevated longer than any ad pod: the baseline is wrong and may follow. */
     val maxElevatedS: Double = 180.0,
+    /** Crest factor (ADR 0021): a peak-to-RMS drop of this many dB under the programme's is a full crest vote; 0 turns it off. */
+    val crestDropDb: Double = 4.0,
 )
 
 /**
@@ -23,15 +27,25 @@ data class LoudnessConfig(
  * measures how far the room dropped, and adds that back to every later
  * reading. If the ducked set is buried under the room (near the silence gate,
  * or the mic hears flat noise — fans, not a broadcast) it goes inert instead.
+ *
+ * Crest factor (ADR 0021): commercials are compressed harder than the show,
+ * so their peak-to-RMS ratio sits several dB lower even when they are no
+ * louder. A drop against the same slow baseline adds up to half a vote —
+ * never a whole one, so a music bed in the programme cannot duck by itself.
  */
 class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Detector {
     override val name = "loudness"
 
     private var weights: DoubleArray? = null
     private var weightsKey: Pair<Int, Int>? = null
-    private val window = ArrayDeque<Pair<Double, Double>>()  // (duration, weighted mean-square)
+    private val window = ArrayDeque<Triple<Double, Double, Double>>()  // (duration, weighted mean-square, crest dB)
     private var windowDur = 0.0
     var baselineLufs: Double? = null
+        private set
+    var baselineCrestDb: Double? = null
+        private set
+    /** Peak-to-RMS ratio over the short-term window, in dB. */
+    var crestDb = 0.0
         private set
     private var observedS = 0.0
     private var ungatedS = 0.0   // consecutive seconds with the short-term value above the gate
@@ -50,7 +64,7 @@ class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Det
     private var skipBaselineUntil = Double.NEGATIVE_INFINITY
 
     override fun warmup() {
-        window.clear(); windowDur = 0.0; baselineLufs = null; observedS = 0.0
+        window.clear(); windowDur = 0.0; baselineLufs = null; baselineCrestDb = null; crestDb = 0.0; observedS = 0.0
         ungatedS = 0.0; elevatedS = 0.0; lastShortTerm = -70.0
         resetDuck()
     }
@@ -116,7 +130,7 @@ class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Det
 
     override fun observeAudio(block: AudioBlock) {
         val ms = weightedMs(block.samples, block.sampleRate)
-        window.addLast(Pair(block.duration, ms))
+        window.addLast(Triple(block.duration, ms, blockCrestDb(block.samples)))
         windowDur += block.duration
         while (windowDur > cfg.windowS && window.size > 1) {
             windowDur -= window.removeFirst().first
@@ -124,8 +138,10 @@ class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Det
         observedS += block.duration
 
         var total = 0.0
-        for ((d, m) in window) total += d * m
+        var crest = 0.0
+        for ((d, m, c) in window) { total += d * m; crest += d * c }
         val meanMs = if (windowDur > 0) total / windowDur else 0.0
+        if (windowDur > 0) crestDb = crest / windowDur
         val raw = if (meanMs <= 0.0) -70.0 else -0.691 + 10.0 * log10(meanMs)
         val now = block.ts + block.duration
         settleUntil?.let { settleFlatness.add(Dsp.spectralFlatness(block.samples)); if (now >= it) settle(raw) }
@@ -139,7 +155,7 @@ class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Det
         if (baseline == null) {
             // Only once the whole window is un-gated programme: a window still
             // filling with the mic's start-up silence reads low and would freeze it there.
-            if (ungatedS >= cfg.windowS) baselineLufs = lastShortTerm
+            if (ungatedS >= cfg.windowS) { baselineLufs = lastShortTerm; baselineCrestDb = crestDb }
             return
         }
         if (lastShortTerm - baseline > cfg.deltaLufs / 2) {
@@ -150,6 +166,7 @@ class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Det
         } else elevatedS = 0.0
         val alpha = min(1.0, block.duration / cfg.baselineS)
         baselineLufs = baseline + alpha * (lastShortTerm - baseline)
+        baselineCrestDb?.let { baselineCrestDb = it + alpha * (crestDb - it) }
     }
 
     override fun vote(ts: Double): DetectorVote {
@@ -159,9 +176,17 @@ class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Det
         val baseline = baselineLufs!!
         if (lastShortTerm <= SILENCE_GATE_LUFS) return vote(ts, 0.0, "gated st_lufs=${"%.1f".format(lastShortTerm)}")
         val delta = lastShortTerm - baseline
-        val confidence = (delta / (cfg.deltaLufs * FULL_CONF_FACTOR)).coerceIn(0.0, 1.0)
+        var confidence = (delta / (cfg.deltaLufs * FULL_CONF_FACTOR)).coerceIn(0.0, 1.0)
+        var crest = ""
+        val baseCrest = baselineCrestDb
+        if (cfg.crestDropDb > 0.0 && baseCrest != null) {
+            val drop = baseCrest - crestDb
+            val crestConf = (drop / (cfg.crestDropDb * FULL_CONF_FACTOR)).coerceIn(0.0, 1.0)
+            confidence = min(1.0, confidence + CREST_SHARE * crestConf)
+            crest = " crest_db=${"%.1f".format(crestDb)} crest_drop_db=${"%.1f".format(drop)}"
+        }
         val duck = if (ducked) " duck_offset_db=${"%.1f".format(duckOffsetDb)}" else ""
-        return vote(ts, confidence, "loudness delta_lufs=${"%.2f".format(delta)} st_lufs=${"%.1f".format(lastShortTerm)} baseline_lufs=${"%.1f".format(baseline)}$duck")
+        return vote(ts, confidence, "loudness delta_lufs=${"%.2f".format(delta)} st_lufs=${"%.1f".format(lastShortTerm)} baseline_lufs=${"%.1f".format(baseline)}$crest$duck")
     }
 
     companion object {
@@ -177,5 +202,16 @@ class LoudnessDetector(private val cfg: LoudnessConfig = LoudnessConfig()) : Det
         const val DUCK_HEADROOM_DB = 6.0
         /** …or the settle window is flat noise: the silence detector's own test for "room, not broadcast". */
         const val BURIED_FLATNESS = 0.2
+        /** A full crest-factor drop is worth this much of a vote (ADR 0021). */
+        const val CREST_SHARE = 0.5
+
+        /** Peak-to-RMS ratio of one block in dB; 0 for silence. */
+        fun blockCrestDb(samples: FloatArray): Double {
+            if (samples.isEmpty()) return 0.0
+            var sq = 0.0; var peak = 0.0
+            for (v in samples) { val d = v.toDouble(); sq += d * d; if (abs(d) > peak) peak = abs(d) }
+            val rms = sqrt(sq / samples.size)
+            return if (rms <= 0.0) 0.0 else 20.0 * log10(peak / rms)
+        }
     }
 }

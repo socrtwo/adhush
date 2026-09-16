@@ -11,9 +11,9 @@ from adhush.util.resources import bundled
 
 PHASE1_DETECTORS = ("black_frame", "silence", "loudness")
 PHASE2_DETECTORS = ("logo_absence", "scene_cut", "fingerprint")
-PHASE3_DETECTORS = ("clock", "jingle")
+PHASE3_DETECTORS = ("clock", "jingle", "aspect_change")
 IMPLEMENTED_DETECTORS = PHASE1_DETECTORS + PHASE2_DETECTORS + PHASE3_DETECTORS
-KNOWN_DETECTORS = IMPLEMENTED_DETECTORS + ("aspect_change", "caption_gap")
+KNOWN_DETECTORS = IMPLEMENTED_DETECTORS + ("caption_gap",)
 KNOWN_CAPTURE_BACKENDS = (
     "hdmi_uvc",
     "camera",
@@ -74,6 +74,25 @@ class LoudnessConfig:
     # Elevated loudness lasting longer than any ad pod means the baseline is
     # wrong (it was taken during a quiet passage); after this long it may follow.
     max_elevated_s: float = 180.0
+    # Crest factor (ADR 0021): commercials are compressed harder than the
+    # programme, so their peak-to-RMS ratio sits several dB lower even when
+    # they are not louder. A drop of this many dB below the programme's crest
+    # is a full crest vote; 0 turns the cue off.
+    crest_drop_db: float = 4.0
+
+
+@dataclass(frozen=True, slots=True)
+class AspectChangeConfig:
+    """Letterbox/pillarbox transitions (ADR 0021), HDMI and screen paths only."""
+
+    bar_luma: float = 24.0  # a row or column this dark on average is a bar…
+    bar_spread: float = 8.0  # …if it is also this flat (a dark scene is not a bar)
+    frame_aspect: float = 16.0 / 9.0  # the shape of the whole captured frame
+    sample_interval_s: float = 0.25
+    confirm_s: float = 1.0  # a new shape must hold this long before it counts
+    baseline_s: float = 600.0  # the programme's shape is the mode over this long
+    min_baseline_s: float = 30.0
+    max_change_s: float = 360.0  # changed longer than any break: the programme changed shape
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +169,7 @@ class DetectConfig:
     scene_cut: SceneCutConfig = field(default_factory=SceneCutConfig)
     clock: ClockConfig = field(default_factory=ClockConfig)
     jingle: JingleConfig = field(default_factory=JingleConfig)
+    aspect_change: AspectChangeConfig = field(default_factory=AspectChangeConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -320,6 +340,7 @@ _LOGO_DEFAULTS = LogoAbsenceConfig()
 _SCENE_DEFAULTS = SceneCutConfig()
 _CLOCK_DEFAULTS = ClockConfig()
 _JINGLE_DEFAULTS = JingleConfig()
+_ASPECT_DEFAULTS = AspectChangeConfig()
 _FUSION_DEFAULTS = FusionConfig()
 _CONTROL_DEFAULTS = ControlConfig()
 _FP_DEFAULTS = FingerprintConfig()
@@ -389,6 +410,7 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
     scene = det.get("scene_cut", {})
     clk = det.get("clock", {})
     jng = det.get("jingle", {})
+    asp = det.get("aspect_change", {})
     detect = DetectConfig(
         enabled=enabled,
         black_frame=BlackFrameConfig(
@@ -404,6 +426,7 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
             delta_lufs=float(loud.get("delta_lufs", _LOUDNESS_DEFAULTS.delta_lufs)),
             baseline_s=float(loud.get("baseline_s", _LOUDNESS_DEFAULTS.baseline_s)),
             max_elevated_s=float(loud.get("max_elevated_s", _LOUDNESS_DEFAULTS.max_elevated_s)),
+            crest_drop_db=float(loud.get("crest_drop_db", _LOUDNESS_DEFAULTS.crest_drop_db)),
         ),
         logo_absence=LogoAbsenceConfig(
             roi=_parse_roi(logo.get("roi"), profile_roi),
@@ -442,6 +465,16 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
             close_hold_s=float(jng.get("close_hold_s", _JINGLE_DEFAULTS.close_hold_s)),
             history_s=float(jng.get("history_s", _JINGLE_DEFAULTS.history_s)),
             max_candidates=int(jng.get("max_candidates", _JINGLE_DEFAULTS.max_candidates)),
+        ),
+        aspect_change=AspectChangeConfig(
+            bar_luma=float(asp.get("bar_luma", _ASPECT_DEFAULTS.bar_luma)),
+            bar_spread=float(asp.get("bar_spread", _ASPECT_DEFAULTS.bar_spread)),
+            frame_aspect=float(asp.get("frame_aspect", _ASPECT_DEFAULTS.frame_aspect)),
+            sample_interval_s=float(asp.get("sample_interval_s", _ASPECT_DEFAULTS.sample_interval_s)),
+            confirm_s=float(asp.get("confirm_s", _ASPECT_DEFAULTS.confirm_s)),
+            baseline_s=float(asp.get("baseline_s", _ASPECT_DEFAULTS.baseline_s)),
+            min_baseline_s=float(asp.get("min_baseline_s", _ASPECT_DEFAULTS.min_baseline_s)),
+            max_change_s=float(asp.get("max_change_s", _ASPECT_DEFAULTS.max_change_s)),
         ),
     )
     if not 0.0 < detect.clock.full_fraction <= 1.0 or detect.clock.min_hours < 1:

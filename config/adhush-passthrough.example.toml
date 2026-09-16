@@ -18,7 +18,7 @@ profile = "passthrough-box"
 [detect]
 # The box sees clean HDMI video, so the full detector set applies. Calibrate
 # the logo template once per channel lineup: adhush calibrate
-enabled = ["black_frame", "silence", "loudness", "logo_absence", "scene_cut", "fingerprint"]
+enabled = ["black_frame", "silence", "loudness", "logo_absence", "scene_cut", "fingerprint", "clock", "jingle", "aspect_change"]
 
 [control]
 backend = "relay_hdmi"

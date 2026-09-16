@@ -7,13 +7,14 @@ from typing import ClassVar
 import numpy as np
 
 from adhush.capture.file_replay import FileReplaySource, write_fixture
-from adhush.config import BlackFrameConfig, LoudnessConfig, SilenceConfig
+from adhush.config import AspectChangeConfig, BlackFrameConfig, LoudnessConfig, SilenceConfig
+from adhush.detect.aspect_change import AspectChangeDetector
 from adhush.detect.base import Detector
 from adhush.detect.black_frame import BlackFrameDetector
 from adhush.detect.loudness import LoudnessDetector
 from adhush.detect.silence import SilenceDetector
-from adhush.events import AudioEvent
-from tests.synth import RATE, Timeline, synthesize
+from adhush.events import AudioEvent, FrameEvent
+from tests.synth import HEIGHT, RATE, WIDTH, Timeline, synthesize
 
 TIMELINE: Timeline = [
     ("program", 8.0),
@@ -174,6 +175,39 @@ class TestLoudness:
             detector.observe_audio(AudioEvent(ts=ts, samples=hot, sample_rate=RATE))
             ts += 0.1
         assert detector.vote(ts).confidence == 1.0
+
+
+    def test_compressed_ad_at_program_level_raises_the_vote(self) -> None:
+        # ADR 0021: a spot mixed no hotter than the show but compressed flat
+        # has a crest factor several dB under the programme's. That is worth
+        # half a vote — never a whole one.
+        detector = LoudnessDetector(LoudnessConfig(window_s=1.5, baseline_s=30.0))
+        n = 800
+        t = np.arange(n, dtype=np.float64) / RATE
+        peaky = 0.1 * np.sin(2 * np.pi * 440 * t)
+        peaky[::400] = 0.5  # sparse peaks: speech-like dynamics, ~16 dB crest
+        flat = 0.1 * np.sin(2 * np.pi * 440 * t)  # the same level, 3 dB crest
+        ts = 0.0
+        for _ in range(150):
+            detector.observe_audio(AudioEvent(ts=ts, samples=peaky.astype(np.float32), sample_rate=RATE))
+            ts += 0.1
+        assert detector.vote(ts).confidence < 1e-9  # the EMA leaves rounding dust
+        assert detector.baseline_crest_db is not None and detector.baseline_crest_db > 12.0
+        for _ in range(30):
+            detector.observe_audio(AudioEvent(ts=ts, samples=flat.astype(np.float32), sample_rate=RATE))
+            ts += 0.1
+        vote = detector.vote(ts)
+        assert 0.45 <= vote.confidence <= 0.5, vote.reason
+        assert "crest_drop_db=" in vote.reason
+        off = LoudnessDetector(LoudnessConfig(window_s=1.5, baseline_s=30.0, crest_drop_db=0.0))
+        ts = 0.0
+        for _ in range(150):
+            off.observe_audio(AudioEvent(ts=ts, samples=peaky.astype(np.float32), sample_rate=RATE))
+            ts += 0.1
+        for _ in range(30):
+            off.observe_audio(AudioEvent(ts=ts, samples=flat.astype(np.float32), sample_rate=RATE))
+            ts += 0.1
+        assert off.vote(ts).confidence < 1e-9
 
 
 class TestDuckCompensation:
@@ -366,3 +400,86 @@ class TestJingle:
         assert 60.0 <= clock.remaining_s(60.0) <= 120.0  # type: ignore[operator]
         assert clock.remaining_s(600.0) == 0.0
         assert ClockDetector(ClockConfig(file=str(tmp_path / "clock.tsv"))).length_samples == 6
+
+
+ASPECT_TIMELINE: Timeline = [
+    ("program", 8.0),
+    ("boundary", 1.0),
+    ("ad_43", 15.0),
+    ("program", 8.0),
+]
+
+
+class TestAspectChange:
+    def _cfg(self) -> AspectChangeConfig:
+        return AspectChangeConfig(min_baseline_s=4.0, confirm_s=0.5)
+
+    def test_pillarboxed_ad_votes_for_its_whole_length(self, tmp_path: Path) -> None:
+        frames, frame_ts, samples, labels = synthesize(ASPECT_TIMELINE)
+        assert labels[0].start_ts == POD_START and labels[0].duration_s == 16.0
+        path = tmp_path / "aspect.npz"
+        write_fixture(path, frames=frames, frame_ts=frame_ts, audio=samples, audio_rate=RATE)
+        detector = AspectChangeDetector(self._cfg())
+        votes: dict[float, float] = {}
+        with FileReplaySource(path) as source:
+            detector.warmup()
+            for frame in source.frames():
+                detector.observe_frame(frame)
+                votes[frame.ts] = detector.vote(frame.ts).confidence
+        assert _max_conf(votes, 0.0, 8.0) == 0.0  # programme, then the black boundary is no shape
+        assert _max_conf(votes, 10.0, 24.0) == 1.0
+        assert min(c for ts, c in votes.items() if 10.5 <= ts < 24.0) == 1.0  # sustained, not transient
+        assert _max_conf(votes, 25.5, 32.0) == 0.0  # the show's shape is back
+        assert detector.baseline is not None and abs(detector.baseline - 1.8) < 1e-9
+
+    def test_measures_the_active_picture(self) -> None:
+        detector = AspectChangeDetector(AspectChangeConfig())
+        full = np.full((HEIGHT, WIDTH), 120, dtype=np.uint8)
+        assert detector.measure(full) is not None and abs(detector.measure(full) - 16 / 9) < 1e-9
+        letter = full.copy()
+        letter[:6] = 0
+        letter[-6:] = 0  # 25 % of the height in bars: 16:9 reads as 2.37:1
+        assert abs(detector.measure(letter) - (16 / 9) / 0.75) < 1e-9
+        assert detector.measure(np.zeros((HEIGHT, WIDTH), dtype=np.uint8)) is None  # black frame: no shape
+        dark = np.random.default_rng(1).integers(0, 40, (HEIGHT, WIDTH), dtype=np.uint8)
+        assert abs(detector.measure(dark) - 16 / 9) < 1e-9  # a dark, busy scene is not a bar
+
+    def test_votes_only_while_the_shape_is_changed(self) -> None:
+        # The programme's own shape is no evidence: out of the normaliser then.
+        detector = AspectChangeDetector(AspectChangeConfig(min_baseline_s=2.0, confirm_s=0.5))
+        frame = np.full((HEIGHT, WIDTH), 120, dtype=np.uint8)
+        pillar = frame.copy()
+        pillar[:, :8] = 0
+        pillar[:, -8:] = 0
+        assert not detector.voting
+        for i in range(12):
+            detector.observe_frame(FrameEvent(ts=i * 0.25, frame=frame))
+        assert detector.baseline is not None and not detector.voting
+        assert detector.vote(3.0).reason.startswith("aspect_same")
+        for i in range(12, 20):
+            detector.observe_frame(FrameEvent(ts=i * 0.25, frame=pillar))
+        assert detector.voting
+        assert detector.vote(5.0).confidence == 1.0
+        for i in range(20, 24):
+            detector.observe_frame(FrameEvent(ts=i * 0.25, frame=frame))
+        assert not detector.voting
+
+    def test_a_long_change_becomes_the_programme(self) -> None:
+        detector = AspectChangeDetector(AspectChangeConfig(min_baseline_s=2.0, confirm_s=0.5, max_change_s=10.0))
+        frame = np.full((HEIGHT, WIDTH), 120, dtype=np.uint8)
+        letter = frame.copy()
+        letter[:6] = 0
+        letter[-6:] = 0
+        ts = 0.0
+        for _ in range(12):
+            detector.observe_frame(FrameEvent(ts=ts, frame=frame))
+            ts += 0.25
+        for _ in range(38):  # 9.5 s: still a break
+            detector.observe_frame(FrameEvent(ts=ts, frame=letter))
+            ts += 0.25
+        assert detector.voting
+        for _ in range(8):  # past max_change_s: a film started
+            detector.observe_frame(FrameEvent(ts=ts, frame=letter))
+            ts += 0.25
+        assert not detector.voting
+        assert detector.baseline is not None and abs(detector.baseline - 2.4) < 1e-9

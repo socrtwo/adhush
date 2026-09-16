@@ -82,6 +82,10 @@ ADR 0020: the break jingle as method 10 (AdVent), the ad badge during
 stream learning, learned break lengths as the mute ceiling (DTC), manual
 ducks to 300 s with an extendable countdown (Mx5-MuteTimer).
 
+## Phase 14 — two cheap cues (done, 0.22.0)
+ADR 0021: `aspect_change` on the HDMI and screen paths (comskip's oldest
+trick) and the crest factor inside loudness (beepscore's observation).
+
 ## Beyond the roadmap
 An audio-only fingerprint matcher for the Python listener (the phone's
 `AudioMatcher` ported), so a memory learned from a stream or on a phone is

@@ -12,7 +12,7 @@ audio_device = "default"
 profile = "sharp-lc46le830u"
 
 [detect]
-enabled = ["black_frame", "silence", "loudness", "logo_absence", "scene_cut", "fingerprint"]
+enabled = ["black_frame", "silence", "loudness", "logo_absence", "scene_cut", "fingerprint", "clock", "jingle", "aspect_change"]
 
 [detect.logo_absence]
 roi = { x = 0.84, y = 0.80, w = 0.14, h = 0.14 }   # default comes from the device profile
@@ -30,6 +30,15 @@ high_cpm = 40.0     # ...1.0 confidence here
 window_s = 1.5      # short window: quick unmute matters more than R128's 3 s
 delta_lufs = 2.5
 max_elevated_s = 180  # elevated longer than any ad pod: the baseline is wrong, let it follow
+crest_drop_db = 4.0   # a spot compressed this far flatter than the show adds half a vote; 0 = off (ADR 0021)
+
+[detect.aspect_change]   # HDMI and screen paths: the picture's shape leaves the programme's (ADR 0021)
+frame_aspect = 1.7778    # the shape of the whole captured frame (16:9)
+bar_luma = 24            # a row or column this dark on average is a bar...
+bar_spread = 8           # ...if it is also this flat
+confirm_s = 1.0          # a new shape must hold this long before it counts
+baseline_s = 600         # the programme's shape is the mode over this long
+max_change_s = 360       # changed longer than any break: the programme changed shape
 
 [detect.black_frame]
 luma_threshold = 16

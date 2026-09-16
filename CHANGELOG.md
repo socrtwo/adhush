@@ -3,6 +3,22 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.22.0] - 2026-09-16
+### Added
+- **`aspect_change`** (ADR 0021, after comskip): the Python core's HDMI and
+  screen-capture paths now watch the picture's shape. Dark, flat bars at
+  the edges give the active picture's aspect ratio; the programme's shape
+  is a rolling mode, and a spot that arrives pillarboxed or letterboxed
+  votes for as long as it holds the other shape. Inert while the shape is
+  the programme's, so it never dilutes the other detectors; never mutes
+  alone. On by default and in the HDMI example configs; the synthetic
+  fixtures gained a 4:3 ad for its ground truth.
+- **Crest factor in loudness** (ADR 0021, after beepscore): the
+  peak-to-RMS ratio rides in the same short-term window against the same
+  slow baseline, and a drop of 4 dB under the programme's — a spot
+  compressed flat, however loud — adds up to half a vote. Python and the
+  phone; `crest_drop_db = 0` turns it off.
+
 ## [0.21.0] - 2026-09-15
 ### Added
 - **Method 10, break jingles** (ADR 0020, after AdVent): the channel's own

@@ -115,7 +115,7 @@ file.
 | # | Method | What it uses | Can duck alone? |
 |---|---|---|---|
 | 1 | Quiet gaps | microphone: the short silence between show and ad | no — needs a second opinion |
-| 2 | Loudness jumps | microphone: the sound jumping up and staying up | no — needs a second opinion |
+| 2 | Loudness jumps | microphone: the sound jumping up and staying up; a spot compressed flat (crest factor) counts for half | no — needs a second opinion |
 | 3 | Remembered breaks | microphone: fingerprints of taught breaks | yes |
 | 4 | Channel bug | camera: the logo corner, whole TV in view | yes |
 | 5 | Spoken words | microphone + offline speech recogniser: scripts | yes |
