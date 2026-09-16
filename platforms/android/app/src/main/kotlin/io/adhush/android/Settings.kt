@@ -69,6 +69,9 @@ class Settings(context: Context) {
     /** Stream learning reads the player's "AD" badge off the screen (ADR 0020). */
     var badge: Boolean get() = prefs.getBoolean("badge", true); set(v) = prefs.edit().putBoolean("badge", v).apply()
 
+    /** The set-up wizard (ADR 0022) has been offered once on first run, or run to the end. */
+    var wizardOffered: Boolean get() = prefs.getBoolean("wizard_offered", false); set(v) = prefs.edit().putBoolean("wizard_offered", v).apply()
+
     /** How many of the ten methods are switched on. Zero means the app cannot work. */
     val methodsOn: Int get() = listOf(silence, loudness, fingerprints, camera, speech, captions, judgeCloud, judgeLocal, clock, jingles).count { it }
     var irAddress: Int get() = prefs.getInt("ir_address", 1); set(v) = prefs.edit().putInt("ir_address", v).apply()

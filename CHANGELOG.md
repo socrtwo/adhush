@@ -3,6 +3,25 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.23.0] - 2026-09-16
+### Added
+- Android **set-up wizard** (ADR 0022): offered once on first run and always
+  on the Home page. It asks how the phone reaches the TV (and asks the set
+  its volume), where the phone sits, the channel, ticker and captions;
+  listens to fifteen seconds of the show and ten of the room with the TV
+  muted; looks through the camera for eight seconds; then suggests every
+  method, the duck level, the camera target and zoom and the local AI size
+  with a reason each, writes them, and opens the Methods page for review.
+  Numbers only, never audio or pictures.
+- `docs/ideas-backlog.md`: fourteen ranked ideas from a search of comskip,
+  MythTV, the ATSC/DVB watermark specs, patents and peer projects.
+### Fixed
+- Every count of the phone's methods now says ten: the Help "Choosing
+  methods" topic (eight), its lists of weak and strong methods (the clock
+  and the jingle were missing), the Help header, the Android README's
+  screens section (six) and the local-AI print guide (eight; PDF
+  regenerated).
+
 ## [0.22.0] - 2026-09-16
 ### Added
 - **`aspect_change`** (ADR 0021, after comskip): the Python core's HDMI and

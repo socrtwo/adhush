@@ -88,7 +88,7 @@ chip per method that lights in its colour while that method runs, the
 Start/Stop pair (Start reads "Running" in green, Stop turns red), the three
 teaching buttons, and **Test mode** — Test TV with its result printed on the
 card. **TV** is how this phone reaches its set, the address and login, and
-the volumes. **Methods** is the six ways of spotting a commercial, each a
+the volumes. **Methods** is the ten ways of spotting a commercial, each a
 switch with a ⓘ explanation and a coloured dot while it runs; at least one
 must be on or the app refuses to start. **Help** is every explanation in
 full. **Log** shows the app's own log and has **Share error log**: every
@@ -96,6 +96,20 @@ status line, every caught error and every crash with its stack trace goes
 into a rolling file in the app's private storage, and that button hands it
 to mail, Drive or messages. If the app ever closes on its own, share that
 file.
+
+## The set-up wizard (0.23.0)
+
+**Set-up wizard** on Home (offered once on first run; *Not now* keeps the
+defaults) takes three minutes: how the phone reaches the TV (it asks the
+set its volume over the network), where the phone sits, the channel, whether
+it is a news channel and whether captions are shown; fifteen seconds of the
+show and ten of the room with the TV muted; eight seconds through the camera
+to see whether the whole TV is in view. It then lists the settings it
+suggests with a reason for each — which methods, the duck level (a loud
+room means a higher duck level so the phone can still hear the ducked set),
+the camera target and zoom, the local AI size this phone can carry — and
+**Apply and review** writes them and opens the Methods page, where every
+switch can be changed. It keeps numbers only, never audio or pictures.
 
 ## Words used in the app
 

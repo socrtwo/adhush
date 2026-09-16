@@ -86,7 +86,15 @@ ducks to 300 s with an extendable countdown (Mx5-MuteTimer).
 ADR 0021: `aspect_change` on the HDMI and screen paths (comskip's oldest
 trick) and the crest factor inside loudness (beepscore's observation).
 
+## Phase 15 — the set-up wizard (done, 0.23.0)
+ADR 0022: a wizard that measures the room and the camera and suggests the
+settings. `docs/ideas-backlog.md` ranks what was found in the wider world.
+
 ## Beyond the roadmap
+Start with `docs/ideas-backlog.md`: the parental-rating bug as an unmute
+cue, ad-unit length quantisation and uniform-colour separators are the
+cheap ones.
+
 An audio-only fingerprint matcher for the Python listener (the phone's
 `AudioMatcher` ported), so a memory learned from a stream or on a phone is
 useful on the Pi too.

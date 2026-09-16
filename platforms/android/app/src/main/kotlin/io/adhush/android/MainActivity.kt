@@ -80,6 +80,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.save).setOnClickListener { save(); log("saved") }
         findViewById<Button>(R.id.test).setOnClickListener { runTest() }
         findViewById<Button>(R.id.testHome).setOnClickListener { runTest() }
+        openPage(intent)
+        if (!settings.wizardOffered) { settings.wizardOffered = true; startActivity(Intent(this, SetupWizardActivity::class.java)) }   // once, on first run; Not now keeps the defaults
         findViewById<Button>(R.id.start).setOnClickListener { save(); if (checkBeforeStart()) startWithPermissions(null) }
         findViewById<Button>(R.id.stop).setOnClickListener { serviceAction(AdHushService.ACTION_STOP) }
         findViewById<Button>(R.id.notAd).setOnClickListener { serviceAction(AdHushService.ACTION_NOT_AD) }
@@ -93,6 +95,7 @@ class MainActivity : AppCompatActivity() {
             setOnMenuItemClickListener { item -> if (item.itemId == R.id.action_remote) { save(); startActivity(Intent(this@MainActivity, RemoteActivity::class.java)); true } else false }
         }
         findViewById<Button>(R.id.openRemote).setOnClickListener { save(); startActivity(Intent(this, RemoteActivity::class.java)) }
+        findViewById<Button>(R.id.wizard).setOnClickListener { save(); startActivity(Intent(this, SetupWizardActivity::class.java)) }
         findViewById<Button>(R.id.survey).setOnClickListener { save(); if (checkBeforeStart()) startWithPermissions(AdHushService.ACTION_SURVEY) }
         findViewById<Button>(R.id.share).setOnClickListener { shareSurvey() }
         findViewById<Button>(R.id.streamStart).setOnClickListener { startStreamLearning() }
@@ -535,8 +538,26 @@ class MainActivity : AppCompatActivity() {
         else log("microphone permission is required")
     }
 
+    /** The wizard hands over to a page ("methods", "tv") with a line for the log; a running instance gets it through onNewIntent. */
+    private fun openPage(i: Intent?) {
+        val page = i?.getStringExtra(EXTRA_PAGE) ?: return
+        i.removeExtra(EXTRA_PAGE)
+        findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.nav).selectedItemId = when (page) { "methods" -> R.id.nav_senses; "tv" -> R.id.nav_tv; else -> R.id.nav_home }
+        i.getStringExtra(EXTRA_NOTE)?.let { log(it); i.removeExtra(EXTRA_NOTE) }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        load()            // the wizard may have rewritten the settings underneath us
+        methodsNote()
+        openPage(intent)
+    }
+
     companion object {
         const val ACTION_USB = "io.adhush.android.USB_PERMISSION"
+        const val EXTRA_PAGE = "page"
+        const val EXTRA_NOTE = "note"
         /** The timed ducks: 30-second steps up to a five-minute break. */
         val DUCK_BUTTONS = listOf(R.id.duck30 to 30, R.id.duck60 to 60, R.id.duck90 to 90, R.id.duck120 to 120, R.id.duck150 to 150,
             R.id.duck180 to 180, R.id.duck210 to 210, R.id.duck240 to 240, R.id.duck270 to 270, R.id.duck300 to 300)

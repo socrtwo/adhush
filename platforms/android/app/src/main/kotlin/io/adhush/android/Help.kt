@@ -6,7 +6,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 /**
  * Plain-language explanations, one per idea, shown from the ⓘ buttons and
  * the Help page. Written for someone who has never heard the jargon: what a
- * "bug" is, what a "script" is, what ducking is, and what each of the six
+ * "bug" is, what a "script" is, what ducking is, and what each of the ten
  * methods actually looks or listens for.
  */
 object Help {
@@ -121,16 +121,20 @@ object Help {
         "Not an ad after a jingle duck counts against that jingle; enough wrong calls demote it. Stream learning teaches jingles too, from clean audio. The idea comes from the AdVent project, which measured that three seconds of a sting is enough to recognise it.")
 
     val METHODS = Topic("Choosing methods",
-        "Any mix of the eight methods can be on, but AT LEAST ONE must be on or the app has nothing to go on and will refuse to start.\n\n" +
-        "Quiet gaps and loudness jumps are hints: two of them have to agree before the TV is ducked. Remembered breaks, the channel bug or ticker, spoken words, captions, and the two AI judges are each strong enough to duck on their own.\n\n" +
+        "Any mix of the ten methods can be on, but AT LEAST ONE must be on or the app has nothing to go on and will refuse to start.\n\n" +
+        "Quiet gaps, loudness jumps and the break clock are hints: two of them have to agree before the TV is ducked. Remembered breaks, the channel bug or ticker, spoken words, captions, the two AI judges and a learned break jingle are each strong enough to duck on their own.\n\n" +
         "The AI judges (7 and 8) need words to read, so they only work together with Speech or Captions.\n\n" +
-        "A good starting set: the three sound methods on, plus the camera once you have set the bug or ticker up, plus captions if the TV shows them, plus one AI judge as a tie-breaker.")
+        "A good starting set: the three sound methods on, plus the camera once you have set the bug or ticker up, plus captions if the TV shows them, plus one AI judge as a tie-breaker. The set-up wizard on the Home page measures the room and the camera and suggests exactly that.")
+
+    val WIZARD = Topic("The set-up wizard",
+        "Three minutes, once, from the Home page. It asks how the phone reaches the TV and where the phone sits, listens to fifteen seconds of the show and ten seconds of the room with the TV muted, looks through the camera for eight seconds to see whether the whole TV is in view, and asks the TV its volume.\n\n" +
+        "From those numbers it suggests which methods to switch on, the duck level (a loud room means a higher duck level, so the phone can still hear the ducked set and bring the show back on time), the camera zoom, the local AI size this phone can carry, and what to do next — then writes the settings and opens the Methods page, where every one of them can be changed. Nothing is recorded: the wizard keeps numbers, never audio or pictures.")
 
     val TEST = Topic("Test mode",
         "Test TV talks to the set the way the app does when a commercial comes on: it asks the volume, mutes and unmutes, ducks and restores, and prints every byte it sent and got back. " +
         "If the sound dips twice, the connection works. It uses whatever connection is chosen on the TV page — network, serial cable or infrared.")
 
-    val ALL = listOf(METHODS, BUG, TICKER, SCRIPT, DUCK, TEACH, TIMED, TEST, SILENCE, LOUDNESS, FINGERPRINTS, CAMERA, SPEECH, CAPTIONS, CLAUDE, LOCAL, CLOCK, JINGLE, STREAM)
+    val ALL = listOf(WIZARD, METHODS, BUG, TICKER, SCRIPT, DUCK, TEACH, TIMED, TEST, SILENCE, LOUDNESS, FINGERPRINTS, CAMERA, SPEECH, CAPTIONS, CLAUDE, LOCAL, CLOCK, JINGLE, STREAM)
 
     fun show(context: Context, topic: Topic) {
         MaterialAlertDialogBuilder(context).setTitle(topic.title).setMessage(topic.body).setPositiveButton("Got it", null).show()

@@ -132,7 +132,9 @@ captions matched against learned scripts, Claude and an on-device language
 model as judges, a learned break clock that also learns how long breaks
 run, and the channel's break jingle), ducking a Sharp over Wi-Fi, a
 USB serial cable or infrared. It teaches itself from a channel's live
-stream, moves its memory between phones, and carries a full remote. See
+stream, moves its memory between phones, carries a full remote, and a
+three-minute set-up wizard measures the room and the camera and suggests
+the settings. See
 `platforms/android/README.md` and the guides in `docs/print/`.
 
 ## Platform roadmap
