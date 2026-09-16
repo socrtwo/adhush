@@ -63,7 +63,8 @@ class TestBlackFrame:
         from adhush.events import FrameEvent
 
         black = np.zeros((48, 64), dtype=np.uint8)
-        bright = np.full((48, 64), 120, dtype=np.uint8)
+        # A picture, not a flat field: a flat field is a uniform separator (ADR 0023).
+        bright = np.tile(np.linspace(60, 180, 64).astype(np.uint8), (48, 1))
         for i, frame in enumerate([bright, black, black, bright]):
             detector.observe_frame(FrameEvent(ts=i / 10, frame=frame))
         assert detector.vote(0.4).confidence == 0.0

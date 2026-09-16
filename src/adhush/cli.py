@@ -17,6 +17,8 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
+import numpy as np
+
 from adhush import __version__
 from adhush.capture import build_capture
 from adhush.capture.devices import alsa_pcm_node, list_sound_cards, list_video_devices
@@ -27,6 +29,7 @@ from adhush.control.base import ControlError
 from adhush.control.ir_lirc import IrLircController
 from adhush.control.probe import probe_backends
 from adhush.detect import build_detectors
+from adhush.detect.cutscene import CutsceneTemplate, load_templates
 from adhush.detect.fingerprint import FingerprintDetector
 from adhush.detect.fusion import Fusion
 from adhush.detect.logo_absence import build_template, save_template
@@ -458,6 +461,60 @@ def _cmd_learn(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_cutscene(args: argparse.Namespace) -> int:
+    """Capture or list the intro/outro templates (ADR 0023)."""
+    config = load_config(args.config)
+    directory = Path(config.detect.cutscene.directory)
+    if args.action == "list":
+        templates = load_templates(directory)
+        if not templates:
+            print(f"no templates in {directory}")
+        for t in templates:
+            print(f"{t.name:24s} {t.kind:4s} hash={t.hash:016x}")
+        return 0
+    frame = None
+    if args.image is not None:
+        try:
+            from PIL import Image
+        except ImportError:
+            print("reading an image needs Pillow (pip install pillow); or use --from with --ts")
+            return 2
+        with Image.open(args.image) as im:
+            rgb = np.asarray(im.convert("RGB"), dtype=np.uint8)
+        frame = rgb[:, :, ::-1].copy()  # the detectors see BGR
+    elif args.from_ is not None:
+        with FileReplaySource(args.from_) as source:
+            for event in source.frames():
+                if event.ts >= args.ts:
+                    frame = np.array(event.frame, copy=True)
+                    break
+        if frame is None:
+            print(f"no frame at or after {args.ts:.2f} s in {args.from_}")
+            return 2
+    else:
+        print("give --image FILE or --from FIXTURE --ts SECONDS")
+        return 2
+    template = CutsceneTemplate.from_frame(args.name, args.kind, frame)
+    path = template.save(directory)
+    print(f"wrote {path} ({args.kind}: {'a break starts' if args.kind == 'in' else 'the programme returns'})")
+    return 0
+
+
+def _cmd_crowd(args: argparse.Namespace) -> int:
+    """Run the shared break feed (ADR 0024)."""
+    from adhush.crowd.server import serve
+
+    server = serve(args.host, args.port)
+    print(f"adhush crowd server on http://{args.host}:{args.port}/ — reports live ten minutes in memory; Ctrl-C stops")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="adhush", description="Mute TV commercials automatically.")
     parser.add_argument("--version", action="version", version=f"adhush {__version__}")
@@ -519,6 +576,22 @@ def main(argv: list[str] | None = None) -> int:
     p_learn.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)
     p_learn.add_argument("--labels", type=Path, required=True, help="JSON [{start_ts, duration_s}]")
     p_learn.set_defaults(func=_cmd_learn)
+
+    p_cut = sub.add_parser("cutscene", help="intro/outro template frames the channel shows around breaks (ADR 0023)")
+    p_cut.add_argument("action", choices=["add", "list"])
+    p_cut.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)
+    p_cut.add_argument("--name", default="cutscene", help="template name (file stem)")
+    p_cut.add_argument("--kind", choices=["in", "out"], default="in", help="in: a break starts; out: the programme returns")
+    p_cut.add_argument("--image", type=Path, default=None, help="a still (PNG/JPEG) of the frame")
+    p_cut.add_argument("--from", dest="from_", type=Path, default=None, help=".npz fixture to take the frame from")
+    p_cut.add_argument("--ts", type=float, default=0.0, help="media time of the frame in the fixture")
+    p_cut.set_defaults(func=_cmd_cutscene)
+
+    p_crowd = sub.add_parser("crowd", help="the shared feed of break times (ADR 0024)")
+    p_crowd.add_argument("action", choices=["serve"])
+    p_crowd.add_argument("--host", default="0.0.0.0")
+    p_crowd.add_argument("--port", type=int, default=8676)
+    p_crowd.set_defaults(func=_cmd_crowd)
 
     p_overlay = sub.add_parser(
         "overlay", help="always-on-top mini window for a running core (thin IPC client)"

@@ -30,6 +30,12 @@ from adhush.config import FusionConfig
 from adhush.events import DetectorVote, MuteDecision
 
 _DEFAULT_WEIGHT = 0.15
+# Detectors whose evidence identifies a break outright (a learned sting, a
+# captured title card, a splice cue, other devices in the same break) carry
+# three default weights unless the profile says otherwise: alone against
+# silent peers they mute, as a missing logo does (ADR 0020, 0023, 0024).
+_ALONE_WEIGHT = 3 * _DEFAULT_WEIGHT
+_ALONE = frozenset({"jingle", "cutscene", "scte35", "crowd"})
 # Absolute normalization floor: two default-weight detectors' worth of
 # agreement, so even a two-detector (audio-only) configuration needs
 # corroboration to mute.
@@ -49,7 +55,7 @@ class Fusion:
         self._muted_side = False
 
     def weight_for(self, detector: str) -> float:
-        return self._weights.get(detector, _DEFAULT_WEIGHT)
+        return self._weights.get(detector, _ALONE_WEIGHT if detector in _ALONE else _DEFAULT_WEIGHT)
 
     def combine(self, votes: list[DetectorVote], ts: float) -> MuteDecision:
         """Fuse the votes of every detector that is *voting* this tick."""

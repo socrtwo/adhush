@@ -43,7 +43,7 @@ class BadgeDetector(private val cfg: BadgeConfig = BadgeConfig()) : Detector {
     override val voting: Boolean get() = scannedTs?.let { lastTs - it < cfg.staleS } ?: false
 
     /** Scans keep arriving and the badge has been gone for a moment: the programme is back. */
-    val programPresent: Boolean
+    override val programPresent: Boolean
         get() {
             val scanned = scannedTs ?: return false
             val seen = seenTs ?: return false

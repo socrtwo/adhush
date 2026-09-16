@@ -1,6 +1,8 @@
 # Copy to config/adhush.toml and edit.
 
 [capture]
+# backend = "ts_stream" reads an MPEG transport stream: url = "http://192.168.1.50:5004/auto/v7" (HDHomeRun) or "udp://:1234" (ADR 0024)
+# stereo = true measures the mix's width before the mono downmix on hdmi_uvc, line_in and ts_stream (ADR 0023)
 backend = "hdmi_uvc"        # hdmi_uvc | camera | microphone | line_in | screen | file_replay
 device = "/dev/video0"
 width = 1280
@@ -12,7 +14,8 @@ audio_device = "default"
 profile = "sharp-lc46le830u"
 
 [detect]
-enabled = ["black_frame", "silence", "loudness", "logo_absence", "scene_cut", "fingerprint", "clock", "jingle", "aspect_change"]
+enabled = ["black_frame", "silence", "loudness", "logo_absence", "scene_cut", "fingerprint", "clock", "jingle", "aspect_change",
+           "rating_bug", "ad_units", "cutscene", "stereo_width", "watermark", "schedule", "scte35", "crowd"]   # the last eight are inert until they have evidence (ADR 0023/0024)
 
 [detect.logo_absence]
 roi = { x = 0.84, y = 0.80, w = 0.14, h = 0.14 }   # default comes from the device profile
@@ -43,6 +46,39 @@ max_change_s = 360       # changed longer than any break: the programme changed 
 [detect.black_frame]
 luma_threshold = 16
 min_run_frames = 3
+uniform_spread = 6.0     # a white flash or colour card counts like black; 0 = black only (ADR 0023)
+
+[detect.rating_bug]      # the parental-rating box after a break: the show is back (ADR 0023)
+roi = { x = 0.0, y = 0.02, w = 0.22, h = 0.16 }
+hold_s = 20
+
+[detect.ad_units]        # separators on the 15/30/60 s ad-unit grid hold a mute (ADR 0023)
+tolerance_s = 1.2
+hold_s = 35
+
+[detect.cutscene]        # adhush cutscene add --kind in|out --image still.png   (ADR 0023)
+directory = "data/cutscenes"
+
+[detect.stereo_width]    # the mix switches mono <-> stereo; needs capture.stereo = true (ADR 0023)
+min_delta = 0.15
+
+[detect.watermark]       # ATSC A/335 / DVB-TA presence; experimental, inert on an unmarked channel (ADR 0023)
+lines = 2
+
+[detect.schedule]        # XMLTV from Schedules Direct or tv_grab_*; empty file = off (ADR 0024)
+file = ""
+channel = ""             # the XMLTV channel id or display name you watch
+start_grace_s = 90
+ad_free = []             # channels that never carry ads: ["PBS"]
+
+[detect.scte35]          # splice cues from a ts_stream capture (ADR 0024)
+max_break_s = 360
+
+[detect.crowd]           # other AdHush devices on the same channel; opt-in (ADR 0024)
+url = ""                 # "http://pi.local:8676" — adhush crowd serve
+channel = ""             # hashed with the salt before it leaves the device
+report = true
+min_reports = 2
 
 [detect.silence]
 dbfs_threshold = -50.0

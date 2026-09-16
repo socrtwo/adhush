@@ -90,6 +90,11 @@ trick) and the crest factor inside loudness (beepscore's observation).
 ADR 0022: a wizard that measures the room and the camera and suggests the
 settings. `docs/ideas-backlog.md` ranks what was found in the wider world.
 
+## Phase 16 — the backlog, built (done, 0.24.0)
+ADR 0023: the rating box, ad units, uniform separators, cutscenes, the
+stereo switch, the ATSC/DVB watermark probe. ADR 0024: an XMLTV schedule,
+SCTE-35 from a transport stream, and the crowd feed.
+
 ## Beyond the roadmap
 Start with `docs/ideas-backlog.md`: the parental-rating bug as an unmute
 cue, ad-unit length quantisation and uniform-colour separators are the

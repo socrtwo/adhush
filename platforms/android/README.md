@@ -128,10 +128,10 @@ switch can be changed. It keeps numbers only, never audio or pictures.
 
 | # | Method | What it uses | Can duck alone? |
 |---|---|---|---|
-| 1 | Quiet gaps | microphone: the short silence between show and ad | no — needs a second opinion |
+| 1 | Quiet gaps | microphone: the short silence between show and ad; gaps on the 15-second ad-unit grid hold a duck through a pod (0.24.0) | no — needs a second opinion |
 | 2 | Loudness jumps | microphone: the sound jumping up and staying up; a spot compressed flat (crest factor) counts for half | no — needs a second opinion |
 | 3 | Remembered breaks | microphone: fingerprints of taught breaks | yes |
-| 4 | Channel bug | camera: the logo corner, whole TV in view | yes |
+| 4 | Channel bug | camera: the logo corner, whole TV in view; the rating box ("TV-14") flashed after a break brings the show back at once (0.24.0) | yes |
 | 5 | Spoken words | microphone + offline speech recogniser: scripts | yes |
 | 6 | On-screen captions | camera: the caption band read as text: scripts | yes |
 | 7 | Ask Claude | the words of 5 or 6 judged by Claude over the API (opt-in, paid) | yes |

@@ -85,6 +85,7 @@ def test_second_airing_is_promoted_and_muted_for_learned_duration(tmp_path: Path
         assert {d.name for d in detectors} == {
             "black_frame", "silence", "loudness", "logo_absence", "scene_cut", "fingerprint",
             "clock", "jingle", "aspect_change",
+            "rating_bug", "ad_units", "cutscene", "stereo_width", "watermark", "schedule", "scte35", "crowd",
         }
         fusion = Fusion(FUSION_CFG, {}, [d.name for d in detectors])
         pipeline = Pipeline(

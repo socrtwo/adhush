@@ -393,7 +393,7 @@ class LogoAbsenceDetector(
     override val voting: Boolean get() = active && sighted
 
     /** Positive programme proof: the logo is visibly there right now. */
-    val programPresent: Boolean get() = active && absentSince == null && score >= cfg.presentThreshold
+    override val programPresent: Boolean get() = active && absentSince == null && score >= cfg.presentThreshold
 
     /** "Not an ad": the logo was not gone. Forget the absence and demand a fresh sighting before saying so again. */
     override fun userSaysProgramme(ts: Double) {

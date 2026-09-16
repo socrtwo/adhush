@@ -3,6 +3,33 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.24.0] - 2026-09-16
+### Added
+- **What comskip, MythTV and the Auto-Cut VCRs knew** (ADR 0023), all
+  inert until they have evidence, all in the default set:
+  `rating_bug` — the parental-rating box after a break is positive
+  programme evidence (Python HDMI path and the phone camera);
+  `ad_units` — gaps on the 15-second ad-unit grid hold a mute through
+  the middle of a pod (both cores; on the phone it rides on Quiet gaps);
+  uniform separators in `black_frame` — a white flash or colour card
+  counts like black; `cutscene` — captured intro/outro frames
+  (`adhush cutscene add`), an "in" frame ducks alone, an "out" frame is
+  the show back; `stereo_width` — the mono/stereo switch, measured by the
+  capture backends before their downmix (`capture.stereo`); `watermark`
+  — ATSC A/335 / DVB-TA presence lost when a local spot replaces the
+  marked picture (experimental: written from the spec's shape, not a
+  live feed).
+- **Three feeds** (ADR 0024): `schedule` — XMLTV programme boundaries
+  (a grace window after a start dilutes mutes; `ad_free` channels never
+  mute); `ts_stream` capture + `scte35` — an HDHomeRun or DVB transport
+  stream's in-band splice cues, parsed in-process, authoritative where
+  they survive; `crowd` — an opt-in shared feed of break times on the
+  same channel with k-anonymous hashing, `adhush crowd serve` for the
+  server.
+- Programme evidence comes from any detector that has it
+  (`Detector.program_present`); wall time reaches every detector
+  (`Detector.tick`); cues are a third event type (`CueEvent`).
+
 ## [0.23.0] - 2026-09-16
 ### Added
 - Android **set-up wizard** (ADR 0022): offered once on first run and always

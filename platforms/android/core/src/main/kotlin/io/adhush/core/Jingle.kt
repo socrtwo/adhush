@@ -178,7 +178,7 @@ class JingleDetector(private val store: JingleStore, private val cfg: JingleConf
     }
 
     /** A closer was just heard: the programme is back, whatever the audio methods think. */
-    val programPresent: Boolean get() = closeHitTs?.let { lastTs - it < cfg.closeHoldS } ?: false
+    override val programPresent: Boolean get() = closeHitTs?.let { lastTs - it < cfg.closeHoldS } ?: false
 
     /** Silent until a sting has opened enough breaks to be trusted: a learner
      *  with nothing to say must not dilute the detectors that do (fusion norm). */

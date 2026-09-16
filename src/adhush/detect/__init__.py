@@ -5,16 +5,24 @@ from __future__ import annotations
 import logging
 
 from adhush.config import DetectConfig, FingerprintConfig
+from adhush.detect.ad_units import AdUnitsDetector
 from adhush.detect.aspect_change import AspectChangeDetector
 from adhush.detect.base import Detector
 from adhush.detect.black_frame import BlackFrameDetector
 from adhush.detect.clock import ClockDetector
+from adhush.detect.crowd import CrowdDetector
+from adhush.detect.cutscene import CutsceneDetector
 from adhush.detect.fingerprint import FingerprintDetector
 from adhush.detect.jingle import JingleDetector
 from adhush.detect.logo_absence import LogoAbsenceDetector
 from adhush.detect.loudness import LoudnessDetector
+from adhush.detect.rating_bug import RatingBugDetector
 from adhush.detect.scene_cut import SceneCutDetector
+from adhush.detect.schedule import ScheduleDetector
+from adhush.detect.scte35 import Scte35Detector
 from adhush.detect.silence import SilenceDetector
+from adhush.detect.stereo_width import StereoWidthDetector
+from adhush.detect.watermark import WatermarkDetector
 from adhush.fingerprint.matcher import Matcher
 
 log = logging.getLogger(__name__)
@@ -31,6 +39,14 @@ _REGISTRY: dict[str, type[Detector]] = {
     ClockDetector.name: ClockDetector,
     JingleDetector.name: JingleDetector,
     AspectChangeDetector.name: AspectChangeDetector,
+    RatingBugDetector.name: RatingBugDetector,
+    AdUnitsDetector.name: AdUnitsDetector,
+    CutsceneDetector.name: CutsceneDetector,
+    StereoWidthDetector.name: StereoWidthDetector,
+    WatermarkDetector.name: WatermarkDetector,
+    ScheduleDetector.name: ScheduleDetector,
+    Scte35Detector.name: Scte35Detector,
+    CrowdDetector.name: CrowdDetector,
 }
 
 
@@ -71,6 +87,22 @@ def build_detectors(
             detectors.append(JingleDetector(config.jingle))
         elif cls is AspectChangeDetector:
             detectors.append(AspectChangeDetector(config.aspect_change))
+        elif cls is RatingBugDetector:
+            detectors.append(RatingBugDetector(config.rating_bug))
+        elif cls is AdUnitsDetector:
+            detectors.append(AdUnitsDetector(config.ad_units))
+        elif cls is CutsceneDetector:
+            detectors.append(CutsceneDetector(config.cutscene))
+        elif cls is StereoWidthDetector:
+            detectors.append(StereoWidthDetector(config.stereo_width))
+        elif cls is WatermarkDetector:
+            detectors.append(WatermarkDetector(config.watermark))
+        elif cls is ScheduleDetector:
+            detectors.append(ScheduleDetector(config.schedule))
+        elif cls is Scte35Detector:
+            detectors.append(Scte35Detector(config.scte35))
+        elif cls is CrowdDetector:
+            detectors.append(CrowdDetector(config.crowd))
         elif cls is LogoAbsenceDetector:
             logo = LogoAbsenceDetector(config.logo_absence)
             if logo.calibrated:

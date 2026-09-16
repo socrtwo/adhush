@@ -28,6 +28,12 @@ interface Detector {
      */
     val voting: Boolean get() = true
     /**
+     * True while this detector has *positive* evidence the programme is on
+     * (the bug back, the closing sting, a rating box): the engine may end a
+     * hold early on it. Absence of ad evidence is not presence of the show.
+     */
+    val programPresent: Boolean get() = false
+    /**
      * The user said "Not an ad" or "Show's back": whatever this detector was
      * sure of a moment ago was the programme. Detectors that hold a belief
      * (a missing logo, a matched script) drop it and start over.

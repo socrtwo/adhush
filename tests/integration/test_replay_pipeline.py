@@ -58,7 +58,7 @@ def _run(tmp_path: Path, *, video: bool, audio: bool):
 def test_av_replay_detects_both_ad_pods(tmp_path: Path) -> None:
     transitions, labels, controller, detectors = _run(tmp_path, video=True, audio=True)
     # logo_absence (uncalibrated) and fingerprint (no store) are dropped.
-    assert {d.name for d in detectors} == {"black_frame", "silence", "loudness", "scene_cut", "clock", "jingle", "aspect_change"}
+    assert {d.name for d in detectors} == {"black_frame", "silence", "loudness", "scene_cut", "clock", "jingle", "aspect_change", "rating_bug", "ad_units", "cutscene", "stereo_width", "watermark", "schedule", "scte35", "crowd"}
     assert len(labels) == 2
 
     mute, unmute = evaluate_onsets(
@@ -85,7 +85,7 @@ def test_av_replay_detects_both_ad_pods(tmp_path: Path) -> None:
 
 def test_audio_only_replay_still_works_with_reduced_set(tmp_path: Path) -> None:
     transitions, labels, _, detectors = _run(tmp_path, video=False, audio=True)
-    assert {d.name for d in detectors} == {"silence", "loudness", "clock", "jingle"}
+    assert {d.name for d in detectors} == {"silence", "loudness", "clock", "jingle", "ad_units", "stereo_width", "schedule", "scte35", "crowd"}
 
     mute, unmute = evaluate_onsets(
         transitions,

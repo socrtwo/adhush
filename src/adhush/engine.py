@@ -21,11 +21,13 @@ from adhush.capture.base import CaptureSource
 from adhush.control.base import ControlError, MuteController
 from adhush.detect.base import Detector
 from adhush.detect.clock import ClockDetector
+from adhush.detect.crowd import CrowdDetector
 from adhush.detect.fingerprint import FingerprintDetector
 from adhush.detect.fusion import Fusion
 from adhush.detect.jingle import JingleDetector
 from adhush.detect.logo_absence import LogoAbsenceDetector
-from adhush.events import AdSegment, AudioEvent, FrameEvent, MuteDecision
+from adhush.detect.schedule import ScheduleDetector
+from adhush.events import AdSegment, AudioEvent, CueEvent, FrameEvent, MuteDecision
 from adhush.fingerprint.learner import Learner
 from adhush.fingerprint.matcher import Match, Matcher
 from adhush.state import Action, AdState, AdStateMachine
@@ -83,6 +85,9 @@ class Pipeline:
         self._wall_clock = wall_clock
         self._clocks = [d for d in detectors if isinstance(d, ClockDetector)]
         self._jingles = [d for d in detectors if isinstance(d, JingleDetector)]
+        # ADR 0024: an ad-free listing vetoes mutes; the crowd hears about every real break.
+        self._schedules = [d for d in detectors if isinstance(d, ScheduleDetector)]
+        self._crowds = [d for d in detectors if isinstance(d, CrowdDetector)]
         self._ad_start_wall: float | None = None
         # A timed manual duck ends at this media time (ADR 0017).
         self._timed_until: float | None = None
@@ -112,11 +117,14 @@ class Pipeline:
         self._mute_match = None
         self.transitions = []
 
-    def process(self, event: FrameEvent | AudioEvent) -> None:
+    def process(self, event: FrameEvent | AudioEvent | CueEvent) -> None:
         if isinstance(event, FrameEvent):
             for detector in self._detectors:
-                if detector.needs_video:
+                if detector.needs_video or detector.wants_video:
                     detector.observe_frame(event)
+        elif isinstance(event, CueEvent):
+            for detector in self._detectors:
+                detector.observe_cue(event)
         else:
             for detector in self._detectors:
                 if detector.needs_audio:
@@ -132,10 +140,12 @@ class Pipeline:
     def _decide(self, ts: float) -> None:
         with self._lock:
             self._last_ts = ts
-            if self._wall_clock is not None and self._clocks:
+            if self._wall_clock is not None:
+                # Wall time reaches every detector that keeps one (the break
+                # clock, a schedule, the crowd); a replay has none.
                 wall = self._wall_clock()
-                for clock in self._clocks:
-                    clock.tick(wall)
+                for detector in self._detectors:
+                    detector.tick(wall)
             if self._timed_until is not None and ts >= self._timed_until:
                 self._end_timed()
                 return
@@ -162,12 +172,15 @@ class Pipeline:
                 AdState.PROGRAM, AdState.SUSPECT_AD,
             )
             # A user hold behaves like a fingerprint hold with no program
-            # evidence: only "Show's back" or the ceiling ends it.
-            # The logo visibly back, or the channel's closing sting heard: the program is on.
-            program_evidence = not self._user_hold and (
-                any(d.program_present for d in self._logos)
-                or any(d.program_present for d in self._jingles)
-            )
+            # evidence: only "Show's back" or the ceiling ends it. Positive
+            # programme evidence comes from any detector that has it: the logo
+            # visibly back, the closing sting, a rating box, a title card, an
+            # in-network cue, other devices' breaks ending (Detector.program_present).
+            program_evidence = not self._user_hold and any(d.program_present for d in self._detectors)
+            if any(s.ad_free_now for s in self._schedules) and not self._user_hold:
+                # An ad-free channel (ADR 0024): nothing may mute, whatever the detectors think.
+                decision = MuteDecision(ts=ts, mute=False, confidence=0.0, reasons=("schedule:ad_free",))
+                promote = False
 
             action = self._machine.update(
                 decision,
@@ -181,6 +194,9 @@ class Pipeline:
             reasons = decision.reasons
             if action is Action.MUTE:
                 self._ad_start_wall = self._wall_clock() if self._wall_clock else None
+                if self._ad_start_wall is not None and self._timed_until is None:
+                    for crowd in self._crowds:
+                        crowd.report("start", self._ad_start_wall)
                 self._machine.ceiling_s = (
                     self._clocks[0].ceiling_s(self._machine.hard_max_s)
                     if self._clocks else self._machine.hard_max_s
@@ -250,6 +266,8 @@ class Pipeline:
         if not reject and wall_start is not None and self._wall_clock is not None:
             for clock in self._clocks:
                 clock.learn(wall_start, self._wall_clock())
+            for crowd in self._crowds:
+                crowd.report("end", self._wall_clock())
         if not reject and start is not None:
             for jingle in self._jingles:
                 jingle.learn_break(start, ts)
@@ -306,6 +324,9 @@ class Pipeline:
                 "break_left_s": self._break_left(),
                 "quiet_s": max(0.0, self._quiet_until - self._last_ts),
                 "camera": self._logos[0].describe(self._last_ts) if self._logos else None,
+                "schedule": self._schedules[0].describe() if self._schedules else None,
+                "crowd": self._crowds[0].describe() if self._crowds and self._crowds[0].enabled else None,
+                "witnesses": [d.name for d in self._detectors if d.program_present],
                 "trace": self._trace,
                 "detectors": [d.name for d in self._detectors],
                 "transitions": len(self.transitions),
@@ -525,9 +546,9 @@ def run_live(
 ) -> None:
     """Drive the pipeline from a live source until ``stop`` is set."""
     pipeline.warmup()
-    events: queue.Queue[FrameEvent | AudioEvent | None] = queue.Queue(maxsize=queue_size)
+    events: queue.Queue[FrameEvent | AudioEvent | CueEvent | None] = queue.Queue(maxsize=queue_size)
 
-    def _pump(stream: Iterator[FrameEvent | AudioEvent]) -> None:
+    def _pump(stream: Iterator[FrameEvent | AudioEvent | CueEvent]) -> None:
         try:
             for event in stream:
                 if stop.is_set():
@@ -541,11 +562,13 @@ def run_live(
 
     caps = source.caps()
     threads = []
-    live_streams = int(caps.video) + int(caps.audio)
+    live_streams = int(caps.video) + int(caps.audio) + int(caps.cues)
     if caps.video:
         threads.append(threading.Thread(target=_pump, args=(source.frames(),), daemon=True))
     if caps.audio:
         threads.append(threading.Thread(target=_pump, args=(source.audio_blocks(),), daemon=True))
+    if caps.cues:
+        threads.append(threading.Thread(target=_pump, args=(source.cues(),), daemon=True))
     for thread in threads:
         thread.start()
 

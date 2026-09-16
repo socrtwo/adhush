@@ -1,5 +1,9 @@
 # Ideas backlog — from the September 2026 search
 
+**Status (0.24.0):** items 1–7 and 10–12 are built (ADR 0023, ADR 0024);
+5 (caption style), 8 (packshots), 9 (subtitle PIDs), 13 (Android TV
+accessibility) and 14 (smoothing) remain.
+
 What the wider world does that AdHush does not yet, ranked by what it
 would buy this project. Each entry says what it is, why it would help, how
 hard it is, and where it came from. Everything AdHush already has (black

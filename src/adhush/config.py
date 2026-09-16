@@ -12,7 +12,9 @@ from adhush.util.resources import bundled
 PHASE1_DETECTORS = ("black_frame", "silence", "loudness")
 PHASE2_DETECTORS = ("logo_absence", "scene_cut", "fingerprint")
 PHASE3_DETECTORS = ("clock", "jingle", "aspect_change")
-IMPLEMENTED_DETECTORS = PHASE1_DETECTORS + PHASE2_DETECTORS + PHASE3_DETECTORS
+# ADR 0023/0024: every one of these is inert until it has something to say.
+PHASE4_DETECTORS = ("rating_bug", "ad_units", "cutscene", "stereo_width", "watermark", "schedule", "scte35", "crowd")
+IMPLEMENTED_DETECTORS = PHASE1_DETECTORS + PHASE2_DETECTORS + PHASE3_DETECTORS + PHASE4_DETECTORS
 KNOWN_DETECTORS = IMPLEMENTED_DETECTORS + ("caption_gap",)
 KNOWN_CAPTURE_BACKENDS = (
     "hdmi_uvc",
@@ -21,6 +23,7 @@ KNOWN_CAPTURE_BACKENDS = (
     "line_in",
     "screen",
     "file_replay",
+    "ts_stream",
 )
 KNOWN_CONTROL_BACKENDS = (
     "rs232_sharp",
@@ -50,12 +53,21 @@ class CaptureConfig:
     audio_block_ms: int = 100
     path: str = ""  # file_replay input
     autocrop: bool = True  # camera: crop to the detected screen rectangle
+    # ts_stream (ADR 0024): an MPEG transport stream over HTTP or UDP — an
+    # HDHomeRun's http://<ip>:5004/auto/v<channel>, a DVB dongle's udp://…
+    url: str = ""
+    # Measure stereo width before the mono downmix on stereo backends (ADR 0023).
+    stereo: bool = True
 
 
 @dataclass(frozen=True, slots=True)
 class BlackFrameConfig:
     luma_threshold: int = 16
     min_run_frames: int = 3
+    # A frame whose downscaled luma spreads no more than this is a uniform
+    # separator (a white flash, a colour card) even when it is not black
+    # (ADR 0023); 0 turns it off.
+    uniform_spread: float = 6.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +105,108 @@ class AspectChangeConfig:
     baseline_s: float = 600.0  # the programme's shape is the mode over this long
     min_baseline_s: float = 30.0
     max_change_s: float = 360.0  # changed longer than any break: the programme changed shape
+
+
+@dataclass(frozen=True, slots=True)
+class RatingBugConfig:
+    """The parental-rating box as programme evidence (ADR 0023)."""
+
+    roi: RoiConfig = field(default_factory=lambda: RoiConfig(x=0.0, y=0.02, w=0.22, h=0.16))
+    bright: int = 190  # luma at or above which a pixel belongs to the box
+    min_fill: float = 0.45  # box pixels that are bright (the text is dark)
+    min_aspect: float = 1.2  # wider than tall…
+    max_aspect: float = 4.0  # …but not a banner
+    min_share: float = 0.04  # box area as a share of the ROI…
+    max_share: float = 0.6  # …and not the whole corner lit up
+    appear_after_s: float = 5.0  # the ROI must have been box-free this long: a fixed bright corner is scenery
+    min_present_s: float = 1.0  # …and the box must stay this long
+    hold_s: float = 20.0  # programme evidence lasts this long after the box
+    sample_interval_s: float = 0.25
+
+
+@dataclass(frozen=True, slots=True)
+class AdUnitsConfig:
+    """Ad-unit length quantisation (ADR 0023)."""
+
+    tolerance_s: float = 1.2  # a gap within this of 15/30/45/60/90/120 s fits
+    hold_s: float = 35.0  # the fit holds this long after the last separator
+    merge_s: float = 2.0  # two cues this close are one separator
+    black_luma: float = 20.0
+    min_black_frames: int = 2
+    silence_dbfs: float = -50.0
+    min_silence_s: float = 0.25
+
+
+@dataclass(frozen=True, slots=True)
+class CutsceneConfig:
+    """Intro/outro template matching (ADR 0023)."""
+
+    directory: str = "data/cutscenes"
+    max_hamming: int = 8  # phash bits
+    min_correlation: float = 0.9  # thumbnail correlation
+    hold_s: float = 10.0  # an "in" template ducks for this long
+    close_hold_s: float = 10.0  # an "out" template is programme evidence this long
+    sample_interval_s: float = 0.2
+
+
+@dataclass(frozen=True, slots=True)
+class StereoWidthConfig:
+    """Stereo-width switch (ADR 0023)."""
+
+    window_s: float = 2.0
+    baseline_s: float = 120.0
+    min_delta: float = 0.15  # side/mid ratio change that counts as a switch
+    confirm_s: float = 1.5
+    max_switch_s: float = 360.0  # switched longer than any break: the programme changed mix
+
+
+@dataclass(frozen=True, slots=True)
+class WatermarkConfig:
+    """ATSC A/335 / DVB-TA video watermark presence (ADR 0023). Experimental."""
+
+    lines: int = 2
+    symbol_px: float = 8.0  # symbol width at 1920 px; scaled to the frame
+    run_in: int = 0xEB52
+    run_in_bits: int = 16
+    min_contrast: float = 40.0  # luma spread between the two levels
+    min_alignment: float = 0.7  # share of luma steps on symbol boundaries
+    sample_interval_s: float = 0.5
+    confirm_s: float = 1.5
+    baseline_s: float = 600.0
+    min_baseline_s: float = 30.0
+    max_absent_s: float = 360.0
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduleConfig:
+    """EPG programme boundaries from an XMLTV file (ADR 0024)."""
+
+    file: str = ""  # XMLTV; empty = off
+    channel: str = ""  # the XMLTV channel id (or display name) being watched
+    start_grace_s: float = 90.0  # a break is unlikely this long after a programme starts
+    ad_free: tuple[str, ...] = ()  # channel ids or display names that never carry ads
+    reload_s: float = 3600.0
+
+
+@dataclass(frozen=True, slots=True)
+class Scte35Config:
+    """SCTE-35 cues from a transport stream (ADR 0024)."""
+
+    max_break_s: float = 360.0  # an out-of-network with no in-network ends here
+    in_hold_s: float = 10.0  # an in-network cue is programme evidence this long
+
+
+@dataclass(frozen=True, slots=True)
+class CrowdConfig:
+    """A shared feed of break times on the same channel (ADR 0024). Opt-in."""
+
+    url: str = ""  # an adhush crowd server; empty = off
+    channel: str = ""  # the channel's name; only a hash prefix ever leaves the device
+    report: bool = True  # send this device's own confirmed breaks
+    min_reports: int = 2  # other devices that must agree before it votes
+    window_s: float = 45.0  # a report is fresh this long
+    poll_s: float = 5.0
+    salt: str = "adhush-crowd-v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,6 +284,14 @@ class DetectConfig:
     clock: ClockConfig = field(default_factory=ClockConfig)
     jingle: JingleConfig = field(default_factory=JingleConfig)
     aspect_change: AspectChangeConfig = field(default_factory=AspectChangeConfig)
+    rating_bug: RatingBugConfig = field(default_factory=RatingBugConfig)
+    ad_units: AdUnitsConfig = field(default_factory=AdUnitsConfig)
+    cutscene: CutsceneConfig = field(default_factory=CutsceneConfig)
+    stereo_width: StereoWidthConfig = field(default_factory=StereoWidthConfig)
+    watermark: WatermarkConfig = field(default_factory=WatermarkConfig)
+    schedule: ScheduleConfig = field(default_factory=ScheduleConfig)
+    scte35: Scte35Config = field(default_factory=Scte35Config)
+    crowd: CrowdConfig = field(default_factory=CrowdConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -341,6 +463,14 @@ _SCENE_DEFAULTS = SceneCutConfig()
 _CLOCK_DEFAULTS = ClockConfig()
 _JINGLE_DEFAULTS = JingleConfig()
 _ASPECT_DEFAULTS = AspectChangeConfig()
+_RATING_DEFAULTS = RatingBugConfig()
+_UNITS_DEFAULTS = AdUnitsConfig()
+_CUTSCENE_DEFAULTS = CutsceneConfig()
+_WIDTH_DEFAULTS = StereoWidthConfig()
+_WATERMARK_DEFAULTS = WatermarkConfig()
+_SCHEDULE_DEFAULTS = ScheduleConfig()
+_SCTE_DEFAULTS = Scte35Config()
+_CROWD_DEFAULTS = CrowdConfig()
 _FUSION_DEFAULTS = FusionConfig()
 _CONTROL_DEFAULTS = ControlConfig()
 _FP_DEFAULTS = FingerprintConfig()
@@ -386,6 +516,8 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
         audio_block_ms=int(cap.get("audio_block_ms", _CAPTURE_DEFAULTS.audio_block_ms)),
         path=str(cap.get("path", "")),
         autocrop=bool(cap.get("autocrop", _CAPTURE_DEFAULTS.autocrop)),
+        url=str(cap.get("url", _CAPTURE_DEFAULTS.url)),
+        stereo=bool(cap.get("stereo", _CAPTURE_DEFAULTS.stereo)),
     )
     if capture.backend not in KNOWN_CAPTURE_BACKENDS:
         raise ConfigError(f"unknown capture backend: {capture.backend}")
@@ -411,11 +543,20 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
     clk = det.get("clock", {})
     jng = det.get("jingle", {})
     asp = det.get("aspect_change", {})
+    rat = det.get("rating_bug", {})
+    unt = det.get("ad_units", {})
+    cut = det.get("cutscene", {})
+    wid = det.get("stereo_width", {})
+    wmk = det.get("watermark", {})
+    sch = det.get("schedule", {})
+    sct = det.get("scte35", {})
+    crd = det.get("crowd", {})
     detect = DetectConfig(
         enabled=enabled,
         black_frame=BlackFrameConfig(
             luma_threshold=int(bf.get("luma_threshold", _BLACK_DEFAULTS.luma_threshold)),
             min_run_frames=int(bf.get("min_run_frames", _BLACK_DEFAULTS.min_run_frames)),
+            uniform_spread=float(bf.get("uniform_spread", _BLACK_DEFAULTS.uniform_spread)),
         ),
         silence=SilenceConfig(
             dbfs_threshold=float(sil.get("dbfs_threshold", _SILENCE_DEFAULTS.dbfs_threshold)),
@@ -475,6 +616,76 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
             baseline_s=float(asp.get("baseline_s", _ASPECT_DEFAULTS.baseline_s)),
             min_baseline_s=float(asp.get("min_baseline_s", _ASPECT_DEFAULTS.min_baseline_s)),
             max_change_s=float(asp.get("max_change_s", _ASPECT_DEFAULTS.max_change_s)),
+        ),
+        rating_bug=RatingBugConfig(
+            roi=_parse_roi(rat.get("roi"), _RATING_DEFAULTS.roi),
+            bright=int(rat.get("bright", _RATING_DEFAULTS.bright)),
+            min_fill=float(rat.get("min_fill", _RATING_DEFAULTS.min_fill)),
+            min_aspect=float(rat.get("min_aspect", _RATING_DEFAULTS.min_aspect)),
+            max_aspect=float(rat.get("max_aspect", _RATING_DEFAULTS.max_aspect)),
+            min_share=float(rat.get("min_share", _RATING_DEFAULTS.min_share)),
+            max_share=float(rat.get("max_share", _RATING_DEFAULTS.max_share)),
+            appear_after_s=float(rat.get("appear_after_s", _RATING_DEFAULTS.appear_after_s)),
+            min_present_s=float(rat.get("min_present_s", _RATING_DEFAULTS.min_present_s)),
+            hold_s=float(rat.get("hold_s", _RATING_DEFAULTS.hold_s)),
+            sample_interval_s=float(rat.get("sample_interval_s", _RATING_DEFAULTS.sample_interval_s)),
+        ),
+        ad_units=AdUnitsConfig(
+            tolerance_s=float(unt.get("tolerance_s", _UNITS_DEFAULTS.tolerance_s)),
+            hold_s=float(unt.get("hold_s", _UNITS_DEFAULTS.hold_s)),
+            merge_s=float(unt.get("merge_s", _UNITS_DEFAULTS.merge_s)),
+            black_luma=float(unt.get("black_luma", _UNITS_DEFAULTS.black_luma)),
+            min_black_frames=int(unt.get("min_black_frames", _UNITS_DEFAULTS.min_black_frames)),
+            silence_dbfs=float(unt.get("silence_dbfs", _UNITS_DEFAULTS.silence_dbfs)),
+            min_silence_s=float(unt.get("min_silence_s", _UNITS_DEFAULTS.min_silence_s)),
+        ),
+        cutscene=CutsceneConfig(
+            directory=str(cut.get("directory", _CUTSCENE_DEFAULTS.directory)),
+            max_hamming=int(cut.get("max_hamming", _CUTSCENE_DEFAULTS.max_hamming)),
+            min_correlation=float(cut.get("min_correlation", _CUTSCENE_DEFAULTS.min_correlation)),
+            hold_s=float(cut.get("hold_s", _CUTSCENE_DEFAULTS.hold_s)),
+            close_hold_s=float(cut.get("close_hold_s", _CUTSCENE_DEFAULTS.close_hold_s)),
+            sample_interval_s=float(cut.get("sample_interval_s", _CUTSCENE_DEFAULTS.sample_interval_s)),
+        ),
+        stereo_width=StereoWidthConfig(
+            window_s=float(wid.get("window_s", _WIDTH_DEFAULTS.window_s)),
+            baseline_s=float(wid.get("baseline_s", _WIDTH_DEFAULTS.baseline_s)),
+            min_delta=float(wid.get("min_delta", _WIDTH_DEFAULTS.min_delta)),
+            confirm_s=float(wid.get("confirm_s", _WIDTH_DEFAULTS.confirm_s)),
+            max_switch_s=float(wid.get("max_switch_s", _WIDTH_DEFAULTS.max_switch_s)),
+        ),
+        watermark=WatermarkConfig(
+            lines=int(wmk.get("lines", _WATERMARK_DEFAULTS.lines)),
+            symbol_px=float(wmk.get("symbol_px", _WATERMARK_DEFAULTS.symbol_px)),
+            run_in=int(wmk.get("run_in", _WATERMARK_DEFAULTS.run_in)),
+            run_in_bits=int(wmk.get("run_in_bits", _WATERMARK_DEFAULTS.run_in_bits)),
+            min_contrast=float(wmk.get("min_contrast", _WATERMARK_DEFAULTS.min_contrast)),
+            min_alignment=float(wmk.get("min_alignment", _WATERMARK_DEFAULTS.min_alignment)),
+            sample_interval_s=float(wmk.get("sample_interval_s", _WATERMARK_DEFAULTS.sample_interval_s)),
+            confirm_s=float(wmk.get("confirm_s", _WATERMARK_DEFAULTS.confirm_s)),
+            baseline_s=float(wmk.get("baseline_s", _WATERMARK_DEFAULTS.baseline_s)),
+            min_baseline_s=float(wmk.get("min_baseline_s", _WATERMARK_DEFAULTS.min_baseline_s)),
+            max_absent_s=float(wmk.get("max_absent_s", _WATERMARK_DEFAULTS.max_absent_s)),
+        ),
+        schedule=ScheduleConfig(
+            file=str(sch.get("file", _SCHEDULE_DEFAULTS.file)),
+            channel=str(sch.get("channel", _SCHEDULE_DEFAULTS.channel)),
+            start_grace_s=float(sch.get("start_grace_s", _SCHEDULE_DEFAULTS.start_grace_s)),
+            ad_free=tuple(str(c) for c in sch.get("ad_free", list(_SCHEDULE_DEFAULTS.ad_free))),
+            reload_s=float(sch.get("reload_s", _SCHEDULE_DEFAULTS.reload_s)),
+        ),
+        scte35=Scte35Config(
+            max_break_s=float(sct.get("max_break_s", _SCTE_DEFAULTS.max_break_s)),
+            in_hold_s=float(sct.get("in_hold_s", _SCTE_DEFAULTS.in_hold_s)),
+        ),
+        crowd=CrowdConfig(
+            url=str(crd.get("url", _CROWD_DEFAULTS.url)),
+            channel=str(crd.get("channel", _CROWD_DEFAULTS.channel)),
+            report=bool(crd.get("report", _CROWD_DEFAULTS.report)),
+            min_reports=int(crd.get("min_reports", _CROWD_DEFAULTS.min_reports)),
+            window_s=float(crd.get("window_s", _CROWD_DEFAULTS.window_s)),
+            poll_s=float(crd.get("poll_s", _CROWD_DEFAULTS.poll_s)),
+            salt=str(crd.get("salt", _CROWD_DEFAULTS.salt)),
         ),
     )
     if not 0.0 < detect.clock.full_fraction <= 1.0 or detect.clock.min_hours < 1:

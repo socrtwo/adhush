@@ -214,7 +214,8 @@ class Engine(
         // A user hold behaves like a fingerprint hold with no programme evidence: only the ceiling ends it.
         // A fingerprint hold ends early when the logo is visibly back — presence is proof of programme.
         // A fingerprint hold ends early when the logo is visibly back, or the channel's closing sting was heard.
-        val programEvidence = !userHold && (logo?.programPresent == true || jingle?.programPresent == true || badge?.programPresent == true)
+        // Any detector with positive programme evidence: the bug back, the closing sting, the badge gone, a rating box (ADR 0023).
+        val programEvidence = !userHold && detectors.any { it.programPresent }
         val action = machine.update(decision, promote = promote, fpHold = fpHold || userHold, programEvidence = programEvidence) ?: return
         val reasons = if (promote) listOf("fingerprint:promote ad=${match!!.adId} dur=${match.durationS.toInt()}") + decision.reasons else decision.reasons
         apply(action, ts, decision.confidence, reasons, if (promote) Source.FINGERPRINT else Source.FUSION, match)
@@ -426,7 +427,10 @@ object Assembly {
         badge: BadgeDetector? = null,
         wallClock: () -> Double = { System.currentTimeMillis() / 1000.0 },
     ): Engine {
-        val detectors = listOfNotNull<Detector>(if (silence) MicSilenceDetector() else null, if (loudness) LoudnessDetector() else null, logo, transcript, captions, clock, jingle, badge) + judges
+        // Ad units (ADR 0023) ride on the quiet gaps: the same separators, on a 15-second grid; the rating box rides on the camera.
+        val units = if (silence) AdUnitsDetector() else null
+        val rating = if (logo != null) RatingBugDetector({ logo.lastScreen }) else null
+        val detectors = listOfNotNull<Detector>(if (silence) MicSilenceDetector() else null, if (loudness) LoudnessDetector() else null, units, logo, rating, transcript, captions, clock, jingle, badge) + judges
         require(detectors.isNotEmpty() || fingerprints) { "at least one method must be on" }
         val matcher = AudioMatcher(store, fpCfg)
         val fp = if (fingerprints) AudioFingerprintDetector(fpCfg, matcher) else null

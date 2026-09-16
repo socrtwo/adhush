@@ -10,7 +10,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import ClassVar
 
-from adhush.events import AudioEvent, DetectorVote, FrameEvent
+from adhush.events import AudioEvent, CueEvent, DetectorVote, FrameEvent
 
 
 class Detector(ABC):
@@ -24,6 +24,9 @@ class Detector(ABC):
     name: ClassVar[str]
     needs_video: ClassVar[bool] = False
     needs_audio: ClassVar[bool] = False
+    # Frames are welcome but not required: the detector still runs on an
+    # audio-only source (ad_units takes its separators from either).
+    wants_video: ClassVar[bool] = False
 
     @property
     def voting(self) -> bool:
@@ -52,6 +55,21 @@ class Detector(ABC):
 
     def observe_audio(self, event: AudioEvent) -> None:
         """Consume one block of mono float32 audio."""
+
+    def observe_cue(self, event: CueEvent) -> None:
+        """Consume an out-of-band marker from the capture path (ADR 0024)."""
+
+    def tick(self, wall: float) -> None:
+        """Wall-clock time passes (the break clock, a schedule, a shared feed).
+        Never called during a replay, which has no wall clock."""
+
+    @property
+    def program_present(self) -> bool:
+        """True while this detector has *positive* evidence the programme is
+        on (the logo back, the closing sting, a rating box, a title card): the
+        engine may end a fingerprint or user hold early on it. Absence of ad
+        evidence is not presence of the programme; most detectors say False."""
+        return False
 
     @abstractmethod
     def vote(self, ts: float) -> DetectorVote:

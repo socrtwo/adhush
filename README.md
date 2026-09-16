@@ -10,7 +10,7 @@ RS-232, network API, or the host's own audio mixer.
 **Status: twelve roadmap phases in, running in real living rooms.** The
 Python core (Windows, macOS, Linux, ChromeOS, Raspberry Pi) captures from
 HDMI-UVC, screen grab, a camera at the screen, a microphone or line-in, runs
-seven detectors plus a learned break clock and the channel's break jingle, fuses their votes, and drives the
+fifteen detectors — from black frames and loudness to the rating box, ad-unit lengths, the channel's break jingle, captured cutscenes, the stereo switch, the ATSC watermark, an EPG, SCTE-35 cues and a crowd feed — fuses their votes, and drives the
 set over RS-232, IP, HDMI-CEC, infrared, a network blaster, the host's own
 mixer or a relay. The Android app (a phone by the TV, no cables) has ten
 methods including offline speech, on-device and cloud AI judges, the channel
@@ -90,10 +90,18 @@ screen. Which platform gets what is in `docs/release.md`.
 |---|---|
 | `logo_absence` | Network bug vanishes from a configured ROI (typically lower right) |
 | `loudness` | Short-term LUFS jumps above rolling program baseline; a crest-factor drop (a spot compressed flat) adds half a vote |
-| `black_frame` | Black/near-black runs at pod boundaries |
+| `black_frame` | Black — or any uniform-colour — runs at pod boundaries |
 | `silence` | Audio gaps at pod boundaries |
 | `scene_cut` | Shot-change rate spike |
 | `aspect_change` | Letterbox/pillarbox transition: the active picture's shape leaves the programme's (HDMI and screen paths) |
+| `rating_bug` | The parental-rating box ("TV-14") flashed after every break: positive evidence the show is back |
+| `ad_units` | Separators on the 15/30/60 s ad-unit grid: holds a mute through the middle of a pod |
+| `cutscene` | Captured intro/outro frames (`adhush cutscene add`): "we'll be right back" ducks, the title card unmutes |
+| `stereo_width` | The mix switches between mono and stereo (HDMI, line-in, transport stream) |
+| `watermark` | ATSC A/335 / DVB-TA video watermark lost when a local spot replaces the picture (experimental) |
+| `schedule` | XMLTV programme boundaries: a grace window after a start, ad-free channels never mute |
+| `scte35` | In-band splice cues from a transport stream (`ts_stream`: HDHomeRun, DVB) — authoritative where present |
+| `crowd` | Other AdHush devices on the same channel reporting a break (opt-in, hashed, `adhush crowd serve`) |
 | `caption_gap` | Closed-caption stream discontinuity |
 | `fingerprint` | Perceptual video + audio hash match against previously seen ads |
 
