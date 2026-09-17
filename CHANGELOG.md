@@ -30,6 +30,14 @@ Format follows Keep a Changelog; versioning follows SemVer.
   (`Detector.program_present`); wall time reaches every detector
   (`Detector.tick`); cues are a third event type (`CueEvent`).
 
+### Fixed
+- The release run built every binary and then refused to publish: strict
+  `mypy` cannot find Pillow, which `adhush cutscene add --image` imports
+  optionally inside a `try`/`except` and which CI does not install. The
+  missing import is now ignored by configuration, and `ci.yml` runs the
+  Python checks on **every branch push** instead of only `main` and pull
+  requests, so the next such drift appears on the push rather than at the tag.
+
 ## [0.23.0] - 2026-09-16
 ### Added
 - Android **set-up wizard** (ADR 0022): offered once on first run and always
