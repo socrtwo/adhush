@@ -22,7 +22,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    packaging { resources.excludes += "META-INF/*.kotlin_module" }
+    packaging {
+        resources.excludes += "META-INF/*.kotlin_module"
+        // The three BouncyCastle jars (core, for Android TV's client certificate) each carry the same OSGi manifest.
+        resources.excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        resources.excludes += "META-INF/versions/*/OSGI-INF/MANIFEST.MF"
+    }
 }
 
 dependencies {
