@@ -95,6 +95,7 @@
                         <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/controlIp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Network (Wi‑Fi, the big Sharp)" />
                         <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/controlSerial" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Serial cable (USB‑OTG to RS‑232C)" />
                         <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/controlIr" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Infrared (phones with a blaster)" />
+                        <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/controlFound" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Another brand — run the set-up wizard to find it" />
                     </RadioGroup>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -119,7 +120,7 @@
 
             <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Infrared codes (Sharp defaults)" android:textAppearance="?attr/textAppearanceTitleMedium" android:paddingBottom="8dp" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Infrared codes (Sharp defaults; the wizard can pick Samsung, LG/Vizio, Sony, Philips, Panasonic or Toshiba instead)" android:textAppearance="?attr/textAppearanceTitleMedium" android:paddingBottom="8dp" />
                     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
                         <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="Address" android:layout_marginEnd="6dp">
                             <com.google.android.material.textfield.TextInputEditText android:id="@+id/irAddress" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" />

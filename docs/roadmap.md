@@ -95,6 +95,10 @@ ADR 0023: the rating box, ad units, uniform separators, cutscenes, the
 stereo switch, the ATSC/DVB watermark probe. ADR 0024: an XMLTV schedule,
 SCTE-35 from a transport stream, and the crowd feed.
 
+## Phase 17 — any brand of TV, from the phone (done, 0.26.0)
+ADR 0025: drivers for Sony, LG, UPnP, Samsung, Roku and Vizio, infrared
+for seven brands, and a finder the wizard uses to prove each path.
+
 ## Beyond the roadmap
 Start with `docs/ideas-backlog.md`: the parental-rating bug as an unmute
 cue, ad-unit length quantisation and uniform-colour separators are the

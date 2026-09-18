@@ -381,7 +381,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<android.widget.RadioGroup>(R.id.localModelChoice).check(when (settings.localModelSize) { "medium" -> R.id.localMedium; "large" -> R.id.localLarge; else -> R.id.localSmall })
         findViewById<Button>(R.id.localModel).text = localModelLabel()
         findViewById<Button>(R.id.speechModel).text = speechModelLabel()
-        findViewById<android.widget.RadioGroup>(R.id.control).check(when (settings.control) { "serial" -> R.id.controlSerial; "ir" -> R.id.controlIr; else -> R.id.controlIp })
+        findViewById<android.widget.RadioGroup>(R.id.control).check(when (settings.control) { "serial" -> R.id.controlSerial; "ir" -> R.id.controlIr; "ip" -> R.id.controlIp; else -> R.id.controlFound })
+        findViewById<android.widget.RadioButton>(R.id.controlFound).text = foundLabel()
         findViewById<EditText>(R.id.irAddress).setText(settings.irAddress.toString())
         findViewById<EditText>(R.id.irVolUp).setText("%02X".format(settings.irVolumeUp))
         findViewById<EditText>(R.id.irVolDown).setText("%02X".format(settings.irVolumeDown))
@@ -414,7 +415,11 @@ class MainActivity : AppCompatActivity() {
         settings.cameraTarget = if (findViewById<android.widget.RadioGroup>(R.id.cameraTarget).checkedRadioButtonId == R.id.targetTicker) "ticker" else "bug"
         settings.speechModel = if (findViewById<android.widget.RadioGroup>(R.id.speechModelChoice).checkedRadioButtonId == R.id.speechMedium) "medium" else "small"
         settings.localModelSize = when (findViewById<android.widget.RadioGroup>(R.id.localModelChoice).checkedRadioButtonId) { R.id.localMedium -> "medium"; R.id.localLarge -> "large"; else -> "small" }
-        settings.control = when (findViewById<android.widget.RadioGroup>(R.id.control).checkedRadioButtonId) { R.id.controlSerial -> "serial"; R.id.controlIr -> "ir"; else -> "ip" }
+        settings.control = when (findViewById<android.widget.RadioGroup>(R.id.control).checkedRadioButtonId) {
+            R.id.controlSerial -> "serial"; R.id.controlIr -> "ir"; R.id.controlIp -> "ip"
+            R.id.controlFound -> settings.control.takeIf { it !in setOf("ip", "serial", "ir") } ?: "ip"   // keep whichever brand path the wizard chose
+            else -> "ip"
+        }
         settings.irAddress = findViewById<EditText>(R.id.irAddress).text.toString().trim().toIntOrNull()?.coerceIn(0, 31) ?: 1
         settings.irVolumeUp = findViewById<EditText>(R.id.irVolUp).text.toString().trim().toIntOrNull(16)?.coerceIn(0, 255) ?: 0x14
         settings.irVolumeDown = findViewById<EditText>(R.id.irVolDown).text.toString().trim().toIntOrNull(16)?.coerceIn(0, 255) ?: 0x15
@@ -504,7 +509,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Infrared: three presses down, three up — watch the set's volume bar. */
     private fun testIr() {
-        val sender = IrKeySender(this, settings.irAddress, settings.irVolumeUp, settings.irVolumeDown)
+        val sender = IrKeySender.fromSettings(this, settings)
         if (!sender.available) { testLine("this phone has no infrared blaster"); return }
         testLine("testing infrared: volume down ×3, then up ×3 — point the top edge of the phone at the TV")
         thread {
@@ -561,6 +566,12 @@ class MainActivity : AppCompatActivity() {
         /** The timed ducks: 30-second steps up to a five-minute break. */
         val DUCK_BUTTONS = listOf(R.id.duck30 to 30, R.id.duck60 to 60, R.id.duck90 to 90, R.id.duck120 to 120, R.id.duck150 to 150,
             R.id.duck180 to 180, R.id.duck210 to 210, R.id.duck240 to 240, R.id.duck270 to 270, R.id.duck300 to 300)
+    }
+
+    /** The fourth radio: the brand path the wizard found, or an invitation to run it. */
+    private fun foundLabel(): String {
+        val path = io.adhush.core.TvPathKind.ofWire(settings.control)
+        return if (path != null) "Another brand, found by the wizard: ${settings.tvBrand} ${settings.tvModel} — ${path.label}" else "Another brand (Samsung, LG, Sony, Roku TV, Vizio, DLNA) — run the set-up wizard to find it"
     }
 
     /** Control actions need a running service; the notification and tile go through the same door. */

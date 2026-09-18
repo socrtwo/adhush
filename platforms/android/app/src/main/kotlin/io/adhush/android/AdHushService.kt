@@ -28,6 +28,13 @@ import io.adhush.core.FileJingleStore
 import io.adhush.core.JingleDetector
 import io.adhush.core.RemoteKey
 import io.adhush.core.press
+import io.adhush.core.LevelController
+import io.adhush.core.LgWebOs
+import io.adhush.core.RokuEcp
+import io.adhush.core.SamsungTizen
+import io.adhush.core.SonyBravia
+import io.adhush.core.UpnpRenderer
+import io.adhush.core.VizioSmartCast
 import io.adhush.core.ControlError
 import io.adhush.core.DuckController
 import io.adhush.core.HANDHELD_LOGO_CONFIG
@@ -85,6 +92,8 @@ class AdHushService : Service(), LifecycleOwner {
     private var projection: MediaProjection? = null
     private var streamStore: FileFingerprintStore? = null
     private var badgeReader: BadgeReader? = null
+    /** The brand driver behind a stepped controller, for the remote's keys (Roku, Samsung, Vizio). */
+    private var keyDriver: Any? = null
     private var streamAdsAtStart = 0
     private var streamScriptsAtStart = 0
     private val io = Executors.newSingleThreadExecutor()
@@ -166,22 +175,32 @@ class AdHushService : Service(), LifecycleOwner {
             update("microphone permission missing"); stopSelf(); return
         }
         // The 0.13 log: a blank address was tried as ":10002" every five seconds. Refuse to start instead.
-        if (settings.control == "ip" && settings.host.isBlank()) { update("no TV address — type it on the TV page and Save"); stopSelf(); return }
+        if (settings.control in setOf("ip", "sony", "lg", "samsung", "roku", "vizio") && settings.host.isBlank()) { update("no TV address — run the wizard's Find my TV, or type it on the TV page and Save"); stopSelf(); return }
+        if (settings.control == "upnp" && settings.upnpControlUrl.isBlank()) { update("no renderer address — run the wizard's Find my TV"); stopSelf(); return }
         if (settings.methodsOn == 0) { update("no method is switched on — turn one on under Methods"); stopSelf(); return }
-        val ctl: DuckController = when (settings.control) {
+        val persist = PrefsDuckPersistence(this)
+        keyDriver = null
+        val ctl: DuckController = try { when (settings.control) {
             "serial" -> {
                 val t = SerialTransport(this); transport = t
-                SharpController(SharpIpClient(t), PrefsDuckPersistence(this), duckLevel = settings.duckLevel, normalVolume = settings.normalVolume, useMuteInstead = settings.useMute)
+                SharpController(SharpIpClient(t), persist, duckLevel = settings.duckLevel, normalVolume = settings.normalVolume, useMuteInstead = settings.useMute)
             }
             "ir" -> {
                 transport = null
-                StepVolumeController(IrKeySender(this, settings.irAddress, settings.irVolumeUp, settings.irVolumeDown), PrefsDuckPersistence(this), duckLevel = settings.duckLevel, normalVolume = settings.normalVolume)
+                StepVolumeController(IrKeySender.fromSettings(this, settings), persist, duckLevel = settings.duckLevel, normalVolume = settings.normalVolume)
             }
+            // The other brands (ADR 0025): exact volume where the set reads it back, stepped keys where it does not.
+            "sony" -> { transport = null; LevelController(SonyBravia(settings.host, settings.sonyPsk), persist, settings.duckLevel, settings.normalVolume, settings.useMute) }
+            "lg" -> { transport = null; LevelController(LgWebOs(settings.host, settings.lgClientKey.ifBlank { null }), persist, settings.duckLevel, settings.normalVolume, settings.useMute) }
+            "upnp" -> { transport = null; LevelController(UpnpRenderer(settings.upnpControlUrl), persist, settings.duckLevel, settings.normalVolume, settings.useMute) }
+            "samsung" -> { transport = null; val d = SamsungTizen(settings.host, settings.samsungToken.ifBlank { null }); keyDriver = d; StepVolumeController(d, persist, settings.duckLevel, settings.normalVolume) }
+            "roku" -> { transport = null; val d = RokuEcp(settings.host); keyDriver = d; StepVolumeController(d, persist, settings.duckLevel, settings.normalVolume) }
+            "vizio" -> { transport = null; val d = VizioSmartCast(settings.host, settings.vizioToken.ifBlank { null }); keyDriver = d; StepVolumeController(d, persist, settings.duckLevel, settings.normalVolume) }
             else -> {
                 val t = SocketTransport(settings.host, settings.port, 2500, settings.login); transport = t
-                SharpController(SharpIpClient(t), PrefsDuckPersistence(this), duckLevel = settings.duckLevel, normalVolume = settings.normalVolume, useMuteInstead = settings.useMute)
+                SharpController(SharpIpClient(t), persist, duckLevel = settings.duckLevel, normalVolume = settings.normalVolume, useMuteInstead = settings.useMute)
             }
-        }
+        } } catch (e: Exception) { update("TV path ${settings.control}: ${e.message}"); stopSelf(); return }
         controller = ctl
         val store = FileFingerprintStore(File(filesDir, "ads.tsv"))
         val cameraOk = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
@@ -526,8 +545,16 @@ class AdHushService : Service(), LifecycleOwner {
         val key = RemoteKey.of(name) ?: return
         val c = controller
         try {
-            if (c is SharpController) { if (!c.client.press(key)) main.post { update("the set did not accept ${key.label}") } }
-            else main.post { update("remote keys need the network or the serial cable; infrared knows only volume and mute") }
+            val d = keyDriver
+            val sent = when {
+                c is SharpController -> c.client.press(key)
+                d is RokuEcp -> d.press(key)
+                d is SamsungTizen -> d.press(key)
+                d is VizioSmartCast -> d.press(key)
+                c is LevelController && key == RemoteKey.MUTE -> c.device.setMute(!c.ducked)
+                else -> { main.post { update("this connection (${settings.control}) has no remote keys beyond volume and mute") }; return }
+            }
+            if (!sent) main.post { update("the set did not accept ${key.label}") }
         } catch (e: ControlError) { main.post { update("remote ${key.label} failed: ${e.message}") } }
     }
 

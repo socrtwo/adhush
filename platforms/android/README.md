@@ -149,6 +149,15 @@ in which nothing may duck. The status line shows the countdown.
 
 ## Which TV, which cable
 
+Since 0.26.0 the phone is not only for a Sharp. The wizard's **Find my
+TV** asks every set on the Wi-Fi who it is and proves each way in: a
+Sharp's control port, a Sony Bravia (type its pre-shared key), an LG
+webOS (allow AdHush on the set once), any DLNA set over UPnP, a Samsung's
+remote channel (allow once), a Roku TV, a Vizio SmartCast (a PIN once).
+Sets that read their volume back are ducked to an exact level; the others
+are stepped with key presses. The TV page's fourth radio shows what was
+found; Sharp's serial cable and infrared for seven brands remain (ADR 0025).
+
 At the top of the settings, pick how *this* phone reaches *its* TV:
 
 - **Network** — the LC-46LE830U over IP Control (address, port, login).

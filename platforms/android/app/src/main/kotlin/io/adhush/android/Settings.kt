@@ -28,8 +28,24 @@ class Settings(context: Context) {
     var duckLevel: Int get() = prefs.getInt("duck", 4); set(v) = prefs.edit().putInt("duck", v).apply()
     var normalVolume: Int get() = prefs.getInt("normal", 20); set(v) = prefs.edit().putInt("normal", v).apply()
     var useMute: Boolean get() = prefs.getBoolean("use_mute", false); set(v) = prefs.edit().putBoolean("use_mute", v).apply()
-    /** How this phone reaches its TV: "ip" (network), "serial" (RS-232C over USB-OTG), "ir" (the phone's own blaster). */
+    /**
+     * How this phone reaches its TV: "ip" (a Sharp's network port), "serial" (RS-232C over USB-OTG), "ir" (the phone's
+     * own blaster), or any other brand's path the wizard found (ADR 0025): "sony", "lg", "upnp", "samsung", "roku", "vizio".
+     */
     var control: String get() = prefs.getString("control", "ip") ?: "ip"; set(v) = prefs.edit().putString("control", v).apply()
+    /** What the wizard found: the maker and model, for the TV page and the log. */
+    var tvBrand: String get() = prefs.getString("tv_brand", "") ?: ""; set(v) = prefs.edit().putString("tv_brand", v).apply()
+    var tvModel: String get() = prefs.getString("tv_model", "") ?: ""; set(v) = prefs.edit().putString("tv_model", v).apply()
+    /** The UPnP RenderingControl control URL of a DLNA renderer. */
+    var upnpControlUrl: String get() = prefs.getString("upnp_url", "") ?: ""; set(v) = prefs.edit().putString("upnp_url", v).apply()
+    /** Sony: the pre-shared key typed into the set. Samsung, LG, Vizio: the token the set handed back when the owner allowed AdHush once. */
+    var sonyPsk: String get() = prefs.getString("sony_psk", "") ?: ""; set(v) = prefs.edit().putString("sony_psk", v).apply()
+    var samsungToken: String get() = prefs.getString("samsung_token", "") ?: ""; set(v) = prefs.edit().putString("samsung_token", v).apply()
+    var lgClientKey: String get() = prefs.getString("lg_key", "") ?: ""; set(v) = prefs.edit().putString("lg_key", v).apply()
+    var vizioToken: String get() = prefs.getString("vizio_token", "") ?: ""; set(v) = prefs.edit().putString("vizio_token", v).apply()
+    var vizioDeviceId: String get() = prefs.getString("vizio_device", "") ?: ""; set(v) = prefs.edit().putString("vizio_device", v).apply()
+    /** Which brand's infrared codes the blaster sends (IrCodeSets); "sharp" uses the address and codes typed on the TV page. */
+    var irCodeSet: String get() = prefs.getString("ir_codes", "sharp") ?: "sharp"; set(v) = prefs.edit().putString("ir_codes", v).apply()
     /** Watch the screen with the back camera for the network bug (ADR 0011). */
     var camera: Boolean get() = prefs.getBoolean("camera", false); set(v) = prefs.edit().putBoolean("camera", v).apply()
     /** Recognise speech and learn commercials from their words (ADR 0012). */

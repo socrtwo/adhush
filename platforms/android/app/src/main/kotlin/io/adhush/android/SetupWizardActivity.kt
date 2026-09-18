@@ -25,19 +25,27 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
 import io.adhush.core.Dsp
+import io.adhush.core.FoundTv
+import io.adhush.core.IrCodeSet
+import io.adhush.core.IrCodeSets
+import io.adhush.core.LgWebOs
+import io.adhush.core.RokuEcp
+import io.adhush.core.SamsungTizen
+import io.adhush.core.SonyBravia
+import io.adhush.core.TvFinder
+import io.adhush.core.TvPath
+import io.adhush.core.TvPathKind
+import io.adhush.core.UpnpRenderer
+import io.adhush.core.VizioSmartCast
 import io.adhush.core.Gray
 import io.adhush.core.LoudnessDetector
+import io.adhush.core.KeySender
 import io.adhush.core.SharpIpClient
-import io.adhush.core.SocketTransport
 import io.adhush.core.TvKey
 import io.adhush.core.Vision
 import java.io.File
 import java.net.Inet4Address
-import java.net.InetSocketAddress
-import java.net.Socket
 import java.util.Locale
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.math.max
 import kotlin.math.min
 
@@ -68,7 +76,7 @@ class SetupWizardActivity : AppCompatActivity() {
     private var control = "ip"
     private var host = ""; private var port = 10002; private var loginId = ""; private var password = ""
     private var tvVolume: Int? = null
-    // The three-way TV check (0.25.0): what each path said, and what worked.
+    // The TV check (0.25.0, any brand since 0.26.0): what each path said, and what worked.
     private var netLine = "not tried yet"
     private var serialLine = "not tried yet"
     private var irLine = "not tried yet"
@@ -77,6 +85,23 @@ class SetupWizardActivity : AppCompatActivity() {
     private var irWorks: Boolean? = null
     private var irAsked = false
     @Volatile private var checking = false
+    // What Find my TV found (ADR 0025) and which way in was proven.
+    private var tvs: List<FoundTv> = emptyList()
+    private var chosen: TvPath? = null
+    private var chosenBrand = ""
+    private var chosenModel = ""
+    private var upnpUrl = ""
+    private var sonyPsk = ""
+    private var samsungToken = ""
+    private var lgKey = ""
+    private var vizioToken = ""
+    private var vizioDeviceId = ""
+    private var vizioReqToken = ""
+    private var pendingKey: ArrayDeque<TvPath> = ArrayDeque()
+    private var askingPath: TvPath? = null
+    private var irSets: List<IrCodeSet> = IrCodeSets.KNOWN
+    private var irIndex = 0
+    private var irChosen: String? = null
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             // The USB dialog answered: try the cable again.
@@ -115,6 +140,8 @@ class SetupWizardActivity : AppCompatActivity() {
         content = findViewById(R.id.wizContent); back = findViewById(R.id.wizBack); next = findViewById(R.id.wizNext)
         control = settings.control; host = settings.host; port = settings.port; loginId = settings.loginId; password = settings.password
         channel = settings.channel; captionsShown = settings.captions
+        sonyPsk = settings.sonyPsk; samsungToken = settings.samsungToken; lgKey = settings.lgClientKey; vizioToken = settings.vizioToken; vizioDeviceId = settings.vizioDeviceId; upnpUrl = settings.upnpControlUrl
+        chosenBrand = settings.tvBrand; chosenModel = settings.tvModel
         back.setOnClickListener { stopSensors(); if (step == 0) finish() else { step--; show() } }
         next.setOnClickListener { stopSensors(); if (leave()) { step++; show() } }
         show()
@@ -149,7 +176,7 @@ class SetupWizardActivity : AppCompatActivity() {
 
     /** Collect the step's answers; false keeps the user on the step. */
     private fun leave(): Boolean = when (step) {
-        1 -> { readTv(); if (control == "ip" && host.isBlank()) { say("Type the TV's address or press Find my TV, or choose another connection."); false } else true }
+        1 -> { readTv(); if (control !in setOf("serial", "ir", "upnp") && host.isBlank()) { say("Press Find my TV, type the TV's address, or choose another connection."); false } else true }
         2 -> { readRoom(); true }
         6 -> { apply(); false }
         else -> true
@@ -161,43 +188,65 @@ class SetupWizardActivity : AppCompatActivity() {
     }
 
     private fun tv() {
-        body.text = "How can this phone reach the TV? Press Find my TV: the phone looks for a Sharp on the Wi-Fi (or asks the address you type), tries a serial cable if one is plugged in, and fires the infrared blaster if it has one. Whatever answers is chosen; you can still change it."
+        body.text = "Press Find my TV. The phone asks every set on the Wi-Fi who it is — Sharp, Samsung, LG, Sony, Roku TV, Vizio, any DLNA set — and tries each way in until one works; then the serial cable if one is plugged in; then the infrared blaster, one brand's codes at a time, asking you whether the sound dipped. Whatever works is chosen; you can still change it."
         val fields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         fields.addView(field("TV address (blank: search the Wi-Fi)", host, "host"))
-        fields.addView(field("Port", port.toString(), "port", InputType.TYPE_CLASS_NUMBER))
-        fields.addView(field("Login (blank if the TV has none)", loginId, "login"))
-        fields.addView(field("Password", password, "password", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD))
+        fields.addView(field("Sharp port", port.toString(), "port", InputType.TYPE_CLASS_NUMBER))
+        fields.addView(field("Sharp login (blank if none)", loginId, "login"))
+        fields.addView(field("Sharp password", password, "password", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD))
+        fields.addView(field("Sony pre-shared key (only for a Bravia; set it under Network → IP Control)", sonyPsk, "psk"))
         content.addView(fields)
         val find = MaterialButton(this).apply { text = "Find my TV"; isEnabled = !checking }
         content.addView(find)
         content.addView(note("Wi-Fi:", bold = true)); content.addView(TextView(this).apply { tag = "rowNet"; text = netLine })
+        // Vizio: the PIN the set shows during pairing
+        val pinRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; tag = "pinRow"; visibility = if (vizioReqToken.isNotBlank() && vizioToken.isBlank()) View.VISIBLE else View.GONE }
+        val pinField = EditText(this).apply { hint = "PIN on the Vizio's screen"; inputType = InputType.TYPE_CLASS_NUMBER; tag = "pin" }
+        pinRow.addView(pinField, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        pinRow.addView(MaterialButton(this).apply { text = "Pair"; setOnClickListener { val pin = pinField.text.toString().trim(); if (pin.isNotBlank()) Thread { vizioPair(pin) }.start() } })
+        content.addView(pinRow)
+        // A key-only path (Samsung, Roku, Vizio) has no readback: the owner says whether the set muted.
+        val askRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; tag = "askRow"; visibility = if (askingPath != null) View.VISIBLE else View.GONE }
+        askRow.addView(note("Did the TV mute and unmute?  "))
+        askRow.addView(MaterialButton(this).apply { text = "Yes"; setOnClickListener { keyPathAnswered(true) } })
+        askRow.addView(MaterialButton(this).apply { text = "No, try the next"; setOnClickListener { keyPathAnswered(false) } })
+        content.addView(askRow)
         content.addView(note("Serial cable:", bold = true)); content.addView(TextView(this).apply { tag = "rowSerial"; text = serialLine })
         content.addView(note("Infrared:", bold = true)); content.addView(TextView(this).apply { tag = "rowIr"; text = irLine })
         val irRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; tag = "irAsk"; visibility = if (irAsked && irWorks == null) View.VISIBLE else View.GONE }
-        irRow.addView(note("Did the TV's sound cut out and come back?  "))
-        irRow.addView(MaterialButton(this).apply { text = "Yes"; setOnClickListener { irWorks = true; irLine = "✓ You saw the set mute and unmute: infrared reaches it (volume and mute only)"; irRow.visibility = View.GONE; pickControl() } })
-        irRow.addView(MaterialButton(this).apply { text = "No"; setOnClickListener { irWorks = false; irLine = "✗ The set did not react to the blaster — point the phone's top edge at the TV, or the codes on the TV page are for another set"; irRow.visibility = View.GONE; pickControl() } })
+        irRow.addView(note("Did the sound cut out and come back?  "))
+        irRow.addView(MaterialButton(this).apply { text = "Yes"; setOnClickListener { irWorks = true; irChosen = irSets[irIndex].name; irLine = "✓ The set answered the ${irSets[irIndex].brand} codes: infrared reaches it (volume and mute only)"; irAsked = false; refreshTvRows(); pickControl() } })
+        irRow.addView(MaterialButton(this).apply { text = "No, try the next"; setOnClickListener { irIndex++; if (irIndex < irSets.size) Thread { fireIr() }.start() else { irWorks = false; irAsked = false; irLine = "✗ No brand's codes moved the set — point the phone's top edge at the TV, or type the codes on the TV page"; refreshTvRows(); pickControl() } } })
         content.addView(irRow)
         content.addView(note("Chosen connection:", bold = true))
         val group = RadioGroup(this).apply { tag = "controlGroup" }
-        val opts = listOf("ip" to "Network (Wi-Fi)", "serial" to "Serial cable (RS-232C through USB)", "ir" to "Infrared (the phone's blaster; volume and mute only)")
-        for ((key, label) in opts) group.addView(RadioButton(this).apply { text = label; tag = key; id = View.generateViewId(); isChecked = key == control })
-        group.setOnCheckedChangeListener { g, id -> control = g.findViewById<RadioButton>(id).tag as String }
+        val opts = listOf("ip" to "Network: a Sharp", "serial" to "Serial cable (RS-232C through USB)", "ir" to "Infrared (the phone's blaster; volume and mute only)", "found" to "Network: the brand path found above")
+        for ((key, label) in opts) group.addView(RadioButton(this).apply { text = label; tag = key; id = View.generateViewId(); isChecked = key == radioFor(control) })
+        group.setOnCheckedChangeListener { g, id -> val k = g.findViewById<RadioButton>(id).tag as String; control = if (k == "found") (chosen?.kind?.wire ?: control) else k }
         content.addView(group)
         find.setOnClickListener {
             readTv()
             if (checking) return@setOnClickListener
             checking = true; find.isEnabled = false
-            netLine = "looking …"; serialLine = "looking …"; irLine = "looking …"; irWorks = null; irAsked = false; refreshTvRows()
+            netLine = "looking …"; serialLine = "looking …"; irLine = "looking …"; irWorks = null; irAsked = false; chosen = null; askingPath = null; pendingKey.clear(); netWorks = false; refreshTvRows()
             Thread {
-                checkNetwork(); refreshTvRows()
-                checkSerial(); refreshTvRows()
-                checkInfrared()
-                checking = false
-                pickControl()
-                runOnUiThread { if (step == 1) find.isEnabled = true }
+                findTvs()
+                if (pendingKey.isEmpty()) afterNetwork() else askNextKeyPath()
             }.start()
         }
+    }
+
+    private fun radioFor(c: String): String = if (c in setOf("ip", "serial", "ir")) c else "found"
+
+    /** Serial, then infrared, then the choice; runs after the network paths are settled. */
+    private fun afterNetwork() {
+        refreshTvRows()
+        checkSerial(); refreshTvRows()
+        irSets = IrCodeSets.ordered(chosenBrand.ifBlank { tvs.firstOrNull()?.brand }); irIndex = 0
+        checkInfrared()
+        checking = false
+        pickControl()
+        runOnUiThread { if (step == 1) content.childViews().filterIsInstance<MaterialButton>().firstOrNull { it.text.toString() == "Find my TV" }?.isEnabled = true }
     }
 
     private fun refreshTvRows() {
@@ -207,14 +256,16 @@ class SetupWizardActivity : AppCompatActivity() {
             content.findViewWithTag<TextView>("rowSerial")?.text = serialLine
             content.findViewWithTag<TextView>("rowIr")?.text = irLine
             content.findViewWithTag<View>("irAsk")?.visibility = if (irAsked && irWorks == null) View.VISIBLE else View.GONE
+            content.findViewWithTag<View>("askRow")?.visibility = if (askingPath != null) View.VISIBLE else View.GONE
+            content.findViewWithTag<View>("pinRow")?.visibility = if (vizioReqToken.isNotBlank() && vizioToken.isBlank()) View.VISIBLE else View.GONE
             content.findViewWithTag<EditText>("host")?.let { if (it.text.toString().trim() != host) it.setText(host) }
         }
     }
 
-    /** What worked wins, network first (it can set the volume exactly), then the cable, then the blaster. */
+    /** What worked wins: an exact-volume network path, then a key path, then the cable, then the blaster. */
     private fun pickControl() {
         control = when {
-            netWorks -> "ip"
+            netWorks && chosen != null -> chosen!!.kind.wire
             serialWorks -> "serial"
             irWorks == true -> "ir"
             else -> control
@@ -222,46 +273,16 @@ class SetupWizardActivity : AppCompatActivity() {
         runOnUiThread {
             if (step != 1) return@runOnUiThread
             val group = content.findViewWithTag<RadioGroup>("controlGroup") ?: return@runOnUiThread
-            for (i in 0 until group.childCount) { val b = group.getChildAt(i) as RadioButton; if (b.tag == control && !b.isChecked) b.isChecked = true }
+            val want = radioFor(control)
+            for (i in 0 until group.childCount) { val b = group.getChildAt(i) as RadioButton; if (b.tag == want && !b.isChecked) b.isChecked = true }
         }
     }
 
     private fun readTv() {
-        host = text("host"); port = text("port").toIntOrNull() ?: 10002; loginId = text("login"); password = text("password")
+        host = text("host"); port = text("port").toIntOrNull() ?: 10002; loginId = text("login"); password = text("password"); sonyPsk = text("psk")
     }
 
     private val login: Pair<String, String>? get() = if (loginId.isBlank() && password.isBlank()) null else Pair(loginId, password)
-
-    /** Ask one address for its volume; null when it is not a Sharp that answers. */
-    private fun askVolume(address: String, timeoutMs: Int): Int? = try {
-        SocketTransport(address, port, timeoutMs, login).use { SharpIpClient(it).queryVolume() }
-    } catch (e: Exception) { null }
-
-    private fun checkNetwork() {
-        netWorks = false
-        if (host.isNotBlank()) {
-            val vol = askVolume(host, 2500)
-            if (vol != null) { netWorks = true; tvVolume = vol; netLine = "✓ $host answered: volume $vol (that becomes your Normal volume)"; return }
-            netLine = "✗ No answer from $host:$port — is the TV on, and its network control switched on? Searching the Wi-Fi instead …"
-            refreshTvRows()
-        }
-        val base = wifiSubnet()
-        if (base == null) { netLine = (if (host.isBlank()) "" else "$netLine\n") + "✗ Not on Wi-Fi: join the TV's network to search it"; return }
-        netLine = "searching $base.1–254 on port $port …"; refreshTvRows()
-        val pool = Executors.newFixedThreadPool(32)
-        val open = java.util.Collections.synchronizedList(ArrayList<String>())
-        for (i in 1..254) pool.execute {
-            val ip = "$base.$i"
-            try { Socket().use { it.connect(InetSocketAddress(ip, port), 300) }; open.add(ip) } catch (e: Exception) { /* not listening */ }
-        }
-        pool.shutdown(); pool.awaitTermination(20, TimeUnit.SECONDS)
-        for (ip in open.sorted()) {
-            val vol = askVolume(ip, 1500)
-            if (vol != null) { netWorks = true; host = ip; tvVolume = vol; netLine = "✓ Found the TV at $ip: volume $vol (that becomes your Normal volume)"; return }
-        }
-        netLine = if (open.isEmpty()) "✗ Nothing on this Wi-Fi listens on port $port — a Sharp needs network control (IP Control) switched on in its own menu"
-                  else "✗ ${open.size} device(s) listen on port $port but none answered as a Sharp (${open.joinToString()}) — check the login"
-    }
 
     /** The phone's IPv4 on the active network as "a.b.c", or null. */
     private fun wifiSubnet(): String? {
@@ -272,11 +293,110 @@ class SetupWizardActivity : AppCompatActivity() {
         return if (parts.size == 4) parts.take(3).joinToString(".") else null
     }
 
+    // -- the network: every brand -------------------------------------------------------
+
+    private fun findTvs() {
+        val base = wifiSubnet()
+        if (base == null && host.isBlank()) { netLine = "✗ Not on Wi-Fi: join the TV's network to search it, or type the address"; return }
+        netLine = "asking every set on the Wi-Fi who it is (about ten seconds) …"; refreshTvRows()
+        val log = ArrayList<String>()
+        val found = ArrayList<FoundTv>()
+        try { found.addAll(TvFinder.find(base, port, login, { log.add(it) })) } catch (e: Exception) { log.add("search: ${e.message}") }
+        if (host.isNotBlank() && found.none { it.ip == host }) TvFinder.probeHost(host, port, login)?.let { found.add(0, it) }
+        tvs = found
+        AppLog.i("wizard", "find my tv: " + log.joinToString(" | "))
+        if (tvs.isEmpty()) { netLine = "✗ No set answered on this Wi-Fi. A Sharp needs IP Control on in its menu; a Samsung, LG or Sony answers only when it is on (not in standby); a Roku TV answers always."; return }
+        val lines = ArrayList<String>()
+        for (t in tvs) lines.add("• ${t.brand.ifBlank { "unknown maker" }} ${t.model.ifBlank { t.name }} at ${t.ip}: " + (if (t.paths.isEmpty()) "no way in found" else t.paths.joinToString { it.kind.label }))
+        netLine = "Found:\n" + lines.joinToString("\n") + "\nTrying each way in …"; refreshTvRows()
+        // Exact-volume paths first, on every set; key-only paths queue up for the owner's yes/no.
+        for (t in tvs) {
+            for (p in t.ordered()) {
+                if (p.kind.exact) {
+                    if (tryExact(t, p)) { netLine += "\n✓ ${t.brand} at ${t.ip} answers over ${p.kind.label}" + (tvVolume?.let { " (volume $it)" } ?: ""); return }
+                } else pendingKey.addLast(p)
+            }
+        }
+        if (pendingKey.isEmpty()) netLine += "\n✗ Nothing answered with its volume" else netLine += "\nNo set reads its volume back; trying the key paths next, one at a time — watch the TV"
+    }
+
+    /** A path that reads the volume back proves itself. */
+    private fun tryExact(t: FoundTv, p: TvPath): Boolean {
+        refreshTvRows()
+        val vol: Int? = try {
+            when (p.kind) {
+                TvPathKind.SHARP -> p.detail.toIntOrNull()
+                TvPathKind.UPNP -> UpnpRenderer(p.detail).getVolume()
+                TvPathKind.SONY -> if (sonyPsk.isBlank()) { netLine += "\n• Sony at ${t.ip}: type the pre-shared key above and press Find my TV again"; null } else SonyBravia(t.ip, sonyPsk).getVolume()
+                TvPathKind.LG -> { netLine += "\n• LG at ${t.ip}: allow AdHush on the TV now (a prompt is on the screen) …"; refreshTvRows(); val lg = LgWebOs(t.ip, lgKey.ifBlank { null }); lg.connect()?.let { lgKey = it }; val v = lg.getVolume(); lg.close(); v }
+                else -> null
+            }
+        } catch (e: Exception) { netLine += "\n• ${p.kind.label} at ${t.ip}: ${e.message}"; null }
+        if (vol == null) return false
+        chosen = p; chosenBrand = t.brand; chosenModel = t.model.ifBlank { t.name }; host = t.ip; netWorks = true; tvVolume = vol
+        if (p.kind == TvPathKind.UPNP) upnpUrl = p.detail
+        return true
+    }
+
+    /** Fire MUTE twice over the next key-only path and ask; runs until one is confirmed or the queue is empty. */
+    private fun askNextKeyPath() {
+        val p = pendingKey.removeFirstOrNull()
+        if (p == null) { askingPath = null; afterNetwork(); return }
+        val t = tvs.firstOrNull { it.ip == p.ip } ?: FoundTv(p.ip, "", "", "")
+        try {
+            val sender: KeySender = when (p.kind) {
+                TvPathKind.SAMSUNG -> { netLine += "\n• Samsung at ${p.ip}: allow AdHush on the TV if it asks …"; refreshTvRows(); SamsungTizen(p.ip, samsungToken.ifBlank { null }).also { it.connect()?.let { tok -> samsungToken = tok } } }
+                TvPathKind.ROKU -> RokuEcp(p.ip)
+                TvPathKind.VIZIO -> {
+                    if (vizioToken.isBlank()) {
+                        if (vizioDeviceId.isBlank()) vizioDeviceId = "adhush-" + java.util.UUID.randomUUID().toString().take(8)
+                        vizioReqToken = VizioSmartCast(p.ip, null).pairStart(vizioDeviceId)
+                        askingPath = p
+                        netLine += "\n• Vizio at ${p.ip}: type the PIN on its screen and press Pair"; refreshTvRows(); return
+                    }
+                    VizioSmartCast(p.ip, vizioToken)
+                }
+                else -> { askNextKeyPath(); return }
+            }
+            askingPath = p
+            netLine += "\n• ${t.brand.ifBlank { p.kind.label }} at ${p.ip}: sending MUTE, then MUTE again in two seconds — watch the TV"; refreshTvRows()
+            sender.press(TvKey.MUTE, 1); Thread.sleep(2000); sender.press(TvKey.MUTE, 1)
+            (sender as? AutoCloseable)?.close()
+            refreshTvRows()
+        } catch (e: Exception) { netLine += "\n• ${p.kind.label} at ${p.ip}: ${e.message}"; askingPath = null; askNextKeyPath() }
+    }
+
+    private fun vizioPair(pin: String) {
+        val p = askingPath ?: return
+        try {
+            vizioToken = VizioSmartCast(p.ip, null).pair(vizioDeviceId, pin, vizioReqToken)
+            vizioReqToken = ""
+            netLine += "\n• Vizio paired; sending MUTE twice — watch the TV"; refreshTvRows()
+            val v = VizioSmartCast(p.ip, vizioToken)
+            v.press(TvKey.MUTE, 1); Thread.sleep(2000); v.press(TvKey.MUTE, 1)
+            refreshTvRows()
+        } catch (e: Exception) { netLine += "\n• Vizio: ${e.message}"; vizioReqToken = ""; askingPath = null; refreshTvRows(); Thread { askNextKeyPath() }.start() }
+    }
+
+    private fun keyPathAnswered(yes: Boolean) {
+        val p = askingPath ?: return
+        askingPath = null
+        if (yes) {
+            val t = tvs.firstOrNull { it.ip == p.ip }
+            chosen = p; chosenBrand = t?.brand ?: p.kind.label; chosenModel = t?.let { it.model.ifBlank { it.name } } ?: ""; host = p.ip; netWorks = true
+            netLine += "\n✓ ${chosenBrand} at ${p.ip} answers over ${p.kind.label} (volume is stepped: it has no readback)"
+            pendingKey.clear()
+            Thread { afterNetwork() }.start()
+        } else Thread { askNextKeyPath() }.start()
+    }
+
+    // -- the cable and the blaster ---------------------------------------------------------
+
     private fun checkSerial() {
         serialWorks = false
         val transport = SerialTransport(this, 2500)
         val device = transport.device()
-        if (device == null) { serialLine = "no USB serial adapter plugged in (an OTG cable with an FTDI, Prolific, CH340 or CP210x adapter)"; return }
+        if (device == null) { serialLine = "no USB serial adapter plugged in (an OTG cable with an FTDI, Prolific, CH340 or CP210x adapter; Sharp's RS-232C only)"; return }
         val usb = getSystemService(Context.USB_SERVICE) as UsbManager
         if (!usb.hasPermission(device)) {
             val pi = android.app.PendingIntent.getBroadcast(this, 0, Intent(MainActivity.ACTION_USB).setPackage(packageName), android.app.PendingIntent.FLAG_MUTABLE)
@@ -290,15 +410,24 @@ class SetupWizardActivity : AppCompatActivity() {
     }
 
     private fun checkInfrared() {
-        val ir = IrKeySender(this, settings.irAddress, settings.irVolumeUp, settings.irVolumeDown)
-        if (!ir.available) { irLine = "this phone has no infrared blaster"; irWorks = false; refreshTvRows(); return }
-        irLine = "blaster found — sending MUTE, then MUTE again in two seconds; watch the TV …"; refreshTvRows()
+        val probe = IrKeySender(this, irSets[0])
+        if (!probe.available) { irLine = "this phone has no infrared blaster"; irWorks = false; refreshTvRows(); return }
+        fireIr()
+    }
+
+    /** MUTE twice with the current code set, then the question. */
+    private fun fireIr() {
+        val set = irSets[irIndex]
+        irLine = "blaster found — trying ${set.brand} codes (${irIndex + 1} of ${irSets.size}): MUTE, then MUTE again in two seconds; watch the TV …"; irAsked = false; refreshTvRows()
         try {
+            val ir = IrKeySender(this, set)
             ir.press(TvKey.MUTE, 1); Thread.sleep(2000); ir.press(TvKey.MUTE, 1)
-            irLine = "blaster fired twice."; irAsked = true
+            irLine = "${set.brand} codes fired twice (${irIndex + 1} of ${irSets.size})."; irAsked = true
         } catch (e: Exception) { irLine = "✗ blaster error: ${e.message}"; irWorks = false }
         refreshTvRows()
     }
+
+    private fun android.view.ViewGroup.childViews(): List<View> = (0 until childCount).map { getChildAt(it) }
 
     private fun room() {
         body.text = "A few questions about the room."
@@ -417,10 +546,13 @@ class SetupWizardActivity : AppCompatActivity() {
         val roomFlatP50 = if (roomFlat.isEmpty()) 0.0 else pct(roomFlat, 0.5)
         val margin = if (showP50 != null && roomP50 != null) showP50 - roomP50 else null
         p.normalVolume = tvVolume ?: settings.normalVolume
-        p.reasons += when (control) {
-            "ip" -> if (netWorks) "Network: the TV at $host answered, so the phone sets the volume exactly." else "Network: chosen, but the TV did not answer yet — check the address on the TV page."
-            "serial" -> if (serialWorks) "Serial cable: the TV answered over the cable." else "Serial cable: chosen; Test TV on the Home page confirms it."
-            else -> if (irWorks == true) "Infrared: the set reacted to the blaster; the app steps the volume with it." else "Infrared: chosen; the blaster was not confirmed."
+        val path = TvPathKind.ofWire(control)
+        p.reasons += when {
+            control == "serial" -> if (serialWorks) "Serial cable: the TV answered over the cable." else "Serial cable: chosen; Test TV on the Home page confirms it."
+            control == "ir" -> if (irWorks == true) "Infrared: the set answered the ${irSets.getOrNull(irIndex)?.brand ?: "chosen"} codes; the app steps the volume with the blaster." else "Infrared: chosen; the blaster was not confirmed."
+            path != null && netWorks -> "$chosenBrand $chosenModel at $host over ${path.label}" + (if (path.exact) ": the phone sets the volume exactly." else ": volume is stepped with key presses, since this path has no readback.")
+            path != null -> "${path.label}: chosen, but not confirmed — run Find my TV again with the set on."
+            else -> "Network: chosen, but the TV did not answer yet — check the address on the TV page."
         }
         if (tvVolume != null) p.reasons += "Normal volume $tvVolume: what the TV said it was set to."
         val noisyRoom = roomP50 != null && roomP50 > -50.0 && roomFlatP50 >= 0.2
@@ -479,6 +611,13 @@ class SetupWizardActivity : AppCompatActivity() {
     private fun apply() {
         val p = plan ?: return
         settings.control = control; settings.host = host; settings.port = port; settings.loginId = loginId; settings.password = password
+        settings.tvBrand = chosenBrand; settings.tvModel = chosenModel
+        if (upnpUrl.isNotBlank()) settings.upnpControlUrl = upnpUrl
+        if (sonyPsk.isNotBlank()) settings.sonyPsk = sonyPsk
+        if (samsungToken.isNotBlank()) settings.samsungToken = samsungToken
+        if (lgKey.isNotBlank()) settings.lgClientKey = lgKey
+        if (vizioToken.isNotBlank()) { settings.vizioToken = vizioToken; settings.vizioDeviceId = vizioDeviceId }
+        irChosen?.let { settings.irCodeSet = it }
         settings.normalVolume = p.normalVolume; settings.duckLevel = p.duckLevel
         settings.silence = p.silence; settings.loudness = p.loudness; settings.fingerprints = p.fingerprints; settings.clock = p.clock; settings.jingles = p.jingles
         settings.camera = p.camera; settings.cameraTarget = p.cameraTarget; settings.cameraZoom = p.cameraZoom; settings.captions = p.captions

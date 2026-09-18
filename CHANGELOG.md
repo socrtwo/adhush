@@ -3,6 +3,23 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.26.0] - 2026-09-18
+### Added
+- **Any brand of TV from the phone** (ADR 0025). The wizard's Find my TV
+  asks every set on the Wi-Fi who it is (SSDP, then each brand's own
+  question) and proves each way in until one works: a Sharp's control
+  port, a Sony Bravia (with its pre-shared key), an LG webOS (allow it on
+  the set once), any DLNA renderer over UPnP, a Samsung's remote channel
+  (allow once), a Roku TV, a Vizio SmartCast (a PIN once). Paths that read
+  the volume back duck to an exact level; key-only paths step the volume,
+  proven by a MUTE fired twice and your yes/no. Then the serial cable, then
+  infrared brand by brand — Sharp, Samsung, LG/Vizio, Sony, Philips,
+  Panasonic, Toshiba — until the set muted. The TV page's fourth radio
+  carries what was found; the remote works over Roku, Samsung and Vizio too.
+- Core: `VolumeDevice` and `LevelController` (the Sharp controller made
+  general), infrared encoders for NEC, Samsung, Sony SIRC, RC-5 and
+  Panasonic, `MiniHttp`, a hundred-line `MiniWebSocket`, and `TvFinder`.
+
 ## [0.25.0] - 2026-09-18
 ### Added
 - Android wizard, **Find my TV** (ADR 0022, amended): the TV step tries
