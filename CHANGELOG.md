@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.25.0] - 2026-09-18
+### Added
+- Android wizard, **Find my TV** (ADR 0022, amended): the TV step tries
+  every way in and reports each — the Wi-Fi (the typed address, or a scan
+  of the phone's subnet for a Sharp on the control port), a serial cable
+  through the USB adapter (asking for USB access if needed), and the
+  infrared blaster (fired twice, then a Yes/No on whether the sound
+  dipped). The first that worked is chosen, network first, and the found
+  address is saved.
+
 ## [0.24.0] - 2026-09-16
 ### Added
 - **What comskip, MythTV and the Auto-Cut VCRs knew** (ADR 0023), all

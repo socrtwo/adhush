@@ -100,8 +100,11 @@ file.
 ## The set-up wizard (0.23.0)
 
 **Set-up wizard** on Home (offered once on first run; *Not now* keeps the
-defaults) takes three minutes: how the phone reaches the TV (it asks the
-set its volume over the network), where the phone sits, the channel, whether
+defaults) takes three minutes: **Find my TV** tries every way in — it
+searches the Wi-Fi for a Sharp on the control port (or asks the address
+you typed), tries a serial cable if an adapter is plugged in, and fires the
+infrared blaster twice and asks whether the sound dipped; whatever answers
+is chosen, network first — then where the phone sits, the channel, whether
 it is a news channel and whether captions are shown; fifteen seconds of the
 show and ten of the room with the TV muted; eight seconds through the camera
 to see whether the whole TV is in view. It then lists the settings it

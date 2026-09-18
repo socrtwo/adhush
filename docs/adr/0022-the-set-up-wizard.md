@@ -80,6 +80,20 @@ and PDF regenerated). The Python README says seven detectors plus the
 clock and the jingle, which is the Python count. Method numbering in the
 app (1–10) matches the Android README table.
 
+## Amended 0.25.0 — Find my TV
+
+The TV step no longer trusts a typed address alone. *Find my TV* tries
+all three paths and reports each: the Wi-Fi (the typed address, else a
+scan of the phone's own /24 on the Sharp control port with a 300 ms
+connect and a `VOLM?` to every listener until one answers as a Sharp),
+the serial cable (adapter present, USB permission asked for through the
+same broadcast the Home page uses, then `VOLM?` over the cable), and the
+infrared blaster (present, fired MUTE twice two seconds apart, then a
+Yes/No from the owner, since infrared is one-way). The first that worked
+is chosen, network before cable before blaster, and the radio group still
+lets the owner override. The address a scan finds is written into the
+settings with the rest.
+
 ## Consequences
 
 - A first run starts in the wizard; nothing changes for an existing

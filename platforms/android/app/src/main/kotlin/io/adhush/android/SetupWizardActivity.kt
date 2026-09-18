@@ -2,8 +2,12 @@ package io.adhush.android
 
 import android.Manifest
 import android.app.ActivityManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.hardware.usb.UsbManager
+import android.net.ConnectivityManager
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.os.Bundle
@@ -25,9 +29,15 @@ import io.adhush.core.Gray
 import io.adhush.core.LoudnessDetector
 import io.adhush.core.SharpIpClient
 import io.adhush.core.SocketTransport
+import io.adhush.core.TvKey
 import io.adhush.core.Vision
 import java.io.File
+import java.net.Inet4Address
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.Locale
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.math.max
 import kotlin.math.min
 
@@ -58,7 +68,22 @@ class SetupWizardActivity : AppCompatActivity() {
     private var control = "ip"
     private var host = ""; private var port = 10002; private var loginId = ""; private var password = ""
     private var tvVolume: Int? = null
-    private var tvTested: String? = null
+    // The three-way TV check (0.25.0): what each path said, and what worked.
+    private var netLine = "not tried yet"
+    private var serialLine = "not tried yet"
+    private var irLine = "not tried yet"
+    private var netWorks = false
+    private var serialWorks = false
+    private var irWorks: Boolean? = null
+    private var irAsked = false
+    @Volatile private var checking = false
+    private val usbReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            // The USB dialog answered: try the cable again.
+            if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) Thread { checkSerial(); pickControl() }.start()
+            else { serialLine = "USB access refused — the cable cannot be used"; refreshTvRows() }
+        }
+    }
     private var placement = "near"        // near | far | elsewhere
     private var channel = ""
     private var news = true
@@ -95,6 +120,13 @@ class SetupWizardActivity : AppCompatActivity() {
         show()
     }
 
+    override fun onResume() {
+        super.onResume()
+        ContextCompat.registerReceiver(this, usbReceiver, IntentFilter(MainActivity.ACTION_USB), ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+
+    override fun onPause() { runCatching { unregisterReceiver(usbReceiver) }; super.onPause() }
+
     override fun onDestroy() { stopSensors(); super.onDestroy() }
 
     private fun stopSensors() { mic?.stop(); mic = null; camera?.stop(); camera = null; main.removeCallbacksAndMessages(null) }
@@ -117,7 +149,7 @@ class SetupWizardActivity : AppCompatActivity() {
 
     /** Collect the step's answers; false keeps the user on the step. */
     private fun leave(): Boolean = when (step) {
-        1 -> { readTv(); if (control == "ip" && host.isBlank()) { say("Type the TV's address, or choose another connection."); false } else true }
+        1 -> { readTv(); if (control == "ip" && host.isBlank()) { say("Type the TV's address or press Find my TV, or choose another connection."); false } else true }
         2 -> { readRoom(); true }
         6 -> { apply(); false }
         else -> true
@@ -129,43 +161,143 @@ class SetupWizardActivity : AppCompatActivity() {
     }
 
     private fun tv() {
-        body.text = "How does this phone reach the TV?"
-        val group = RadioGroup(this)
-        val opts = listOf("ip" to "Network (a Sharp with a network port; Wi-Fi)", "serial" to "Serial cable (RS-232C through a USB adapter)", "ir" to "Infrared (the phone's own blaster; volume and mute only)")
-        for ((key, label) in opts) group.addView(RadioButton(this).apply { text = label; tag = key; id = View.generateViewId(); isChecked = key == control })
-        content.addView(group)
+        body.text = "How can this phone reach the TV? Press Find my TV: the phone looks for a Sharp on the Wi-Fi (or asks the address you type), tries a serial cable if one is plugged in, and fires the infrared blaster if it has one. Whatever answers is chosen; you can still change it."
         val fields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val hostF = field("TV address (for example 192.168.1.12)", host, "host")
-        val portF = field("Port", port.toString(), "port", InputType.TYPE_CLASS_NUMBER)
-        val loginF = field("Login (blank if the TV has none)", loginId, "login")
-        val passF = field("Password", password, "password", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
-        for (f in listOf(hostF, portF, loginF, passF)) fields.addView(f)
-        val result = TextView(this).apply { text = tvTested ?: ""; setPadding(0, 8, 0, 8) }
-        val test = MaterialButton(this).apply { text = "Ask the TV its volume"; setOnClickListener { readTv(); testTv(result) } }
-        fields.addView(test); fields.addView(result)
+        fields.addView(field("TV address (blank: search the Wi-Fi)", host, "host"))
+        fields.addView(field("Port", port.toString(), "port", InputType.TYPE_CLASS_NUMBER))
+        fields.addView(field("Login (blank if the TV has none)", loginId, "login"))
+        fields.addView(field("Password", password, "password", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD))
         content.addView(fields)
-        group.setOnCheckedChangeListener { g, id -> control = g.findViewById<RadioButton>(id).tag as String; fields.visibility = if (control == "ip") View.VISIBLE else View.GONE }
-        fields.visibility = if (control == "ip") View.VISIBLE else View.GONE
-        if (control != "ip") content.addView(note(if (control == "serial") "The cable is tested by Test TV on the Home page once the wizard is done (it needs the USB permission)." else "Infrared only knows volume up, down and mute; the app steps the volume instead of setting it."))
+        val find = MaterialButton(this).apply { text = "Find my TV"; isEnabled = !checking }
+        content.addView(find)
+        content.addView(note("Wi-Fi:", bold = true)); content.addView(TextView(this).apply { tag = "rowNet"; text = netLine })
+        content.addView(note("Serial cable:", bold = true)); content.addView(TextView(this).apply { tag = "rowSerial"; text = serialLine })
+        content.addView(note("Infrared:", bold = true)); content.addView(TextView(this).apply { tag = "rowIr"; text = irLine })
+        val irRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; tag = "irAsk"; visibility = if (irAsked && irWorks == null) View.VISIBLE else View.GONE }
+        irRow.addView(note("Did the TV's sound cut out and come back?  "))
+        irRow.addView(MaterialButton(this).apply { text = "Yes"; setOnClickListener { irWorks = true; irLine = "✓ You saw the set mute and unmute: infrared reaches it (volume and mute only)"; irRow.visibility = View.GONE; pickControl() } })
+        irRow.addView(MaterialButton(this).apply { text = "No"; setOnClickListener { irWorks = false; irLine = "✗ The set did not react to the blaster — point the phone's top edge at the TV, or the codes on the TV page are for another set"; irRow.visibility = View.GONE; pickControl() } })
+        content.addView(irRow)
+        content.addView(note("Chosen connection:", bold = true))
+        val group = RadioGroup(this).apply { tag = "controlGroup" }
+        val opts = listOf("ip" to "Network (Wi-Fi)", "serial" to "Serial cable (RS-232C through USB)", "ir" to "Infrared (the phone's blaster; volume and mute only)")
+        for ((key, label) in opts) group.addView(RadioButton(this).apply { text = label; tag = key; id = View.generateViewId(); isChecked = key == control })
+        group.setOnCheckedChangeListener { g, id -> control = g.findViewById<RadioButton>(id).tag as String }
+        content.addView(group)
+        find.setOnClickListener {
+            readTv()
+            if (checking) return@setOnClickListener
+            checking = true; find.isEnabled = false
+            netLine = "looking …"; serialLine = "looking …"; irLine = "looking …"; irWorks = null; irAsked = false; refreshTvRows()
+            Thread {
+                checkNetwork(); refreshTvRows()
+                checkSerial(); refreshTvRows()
+                checkInfrared()
+                checking = false
+                pickControl()
+                runOnUiThread { if (step == 1) find.isEnabled = true }
+            }.start()
+        }
+    }
+
+    private fun refreshTvRows() {
+        runOnUiThread {
+            if (step != 1) return@runOnUiThread
+            content.findViewWithTag<TextView>("rowNet")?.text = netLine
+            content.findViewWithTag<TextView>("rowSerial")?.text = serialLine
+            content.findViewWithTag<TextView>("rowIr")?.text = irLine
+            content.findViewWithTag<View>("irAsk")?.visibility = if (irAsked && irWorks == null) View.VISIBLE else View.GONE
+            content.findViewWithTag<EditText>("host")?.let { if (it.text.toString().trim() != host) it.setText(host) }
+        }
+    }
+
+    /** What worked wins, network first (it can set the volume exactly), then the cable, then the blaster. */
+    private fun pickControl() {
+        control = when {
+            netWorks -> "ip"
+            serialWorks -> "serial"
+            irWorks == true -> "ir"
+            else -> control
+        }
+        runOnUiThread {
+            if (step != 1) return@runOnUiThread
+            val group = content.findViewWithTag<RadioGroup>("controlGroup") ?: return@runOnUiThread
+            for (i in 0 until group.childCount) { val b = group.getChildAt(i) as RadioButton; if (b.tag == control && !b.isChecked) b.isChecked = true }
+        }
     }
 
     private fun readTv() {
         host = text("host"); port = text("port").toIntOrNull() ?: 10002; loginId = text("login"); password = text("password")
     }
 
-    private fun testTv(result: TextView) {
-        result.text = "asking …"
-        Thread {
-            val line = try {
-                SocketTransport(host, port, login = if (loginId.isBlank() && password.isBlank()) null else Pair(loginId, password)).use { t ->
-                    val vol = SharpIpClient(t).queryVolume()
-                    tvVolume = vol
-                    if (vol != null) "✓ The TV answered: volume $vol. That becomes your Normal volume." else "The TV connected but did not say its volume; the app will use the Normal volume from the TV page."
-                }
-            } catch (e: Exception) { "✗ No answer from $host:$port — ${e.message}. Check the address, that the TV is on, and its network control setting." }
-            tvTested = line
-            runOnUiThread { result.text = line }
-        }.start()
+    private val login: Pair<String, String>? get() = if (loginId.isBlank() && password.isBlank()) null else Pair(loginId, password)
+
+    /** Ask one address for its volume; null when it is not a Sharp that answers. */
+    private fun askVolume(address: String, timeoutMs: Int): Int? = try {
+        SocketTransport(address, port, timeoutMs, login).use { SharpIpClient(it).queryVolume() }
+    } catch (e: Exception) { null }
+
+    private fun checkNetwork() {
+        netWorks = false
+        if (host.isNotBlank()) {
+            val vol = askVolume(host, 2500)
+            if (vol != null) { netWorks = true; tvVolume = vol; netLine = "✓ $host answered: volume $vol (that becomes your Normal volume)"; return }
+            netLine = "✗ No answer from $host:$port — is the TV on, and its network control switched on? Searching the Wi-Fi instead …"
+            refreshTvRows()
+        }
+        val base = wifiSubnet()
+        if (base == null) { netLine = (if (host.isBlank()) "" else "$netLine\n") + "✗ Not on Wi-Fi: join the TV's network to search it"; return }
+        netLine = "searching $base.1–254 on port $port …"; refreshTvRows()
+        val pool = Executors.newFixedThreadPool(32)
+        val open = java.util.Collections.synchronizedList(ArrayList<String>())
+        for (i in 1..254) pool.execute {
+            val ip = "$base.$i"
+            try { Socket().use { it.connect(InetSocketAddress(ip, port), 300) }; open.add(ip) } catch (e: Exception) { /* not listening */ }
+        }
+        pool.shutdown(); pool.awaitTermination(20, TimeUnit.SECONDS)
+        for (ip in open.sorted()) {
+            val vol = askVolume(ip, 1500)
+            if (vol != null) { netWorks = true; host = ip; tvVolume = vol; netLine = "✓ Found the TV at $ip: volume $vol (that becomes your Normal volume)"; return }
+        }
+        netLine = if (open.isEmpty()) "✗ Nothing on this Wi-Fi listens on port $port — a Sharp needs network control (IP Control) switched on in its own menu"
+                  else "✗ ${open.size} device(s) listen on port $port but none answered as a Sharp (${open.joinToString()}) — check the login"
+    }
+
+    /** The phone's IPv4 on the active network as "a.b.c", or null. */
+    private fun wifiSubnet(): String? {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val lp = cm.getLinkProperties(cm.activeNetwork ?: return null) ?: return null
+        val addr = lp.linkAddresses.map { it.address }.firstOrNull { it is Inet4Address && !it.isLoopbackAddress } ?: return null
+        val parts = addr.hostAddress?.split(".") ?: return null
+        return if (parts.size == 4) parts.take(3).joinToString(".") else null
+    }
+
+    private fun checkSerial() {
+        serialWorks = false
+        val transport = SerialTransport(this, 2500)
+        val device = transport.device()
+        if (device == null) { serialLine = "no USB serial adapter plugged in (an OTG cable with an FTDI, Prolific, CH340 or CP210x adapter)"; return }
+        val usb = getSystemService(Context.USB_SERVICE) as UsbManager
+        if (!usb.hasPermission(device)) {
+            val pi = android.app.PendingIntent.getBroadcast(this, 0, Intent(MainActivity.ACTION_USB).setPackage(packageName), android.app.PendingIntent.FLAG_MUTABLE)
+            usb.requestPermission(device, pi)
+            serialLine = "adapter found — allow USB access in the dialog and the cable is tried again"; return
+        }
+        serialLine = "adapter found; asking the TV over the cable …"; refreshTvRows()
+        val vol = try { transport.use { SharpIpClient(it).queryVolume() } } catch (e: Exception) { null }
+        if (vol != null) { serialWorks = true; if (tvVolume == null) tvVolume = vol; serialLine = "✓ The TV answered over the cable: volume $vol" }
+        else serialLine = "✗ Adapter found but the TV did not answer — is the cable in the TV's RS-232C port, and the set on?"
+    }
+
+    private fun checkInfrared() {
+        val ir = IrKeySender(this, settings.irAddress, settings.irVolumeUp, settings.irVolumeDown)
+        if (!ir.available) { irLine = "this phone has no infrared blaster"; irWorks = false; refreshTvRows(); return }
+        irLine = "blaster found — sending MUTE, then MUTE again in two seconds; watch the TV …"; refreshTvRows()
+        try {
+            ir.press(TvKey.MUTE, 1); Thread.sleep(2000); ir.press(TvKey.MUTE, 1)
+            irLine = "blaster fired twice."; irAsked = true
+        } catch (e: Exception) { irLine = "✗ blaster error: ${e.message}"; irWorks = false }
+        refreshTvRows()
     }
 
     private fun room() {
@@ -285,6 +417,11 @@ class SetupWizardActivity : AppCompatActivity() {
         val roomFlatP50 = if (roomFlat.isEmpty()) 0.0 else pct(roomFlat, 0.5)
         val margin = if (showP50 != null && roomP50 != null) showP50 - roomP50 else null
         p.normalVolume = tvVolume ?: settings.normalVolume
+        p.reasons += when (control) {
+            "ip" -> if (netWorks) "Network: the TV at $host answered, so the phone sets the volume exactly." else "Network: chosen, but the TV did not answer yet — check the address on the TV page."
+            "serial" -> if (serialWorks) "Serial cable: the TV answered over the cable." else "Serial cable: chosen; Test TV on the Home page confirms it."
+            else -> if (irWorks == true) "Infrared: the set reacted to the blaster; the app steps the volume with it." else "Infrared: chosen; the blaster was not confirmed."
+        }
         if (tvVolume != null) p.reasons += "Normal volume $tvVolume: what the TV said it was set to."
         val noisyRoom = roomP50 != null && roomP50 > -50.0 && roomFlatP50 >= 0.2
         if (noisyRoom) p.reasons += "The room has steady noise (fans or air) at ${fmt(roomP50!!)} dBFS."

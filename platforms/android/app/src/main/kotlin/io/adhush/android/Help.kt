@@ -127,7 +127,7 @@ object Help {
         "A good starting set: the three sound methods on, plus the camera once you have set the bug or ticker up, plus captions if the TV shows them, plus one AI judge as a tie-breaker. The set-up wizard on the Home page measures the room and the camera and suggests exactly that.")
 
     val WIZARD = Topic("The set-up wizard",
-        "Three minutes, once, from the Home page. It asks how the phone reaches the TV and where the phone sits, listens to fifteen seconds of the show and ten seconds of the room with the TV muted, looks through the camera for eight seconds to see whether the whole TV is in view, and asks the TV its volume.\n\n" +
+        "Three minutes, once, from the Home page. Find my TV tries every way in: it searches the Wi-Fi for a Sharp listening on the control port (or asks the address you typed), tries a serial cable if an adapter is plugged in, and fires the infrared blaster twice and asks whether the sound dipped. Whatever answers is chosen, network first. Then it asks where the phone sits, listens to fifteen seconds of the show and ten seconds of the room with the TV muted, and looks through the camera for eight seconds to see whether the whole TV is in view.\n\n" +
         "From those numbers it suggests which methods to switch on, the duck level (a loud room means a higher duck level, so the phone can still hear the ducked set and bring the show back on time), the camera zoom, the local AI size this phone can carry, and what to do next — then writes the settings and opens the Methods page, where every one of them can be changed. Nothing is recorded: the wizard keeps numbers, never audio or pictures.")
 
     val TEST = Topic("Test mode",
