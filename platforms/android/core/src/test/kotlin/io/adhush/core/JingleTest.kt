@@ -38,7 +38,60 @@ class JingleTest {
     private val opener = listOf(listOf(0, 2, 4, 7, 9, 11), listOf(1, 3, 5, 6, 8, 10), listOf(0, 1, 4, 5, 8, 9), listOf(2, 3, 6, 7, 10, 11), listOf(0, 3, 6, 9, 1, 4), listOf(2, 5, 8, 11, 7, 10))
     private val closer = listOf(listOf(0, 1, 2, 3, 4, 5), listOf(6, 7, 8, 9, 10, 11), listOf(0, 2, 4, 6, 8, 10), listOf(1, 3, 5, 7, 9, 11), listOf(0, 1, 6, 7, 2, 8), listOf(3, 4, 9, 10, 5, 11))
 
-    private class MemStore : JingleStore { var saved: List<Jingle> = emptyList(); override fun load() = saved; override fun save(jingles: List<Jingle>) { saved = jingles.map { Jingle(it.id, it.kind, it.blocks, it.hits, it.falseHits, it.createdTs) } } }
+    private class MemStore : JingleStore { var saved: List<Jingle> = emptyList(); override fun load() = saved; override fun save(jingles: List<Jingle>) { saved = jingles.map { Jingle(it.id, it.kind, it.blocks, it.hits, it.falseHits, it.createdTs, HashSet(it.hours)) } } }
+
+    private fun learnThree(det: JingleDetector, f: Feeder, rnd: Random, wall: Double? = null) {
+        repeat(3) { programme(f, 15.0, rnd); sting(f, opener); val s = f.ts + 1.0; programme(f, 25.0, rnd); sting(f, closer); det.learnBreak(s, f.ts - 1.5, wall); programme(f, 8.0, rnd) }
+    }
+
+    @Test fun `a sting transposed a semitone is the same family`() {
+        assertEquals(0b010000000000, pitchRotate(0b100000000000, 1))     // class 0 (A) up to class 1
+        assertEquals(0b100000000000, pitchRotate(0b000000000001, 1))     // class 11 wraps to class 0
+        assertEquals(0b101100110001, pitchRotate(pitchRotate(0b101100110001, 2), -2))
+        assertEquals(listOf(1, 1, 2, 3, 3, 4), tempoStretch(listOf(1, 2, 3, 4), 1.5))
+        val up = opener.map { step -> step.map { it + 1 } }
+        for ((shifts, expect) in listOf(2 to 1.0, 0 to 0.0)) {
+            val det = JingleDetector(MemStore(), JingleConfig(pitchShifts = shifts)); det.warmup()
+            val f = Feeder(det); val rnd = Random(5)
+            learnThree(det, f, rnd)
+            assertTrue(det.promoted().any { it.kind == JingleKind.OPEN }, det.describe())
+            programme(f, 10.0, rnd)
+            assertEquals(0.0, det.vote(f.ts).confidence)
+            sting(f, up)
+            val v = det.vote(f.ts)
+            assertEquals(expect, v.confidence, "shifts=$shifts: ${v.reason}")
+            if (expect > 0) assertTrue("family=+1st" in v.reason, v.reason)
+        }
+    }
+
+    @Test fun `two breaks at nine o'clock trust the sting at nine, not at two, and the hours round-trip`() {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(2026, 8, 18, 9, 5, 0); val nine = cal.timeInMillis / 1000.0
+        cal.set(2026, 8, 18, 14, 5, 0); val two = cal.timeInMillis / 1000.0
+        assertEquals(9, localHour(nine)); assertEquals(14, localHour(two))
+        val store = MemStore()
+        val det = JingleDetector(store); det.warmup()
+        val f = Feeder(det); val rnd = Random(3)
+        repeat(2) { programme(f, 15.0, rnd); sting(f, opener); val s = f.ts + 1.0; programme(f, 25.0, rnd); sting(f, closer); det.learnBreak(s, f.ts - 1.5, nine); programme(f, 8.0, rnd) }
+        assertTrue(det.promoted().isEmpty(), "two breaks and no clock: not yet")
+        det.tick(two); assertTrue(det.promoted().isEmpty(), "not at two o'clock")
+        det.tick(nine + 600.0)
+        val opens = det.promoted().filter { it.kind == JingleKind.OPEN }
+        assertEquals(1, opens.size, det.describe()); assertEquals(setOf(9), opens[0].hours)
+        assertTrue("heard at 09h" in det.describe(), det.describe())
+        sting(f, opener); assertEquals(1.0, det.vote(f.ts).confidence)
+        assertTrue(store.saved.any { it.hours == setOf(9) }, "the store carries the hours")
+        // The file store writes v2 rows and still reads v1 rows without hours.
+        val dir = kotlin.io.path.createTempDirectory("jingles").toFile()
+        val file = java.io.File(dir, "jingles.tsv")
+        FileJingleStore(file).save(store.saved)
+        assertTrue(file.readText().startsWith("# adhush jingles v2"))
+        assertTrue(FileJingleStore(file).load().any { it.hours == setOf(9) })
+        file.writeText(file.readLines().joinToString("\n") { it.substringBeforeLast('\t') } + "\n")
+        val legacy = FileJingleStore(file).load()
+        assertTrue(legacy.isNotEmpty() && legacy.all { it.hours.isEmpty() })
+        dir.deleteRecursively()
+    }
 
     @Test fun `a sting that opens three breaks is promoted, then ducks on its own and its closer ends the break`() {
         val store = MemStore()

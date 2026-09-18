@@ -14,7 +14,11 @@ PHASE2_DETECTORS = ("logo_absence", "scene_cut", "fingerprint")
 PHASE3_DETECTORS = ("clock", "jingle", "aspect_change")
 # ADR 0023/0024: every one of these is inert until it has something to say.
 PHASE4_DETECTORS = ("rating_bug", "ad_units", "cutscene", "stereo_width", "watermark", "schedule", "scte35", "crowd")
-IMPLEMENTED_DETECTORS = PHASE1_DETECTORS + PHASE2_DETECTORS + PHASE3_DETECTORS + PHASE4_DETECTORS
+# ADR 0027: the sound-effect stinger that opens a segment.
+PHASE5_DETECTORS = ("stinger",)
+IMPLEMENTED_DETECTORS = (
+    PHASE1_DETECTORS + PHASE2_DETECTORS + PHASE3_DETECTORS + PHASE4_DETECTORS + PHASE5_DETECTORS
+)
 KNOWN_DETECTORS = IMPLEMENTED_DETECTORS + ("caption_gap",)
 KNOWN_CAPTURE_BACKENDS = (
     "hdmi_uvc",
@@ -271,6 +275,32 @@ class JingleConfig:
     close_hold_s: float = 10.0  # a closer counts as program evidence this long
     history_s: float = 400.0
     max_candidates: int = 80
+    # ADR 0027, family matching: a sting is also recognised transposed by up to
+    # this many semitones either way and stretched by up to this fraction ...
+    pitch_shifts: int = 2
+    tempo_tolerance: float = 0.1
+    # ... but a transposed or stretched match must clear a higher bar.
+    family_penalty: float = 0.05
+    # ADR 0027, time of day: a sting heard at an hour it has opened breaks in
+    # before is trusted sooner (one hit earlier) and matched a little more loosely.
+    hour_bonus: float = 0.03
+
+
+@dataclass(frozen=True, slots=True)
+class StingerConfig:
+    """Segment stingers (ADR 0027): the short whoosh / hit / swell a channel drops
+    on the cut into a segment or a break, followed by a change of level."""
+
+    block_s: float = 0.1
+    min_flatness: float = 0.25  # a burst is noisy, not tonal; 0 = pure tone, 1 = white noise
+    burst_above_db: float = 6.0  # burst level over the two-second pre-burst median
+    max_burst_s: float = 1.5
+    level_step_db: float = 3.0  # post-burst median must move this much from pre-burst ...
+    loud_burst_db: float = 10.0  # ... unless the burst itself was this far above
+    pre_s: float = 2.0
+    post_s: float = 1.0
+    hold_s: float = 2.5  # the vote decays to nothing over this long
+    duck_guard_s: float = 1.5  # ignore audio this long after our own volume change
 
 
 @dataclass(frozen=True, slots=True)
@@ -292,6 +322,7 @@ class DetectConfig:
     schedule: ScheduleConfig = field(default_factory=ScheduleConfig)
     scte35: Scte35Config = field(default_factory=Scte35Config)
     crowd: CrowdConfig = field(default_factory=CrowdConfig)
+    stinger: StingerConfig = field(default_factory=StingerConfig)
 
 
 @dataclass(frozen=True, slots=True)
@@ -471,6 +502,7 @@ _WATERMARK_DEFAULTS = WatermarkConfig()
 _SCHEDULE_DEFAULTS = ScheduleConfig()
 _SCTE_DEFAULTS = Scte35Config()
 _CROWD_DEFAULTS = CrowdConfig()
+_STINGER_DEFAULTS = StingerConfig()
 _FUSION_DEFAULTS = FusionConfig()
 _CONTROL_DEFAULTS = ControlConfig()
 _FP_DEFAULTS = FingerprintConfig()
@@ -551,6 +583,7 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
     sch = det.get("schedule", {})
     sct = det.get("scte35", {})
     crd = det.get("crowd", {})
+    stg = det.get("stinger", {})
     detect = DetectConfig(
         enabled=enabled,
         black_frame=BlackFrameConfig(
@@ -606,6 +639,10 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
             close_hold_s=float(jng.get("close_hold_s", _JINGLE_DEFAULTS.close_hold_s)),
             history_s=float(jng.get("history_s", _JINGLE_DEFAULTS.history_s)),
             max_candidates=int(jng.get("max_candidates", _JINGLE_DEFAULTS.max_candidates)),
+            pitch_shifts=int(jng.get("pitch_shifts", _JINGLE_DEFAULTS.pitch_shifts)),
+            tempo_tolerance=float(jng.get("tempo_tolerance", _JINGLE_DEFAULTS.tempo_tolerance)),
+            family_penalty=float(jng.get("family_penalty", _JINGLE_DEFAULTS.family_penalty)),
+            hour_bonus=float(jng.get("hour_bonus", _JINGLE_DEFAULTS.hour_bonus)),
         ),
         aspect_change=AspectChangeConfig(
             bar_luma=float(asp.get("bar_luma", _ASPECT_DEFAULTS.bar_luma)),
@@ -686,6 +723,18 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
             window_s=float(crd.get("window_s", _CROWD_DEFAULTS.window_s)),
             poll_s=float(crd.get("poll_s", _CROWD_DEFAULTS.poll_s)),
             salt=str(crd.get("salt", _CROWD_DEFAULTS.salt)),
+        ),
+        stinger=StingerConfig(
+            block_s=float(stg.get("block_s", _STINGER_DEFAULTS.block_s)),
+            min_flatness=float(stg.get("min_flatness", _STINGER_DEFAULTS.min_flatness)),
+            burst_above_db=float(stg.get("burst_above_db", _STINGER_DEFAULTS.burst_above_db)),
+            max_burst_s=float(stg.get("max_burst_s", _STINGER_DEFAULTS.max_burst_s)),
+            level_step_db=float(stg.get("level_step_db", _STINGER_DEFAULTS.level_step_db)),
+            loud_burst_db=float(stg.get("loud_burst_db", _STINGER_DEFAULTS.loud_burst_db)),
+            pre_s=float(stg.get("pre_s", _STINGER_DEFAULTS.pre_s)),
+            post_s=float(stg.get("post_s", _STINGER_DEFAULTS.post_s)),
+            hold_s=float(stg.get("hold_s", _STINGER_DEFAULTS.hold_s)),
+            duck_guard_s=float(stg.get("duck_guard_s", _STINGER_DEFAULTS.duck_guard_s)),
         ),
     )
     if not 0.0 < detect.clock.full_fraction <= 1.0 or detect.clock.min_hours < 1:

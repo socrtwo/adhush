@@ -270,7 +270,7 @@ class Pipeline:
                 crowd.report("end", self._wall_clock())
         if not reject and start is not None:
             for jingle in self._jingles:
-                jingle.learn_break(start, ts)
+                jingle.learn_break(start, ts, wall_start)
         if self._learner is None or self._fp is None or start is None or reject:
             return
         duration = ts - start

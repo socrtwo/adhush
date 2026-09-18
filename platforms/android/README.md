@@ -140,7 +140,7 @@ switch can be changed. It keeps numbers only, never audio or pictures.
 | 7 | Ask Claude | the words of 5 or 6 judged by Claude over the API (opt-in, paid) | yes |
 | 8 | Local AI | the words of 5 or 6 judged by a small model on the phone (free) | yes |
 | 9 | Break clock | the minute of the hour and how long breaks run, learned from every confirmed break | no — tips the balance; caps how long a duck may hold |
-| 10 | Break jingle | microphone: the channel's sting into (and out of) every break, learned from three breaks | yes |
+| 10 | Break jingle | microphone: the channel's sting into (and out of) every break, learned from three breaks; its re-cuts count as the same family; remembers the hours it plays | yes |
 
 **Not an ad** now does three things: restores the volume, tells every
 method it was wrong (the camera must see the bug again before it may call
@@ -362,6 +362,17 @@ known **closer** heard while ducked counts as the show being back. **Not an
 ad** counts against the opener that fired and demotes it when it has been
 wrong as often as right. A channel with no sting never promotes anything.
 The learned stings live in `jingles.tsv` and travel with the shared memory.
+
+Since 0.28.0 (ADR 0027) a sting is also recognised transposed by up to two
+semitones or stretched by up to a tenth in tempo — the same house sting
+re-cut per show — at a slightly higher bar, and a re-cut heard live counts
+for the sting it resembles. Every jingle remembers the local hours it has
+opened breaks in; at one of those hours it is trusted after two breaks
+instead of three and matched a little more loosely. The **segment
+stinger** — the whoosh or hit on the cut, with no tune to learn — is a
+separate default-weight detector that rides on the Loudness method: a
+short noisy burst over the bed, then the level moves. It tips the balance
+for a couple of seconds and never ducks alone.
 
 ## Learn from a stream (0.19.0)
 

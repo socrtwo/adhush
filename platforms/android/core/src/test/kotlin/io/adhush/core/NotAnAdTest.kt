@@ -137,7 +137,7 @@ class NotAnAdTest {
     @Test fun `methods can be switched off one by one but not all at once`() {
         val ctl = Ctl()
         val e = Assembly.engine(ctl, silence = false, loudness = true, fingerprints = false)
-        assertEquals(listOf("loudness"), e.status().detectors)
+        assertEquals(listOf("loudness", "stinger"), e.status().detectors)   // the stinger rides on loudness (ADR 0027)
         val e2 = Assembly.engine(ctl, silence = false, loudness = false, fingerprints = true)
         assertEquals(listOf("fingerprint"), e2.status().detectors)
         val store = FileScriptStore()

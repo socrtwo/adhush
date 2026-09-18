@@ -193,6 +193,7 @@ class Engine(
         val ts = block.ts
         lastTs = ts
         clock?.tick(wallClock())
+        jingle?.tick(wallClock())
         // An inert detector (the camera with no whole screen in view) casts no vote and leaves the normaliser alone.
         val voting = detectors.filter { it.voting }
         val votes = voting.map { it.vote(ts) } + (fingerprint?.vote(ts)?.let { listOf(it) } ?: emptyList())
@@ -233,7 +234,7 @@ class Engine(
                 val start = adStartTs; val src = adSource; val adId = activeAdId
                 adStartTs = null; adSource = null; activeAdId = null; userHold = false
                 // The break clock and the jingle detector learn every real break; a timed manual duck teaches nothing.
-                if (start != null && src != null && src != Source.TIMED) { clock?.learn(adStartWall, wallClock()); jingle?.learnBreak(start, ts) }
+                if (start != null && src != null && src != Source.TIMED) { clock?.learn(adStartWall, wallClock()); jingle?.learnBreak(start, ts, adStartWall) }
                 if (start != null && learner != null && fingerprint != null) {
                     val duration = ts - start
                     when (src) {
@@ -430,7 +431,9 @@ object Assembly {
         // Ad units (ADR 0023) ride on the quiet gaps: the same separators, on a 15-second grid; the rating box rides on the camera.
         val units = if (silence) AdUnitsDetector() else null
         val rating = if (logo != null) RatingBugDetector({ logo.lastScreen }) else null
-        val detectors = listOfNotNull<Detector>(if (silence) MicSilenceDetector() else null, if (loudness) LoudnessDetector() else null, units, logo, rating, transcript, captions, clock, jingle, badge) + judges
+        // The segment stinger (ADR 0027) rides on the loudness method: a burst over the bed, then the level moves.
+        val stinger = if (loudness) StingerDetector() else null
+        val detectors = listOfNotNull<Detector>(if (silence) MicSilenceDetector() else null, if (loudness) LoudnessDetector() else null, units, stinger, logo, rating, transcript, captions, clock, jingle, badge) + judges
         require(detectors.isNotEmpty() || fingerprints) { "at least one method must be on" }
         val matcher = AudioMatcher(store, fpCfg)
         val fp = if (fingerprints) AudioFingerprintDetector(fpCfg, matcher) else null

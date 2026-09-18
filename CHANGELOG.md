@@ -3,6 +3,24 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.28.0] - 2026-09-18
+### Added
+- **Jingle families** (ADR 0027): a learned sting is also recognised
+  transposed by up to two semitones and stretched by up to ten per cent
+  in tempo, at a higher bar, so a channel's per-show re-cuts of its house
+  sting count as the sting they resemble. The vote reason names the
+  variant. Both cores.
+- **Segment stingers** (`stinger`, ADR 0027): the whoosh or hit a channel
+  drops on the cut into a segment or a break — a short noisy burst over
+  the bed, then the level moves. Default weight, inert until it fires,
+  decays over 2.5 s; ignores our own duck. On by default in the Python
+  core; on the phone it rides on the Loudness method.
+- **The hour of day** (ADR 0027): every jingle remembers the local hours
+  it opened breaks in; heard again at one of those hours it is trusted a
+  break early and matched a little more loosely. `jingles.tsv` becomes v2
+  with an `hours` column; v1 files still load, and the shared memory
+  carries the hours between phones.
+
 ## [0.27.0] - 2026-09-18
 ### Added
 - **The other TV families** (ADR 0026): Android TV / Google TV (paired

@@ -118,7 +118,8 @@ object Help {
     val JINGLE = Topic("Method 10 — break jingles",
         "A channel plays the same short sting going into and out of every break — a few notes, a whoosh, the show's own bumper. Instead of remembering each commercial, this method remembers the sting: one fingerprint covers every break on that channel for good.\n\n" +
         "Nothing is typed in. Every break the app ends (by any method, or by your ✓ and ▶) teaches the seconds around its start and its end as candidates. A candidate that turns out to open three different breaks is promoted; from then on, hearing it ducks the set the moment the break starts, and hearing the closing sting brings the show back at once.\n\n" +
-        "Not an ad after a jingle duck counts against that jingle; enough wrong calls demote it. Stream learning teaches jingles too, from clean audio. The idea comes from the AdVent project, which measured that three seconds of a sting is enough to recognise it.")
+        "Not an ad after a jingle duck counts against that jingle; enough wrong calls demote it. Stream learning teaches jingles too, from clean audio. The idea comes from the AdVent project, which measured that three seconds of a sting is enough to recognise it.\n\n" +
+        "A channel re-cuts its sting per show, so a version a couple of semitones up or down, or a little faster or slower, counts as the same sting (a family). Each sting also remembers the hours of the day it has opened breaks in: at one of those hours it is trusted after two breaks instead of three. The short whoosh or hit on the cut into a segment — a burst of noise, then the level moves — is heard separately while Loudness is on; it tips the balance for a couple of seconds and never ducks alone.")
 
     val METHODS = Topic("Choosing methods",
         "Any mix of the ten methods can be on, but AT LEAST ONE must be on or the app has nothing to go on and will refuse to start.\n\n" +

@@ -18,7 +18,7 @@ profile = "sharp-lc46le830u"
 
 [detect]
 # The listener's four ways (docs/build-guide-tv-listener.md, "The methods"):
-enabled = ["silence", "loudness", "logo_absence", "fingerprint", "clock", "jingle", "ad_units", "stereo_width", "schedule", "crowd"]   # clock: the learned break clock (ADR 0017); jingle: the channel's break sting (ADR 0020)
+enabled = ["silence", "loudness", "logo_absence", "fingerprint", "clock", "jingle", "ad_units", "stereo_width", "schedule", "crowd", "stinger"]   # clock: the learned break clock (ADR 0017); jingle: the channel's break sting (ADR 0020)
 
 [detect.logo_absence]
 absence_frames = 25          # 2.5 s at 10 fps: the bug must be gone this long

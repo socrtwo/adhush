@@ -87,7 +87,7 @@ object Memory {
             val mine = ArrayList(store.load())
             val known = HashSet(mine.map { it.blocks })
             var nextId = (mine.maxOfOrNull { it.id } ?: 0) + 1
-            for (j in theirs) if (known.add(j.blocks)) { mine.add(Jingle(nextId++, j.kind, j.blocks, j.hits, j.falseHits, j.createdTs)); jingles++ }
+            for (j in theirs) if (known.add(j.blocks)) { mine.add(Jingle(nextId++, j.kind, j.blocks, j.hits, j.falseHits, j.createdTs, HashSet(j.hours))); jingles++ }
             if (jingles > 0) store.save(mine)
         }
         tmp.deleteRecursively()

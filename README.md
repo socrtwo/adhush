@@ -5,19 +5,19 @@ show returns. Nothing is uploaded, nothing is recorded, and no capture
 path is circumvented: it watches and listens the way a person in the room
 does, decides, and presses the volume for you.
 
-**Status 0.27.0: eighteen roadmap phases in, running in real living
+**Status 0.28.0: nineteen roadmap phases in, running in real living
 rooms.** Two implementations share one design, and `docs/adr/` records
 every decision behind both:
 
 - **The Python core** (Windows, macOS, Linux, ChromeOS, Raspberry Pi)
   captures from an HDMI splitter and USB dongle, a transport stream from an
   HDHomeRun or DVB tuner, the screen, a camera at the set, a microphone or
-  a line-in. Fifteen detectors vote — black frames and silence, loudness
+  a line-in. Eighteen detectors vote — black frames and silence, loudness
   and the crest factor, the channel bug, scene cuts, aspect change, the
   rating box, ad-unit lengths, captured cutscenes, the stereo switch, the
   ATSC watermark, fingerprints of ads seen before, the break clock, the
-  channel's break jingle, an XMLTV schedule, SCTE-35 cues and a shared
-  crowd feed — and the set is driven over RS-232, IP, HDMI-CEC, infrared,
+  channel's break jingle and its re-cuts, the segment stinger, an XMLTV
+  schedule, SCTE-35 cues and a shared crowd feed — and the set is driven over RS-232, IP, HDMI-CEC, infrared,
   a network blaster, the host's own mixer or a relay.
 - **The Android app** is a phone by the TV, no cables: the same core
   ported to Kotlin with ten methods, among them offline speech and
@@ -121,7 +121,8 @@ ends a hold early. `docs/architecture.md` and
 | `stereo_width` | The mix switches between mono and stereo (HDMI, line-in, transport stream) |
 | `watermark` | The ATSC A/335 / DVB-TA video watermark lost when a local spot replaces the picture (experimental) |
 | `clock` | The break clock: which minutes of the hour the breaks land on, and how long they run |
-| `jingle` | The channel's own sting into and out of every break, learned from three breaks |
+| `jingle` | The channel's own sting into and out of every break, learned from three breaks; re-cuts a few semitones or a little slower count as the same family; remembers the hours it plays |
+| `stinger` | The whoosh or hit on the cut into a segment: a short noisy burst over the bed, then the level moves |
 | `schedule` | XMLTV programme boundaries: a grace window after a start; ad-free channels never mute |
 | `scte35` | In-band splice cues from a transport stream (`ts_stream`): authoritative where the feed still carries them |
 | `crowd` | Other AdHush devices on the same channel reporting a break (opt-in, hashed, `adhush crowd serve`) |
@@ -143,7 +144,7 @@ configuration enables it all without weakening the rest.
 | 7 | Ask Claude | the words, judged over the API (opt-in, paid) |
 | 8 | Local AI | the words, judged by a Qwen model on the phone in three sizes |
 | 9 | Break clock | the minute of the hour and how long breaks run |
-| 10 | Break jingle | the channel's sting, learned by itself |
+| 10 | Break jingle | the channel's sting and its re-cuts, learned by itself, with the hours it plays; the segment stinger rides on Loudness |
 
 The phone also learns a channel's commercials from its live stream before
 the first evening at the TV, reads a streaming player's "AD" badge, moves

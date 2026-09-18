@@ -22,6 +22,7 @@ from adhush.detect.schedule import ScheduleDetector
 from adhush.detect.scte35 import Scte35Detector
 from adhush.detect.silence import SilenceDetector
 from adhush.detect.stereo_width import StereoWidthDetector
+from adhush.detect.stinger import StingerDetector
 from adhush.detect.watermark import WatermarkDetector
 from adhush.fingerprint.matcher import Matcher
 
@@ -47,6 +48,7 @@ _REGISTRY: dict[str, type[Detector]] = {
     ScheduleDetector.name: ScheduleDetector,
     Scte35Detector.name: Scte35Detector,
     CrowdDetector.name: CrowdDetector,
+    StingerDetector.name: StingerDetector,
 }
 
 
@@ -103,6 +105,8 @@ def build_detectors(
             detectors.append(Scte35Detector(config.scte35))
         elif cls is CrowdDetector:
             detectors.append(CrowdDetector(config.crowd))
+        elif cls is StingerDetector:
+            detectors.append(StingerDetector(config.stinger))
         elif cls is LogoAbsenceDetector:
             logo = LogoAbsenceDetector(config.logo_absence)
             if logo.calibrated:

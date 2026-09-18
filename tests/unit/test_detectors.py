@@ -1,6 +1,8 @@
 """Detector fixture tests: each Phase 1 detector replayed over labeled ground
 truth synthesized through the file_replay path, plus targeted edge cases."""
 
+import re
+from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
 
@@ -388,6 +390,108 @@ class TestJingle:
         det.user_says_program(f.ts)
         assert det.vote(f.ts).confidence == 0.0
 
+    def _learn_three(self, det: "JingleDetector", f: "_Feed", rng: np.random.Generator, hours: list[float | None] | None = None) -> None:  # noqa: F821
+        for k in range(3):
+            self._programme(f, 15.0, rng)
+            self._sting(f, self.OPENER)
+            start = f.ts + 1.0
+            self._programme(f, 25.0, rng)
+            self._sting(f, self.CLOSER)
+            end = f.ts - 1.5
+            det.learn_break(start, end, hours[k] if hours else None)
+            self._programme(f, 8.0, rng)
+
+    def test_a_transposed_sting_is_the_same_family(self, tmp_path: Path) -> None:
+        """ADR 0027: the show's re-cut of the channel sting, a semitone up, still opens the break."""
+        from adhush.config import JingleConfig
+        from adhush.detect.jingle import JingleDetector, pitch_rotate
+
+        assert pitch_rotate(0b100000000000, 1) == 0b010000000000  # class 0 (A) up to class 1
+        assert pitch_rotate(0b000000000001, 1) == 0b100000000000  # class 11 wraps to class 0
+        assert pitch_rotate(pitch_rotate(0b101100110001, 2), -2) == 0b101100110001
+        up = [[s + 1 for s in step] for step in self.OPENER]
+        for shifts, expect in ((2, 1.0), (0, 0.0)):
+            cfg = JingleConfig(file=str(tmp_path / f"j{shifts}.tsv"), pitch_shifts=shifts)
+            det = JingleDetector(cfg)
+            det.warmup()
+            f = self._Feed(det)
+            rng = np.random.default_rng(5)
+            self._learn_three(det, f, rng)
+            assert any(j.kind == "open" for j in det.promoted()), det.describe()
+            self._programme(f, 10.0, rng)
+            assert det.vote(f.ts).confidence == 0.0
+            self._sting(f, up)
+            vote = det.vote(f.ts)
+            assert vote.confidence == expect, (shifts, vote.reason)
+            if expect:
+                assert "family=+1st" in vote.reason, vote.reason
+
+    def test_a_slower_sting_is_the_same_family(self, tmp_path: Path) -> None:
+        """ADR 0027: the same sting cut half again as slow; the stretched variant is the better fit."""
+        from adhush.config import JingleConfig
+        from adhush.detect.jingle import JingleDetector, tempo_stretch
+
+        assert tempo_stretch([1, 2, 3, 4], 1.5) == [1, 1, 2, 3, 3, 4]
+        assert tempo_stretch([1, 2, 3, 4], 0.5) == [1, 3]
+        agree: dict[float, float] = {}
+        for tol in (0.5, 0.0):
+            cfg = JingleConfig(file=str(tmp_path / f"t{tol}.tsv"), tempo_tolerance=tol, pitch_shifts=0)
+            det = JingleDetector(cfg)
+            det.warmup()
+            f = self._Feed(det)
+            rng = np.random.default_rng(7)
+            self._learn_three(det, f, rng)
+            self._programme(f, 10.0, rng)
+            for c in self.OPENER:  # each step 0.75 s instead of 0.5: the show's slow cut
+                for _ in range(7):
+                    f.block(self._chord(c, f.ts, RATE // 10))
+                f.block(self._chord(c, f.ts, RATE // 20))
+            vote = det.vote(f.ts)
+            assert vote.confidence == 1.0, (tol, vote.reason)
+            m = re.search(r"agree=([0-9.]+)", vote.reason)
+            assert m is not None
+            agree[tol] = float(m.group(1))
+            assert ("family=+0st/1.50x" in vote.reason) == (tol > 0), vote.reason
+        assert agree[0.5] >= agree[0.0], agree
+
+    def test_hours_admit_a_sting_a_break_early_and_round_trip(self, tmp_path: Path) -> None:
+        """ADR 0027: two breaks at nine o'clock, and at nine the sting is trusted; at two it is not."""
+        from adhush.config import JingleConfig
+        from adhush.detect.jingle import JingleDetector, local_hour
+
+        nine = datetime(2026, 9, 18, 9, 5).timestamp()  # noqa: DTZ001 — local, like the viewer's clock
+        two = datetime(2026, 9, 18, 14, 5).timestamp()  # noqa: DTZ001
+        assert local_hour(nine) == 9 and local_hour(two) == 14
+        cfg = JingleConfig(file=str(tmp_path / "jingles.tsv"))
+        det = JingleDetector(cfg)
+        det.warmup()
+        f = self._Feed(det)
+        rng = np.random.default_rng(3)
+        for _ in range(2):
+            self._programme(f, 15.0, rng)
+            self._sting(f, self.OPENER)
+            start = f.ts + 1.0
+            self._programme(f, 25.0, rng)
+            self._sting(f, self.CLOSER)
+            det.learn_break(start, f.ts - 1.5, nine)
+            self._programme(f, 8.0, rng)
+        assert not det.promoted()  # two breaks, no clock: not yet
+        det.tick(two)
+        assert not det.promoted()
+        det.tick(nine + 600.0)
+        opens = [j for j in det.promoted() if j.kind == "open"]
+        assert len(opens) == 1 and opens[0].hours == {9}, det.describe()
+        assert "heard at 09h" in det.describe()
+        self._sting(f, self.OPENER)
+        assert det.vote(f.ts).confidence == 1.0
+        again = JingleDetector(cfg)  # v2 rows carry the hours ...
+        assert [j.hours for j in again.promoted() if False] == [] and any(j.hours == {9} for j in again._jingles)
+        text = (tmp_path / "jingles.tsv").read_text()
+        assert text.startswith("# adhush jingles v2")
+        (tmp_path / "jingles.tsv").write_text("\n".join(line.rsplit("\t", 1)[0] for line in text.splitlines()) + "\n")
+        legacy = JingleDetector(cfg)  # ... and v1 rows without them still load
+        assert legacy._jingles and all(j.hours == set() for j in legacy._jingles)
+
     def test_clock_learns_break_lengths(self, tmp_path: Path) -> None:
         from adhush.config import ClockConfig
         from adhush.detect.clock import ClockDetector
@@ -484,3 +588,81 @@ class TestAspectChange:
             ts += 0.25
         assert not detector.voting
         assert detector.baseline is not None and abs(detector.baseline - 2.4) < 1e-9
+
+
+class TestStinger:
+    """ADR 0027: a short noisy burst over the bed, then the level moves — a segment stinger."""
+
+    @staticmethod
+    def _tone(f: "_StingFeed", seconds: float, dbfs: float) -> None:
+        amp = 10 ** (dbfs / 20.0) * np.sqrt(2.0)
+        n = int(seconds * RATE)
+        t = f.ts + np.arange(n) / RATE
+        f.block((amp * np.sin(2 * np.pi * 440.0 * t)).astype(np.float32))
+
+    @staticmethod
+    def _noise(f: "_StingFeed", seconds: float, dbfs: float, rng: np.random.Generator) -> None:
+        n = int(seconds * RATE)
+        f.block((10 ** (dbfs / 20.0) * rng.standard_normal(n)).astype(np.float32))
+
+    class _StingFeed:
+        def __init__(self, det: "StingerDetector") -> None:  # noqa: F821
+            self.det, self.ts = det, 0.0
+
+        def block(self, samples: np.ndarray) -> None:
+            for i in range(0, len(samples), RATE // 20):  # 50 ms events, like a capture
+                chunk = samples[i : i + RATE // 20]
+                self.det.observe_audio(AudioEvent(ts=self.ts, samples=chunk, sample_rate=RATE))
+                self.ts += len(chunk) / RATE
+
+    def _det(self) -> "StingerDetector":  # noqa: F821
+        from adhush.config import StingerConfig
+        from adhush.detect.stinger import StingerDetector
+
+        det = StingerDetector(StingerConfig())
+        det.warmup()
+        return det
+
+    def test_burst_then_level_step_fires_and_decays(self) -> None:
+        det = self._det()
+        f = self._StingFeed(det)
+        rng = np.random.default_rng(1)
+        self._tone(f, 3.0, -20.0)
+        assert not det.voting and det.vote(f.ts).confidence == 0.0
+        self._noise(f, 0.3, -8.0, rng)
+        self._tone(f, 1.2, -12.0)
+        vote = det.vote(f.ts)
+        assert det.voting and vote.confidence > 0.8, vote.reason
+        assert vote.reason.startswith("stinger burst_db=+") and "step_db=+" in vote.reason, vote.reason
+        self._tone(f, 3.0, -12.0)
+        assert not det.voting and det.vote(f.ts).confidence == 0.0
+        assert det.describe() == "1 stinger(s) heard"
+
+    def test_level_step_without_a_burst_is_not_a_stinger(self) -> None:
+        det = self._det()
+        f = self._StingFeed(det)
+        self._tone(f, 3.0, -20.0)
+        self._tone(f, 2.0, -8.0)  # loudness's business, not a stinger
+        assert not det.voting and det.vote(f.ts).confidence == 0.0
+
+    def test_long_noise_and_a_burst_back_to_the_same_bed_do_not_fire(self) -> None:
+        det = self._det()
+        f = self._StingFeed(det)
+        rng = np.random.default_rng(2)
+        self._tone(f, 3.0, -20.0)
+        self._noise(f, 3.0, -8.0, rng)  # applause: far too long for a stinger
+        assert not det.voting
+        self._tone(f, 3.0, -20.0)
+        self._noise(f, 0.3, -13.0, rng)  # +7 dB, back to the same bed: nothing changed
+        self._tone(f, 2.0, -20.0)
+        assert not det.voting, det.vote(f.ts).reason
+
+    def test_our_own_duck_is_ignored(self) -> None:
+        det = self._det()
+        f = self._StingFeed(det)
+        rng = np.random.default_rng(3)
+        self._tone(f, 3.0, -20.0)
+        det.audio_ducked(f.ts, True)
+        self._noise(f, 0.3, -8.0, rng)
+        self._tone(f, 1.2, -12.0)
+        assert not det.voting

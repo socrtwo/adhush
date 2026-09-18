@@ -15,7 +15,7 @@ profile = "sharp-lc46le830u"
 
 [detect]
 enabled = ["black_frame", "silence", "loudness", "logo_absence", "scene_cut", "fingerprint", "clock", "jingle", "aspect_change",
-           "rating_bug", "ad_units", "cutscene", "stereo_width", "watermark", "schedule", "scte35", "crowd"]   # the last eight are inert until they have evidence (ADR 0023/0024)
+           "rating_bug", "ad_units", "cutscene", "stereo_width", "watermark", "schedule", "scte35", "crowd", "stinger"]   # the last nine are inert until they have evidence (ADR 0023/0024/0027)
 
 [detect.logo_absence]
 roi = { x = 0.84, y = 0.80, w = 0.14, h = 0.14 }   # default comes from the device profile
@@ -79,6 +79,13 @@ url = ""                 # "http://pi.local:8676" — adhush crowd serve
 channel = ""             # hashed with the salt before it leaves the device
 report = true
 min_reports = 2
+
+[detect.stinger]         # the whoosh or hit on the cut into a segment (ADR 0027); default weight, inert until it fires
+min_flatness = 0.25      # a burst is noisy, not tonal
+burst_above_db = 6.0     # over the two seconds before it
+level_step_db = 3.0      # and the level has moved afterwards ...
+loud_burst_db = 10.0     # ... or the burst itself was this far above
+hold_s = 2.5
 
 [detect.silence]
 dbfs_threshold = -50.0
