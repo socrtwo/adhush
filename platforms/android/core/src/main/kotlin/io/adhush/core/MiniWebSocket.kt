@@ -27,7 +27,9 @@ class MiniWebSocket(private val url: String, private val timeoutMs: Int = 5000) 
         val uri = URI(url)
         val secure = uri.scheme == "wss"
         val port = if (uri.port > 0) uri.port else if (secure) 443 else 80
-        val plain = Socket().apply { connect(InetSocketAddress(uri.host, port), timeoutMs); soTimeout = timeoutMs }
+        val plain = Socket()
+        plain.connect(InetSocketAddress(uri.host, port), timeoutMs)
+        plain.soTimeout = timeoutMs
         val s: Socket = if (secure) MiniHttp.trustAllContext().socketFactory.createSocket(plain, uri.host, port, true).also { (it as javax.net.ssl.SSLSocket).startHandshake() } else plain
         socket = s
         input = BufferedInputStream(s.getInputStream())

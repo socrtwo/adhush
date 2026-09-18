@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.27.0] - 2026-09-18
+### Added
+- **The other TV families** (ADR 0026): Android TV / Google TV (paired
+  once with the six-character code, the phone's own certificate kept),
+  Hisense VIDAA (its MQTT broker; the four-digit code on newer sets),
+  and Philips JointSpace 1 and 6 (a PIN once on the Android-based sets).
+  All three read the volume back, so they duck to an exact level. The
+  wizard's Find my TV tries them like the rest and shows one code row
+  when a set asks for one; the remote works over all three.
+
 ## [0.26.0] - 2026-09-18
 ### Added
 - **Any brand of TV from the phone** (ADR 0025). The wizard's Find my TV

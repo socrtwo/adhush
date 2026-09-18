@@ -24,11 +24,15 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
+import io.adhush.core.AndroidTvRemote
+import io.adhush.core.ClientIdentity
 import io.adhush.core.Dsp
 import io.adhush.core.FoundTv
+import io.adhush.core.HisenseVidaa
 import io.adhush.core.IrCodeSet
 import io.adhush.core.IrCodeSets
 import io.adhush.core.LgWebOs
+import io.adhush.core.PhilipsJointSpace
 import io.adhush.core.RokuEcp
 import io.adhush.core.SamsungTizen
 import io.adhush.core.SonyBravia
@@ -102,6 +106,16 @@ class SetupWizardActivity : AppCompatActivity() {
     private var irSets: List<IrCodeSet> = IrCodeSets.KNOWN
     private var irIndex = 0
     private var irChosen: String? = null
+    // The other families (ADR 0026): what they need once, and the code the owner types while a path waits for it.
+    private var atvIdentity: ClientIdentity? = null
+    private var atvBlob = ""
+    private var hisenseClientId = ""
+    private var philipsId = ""
+    private var philipsKey = ""
+    private var philipsVersion = 1
+    @Volatile private var codeFor: TvPath? = null
+    @Volatile private var codeLabel = ""
+    private val typedCode = java.util.concurrent.LinkedBlockingQueue<String>()
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             // The USB dialog answered: try the cable again.
@@ -142,6 +156,7 @@ class SetupWizardActivity : AppCompatActivity() {
         channel = settings.channel; captionsShown = settings.captions
         sonyPsk = settings.sonyPsk; samsungToken = settings.samsungToken; lgKey = settings.lgClientKey; vizioToken = settings.vizioToken; vizioDeviceId = settings.vizioDeviceId; upnpUrl = settings.upnpControlUrl
         chosenBrand = settings.tvBrand; chosenModel = settings.tvModel
+        atvBlob = settings.androidTvIdentity; hisenseClientId = settings.hisenseClientId; philipsId = settings.philipsDeviceId; philipsKey = settings.philipsKey; philipsVersion = settings.philipsVersion
         back.setOnClickListener { stopSensors(); if (step == 0) finish() else { step--; show() } }
         next.setOnClickListener { stopSensors(); if (leave()) { step++; show() } }
         show()
@@ -188,7 +203,7 @@ class SetupWizardActivity : AppCompatActivity() {
     }
 
     private fun tv() {
-        body.text = "Press Find my TV. The phone asks every set on the Wi-Fi who it is — Sharp, Samsung, LG, Sony, Roku TV, Vizio, any DLNA set — and tries each way in until one works; then the serial cable if one is plugged in; then the infrared blaster, one brand's codes at a time, asking you whether the sound dipped. Whatever works is chosen; you can still change it."
+        body.text = "Press Find my TV. The phone asks every set on the Wi-Fi who it is — Sharp, Samsung, LG, Sony, Roku TV, Vizio, Android TV and Google TV, Hisense, Philips, any DLNA set — and tries each way in until one works; then the serial cable if one is plugged in; then the infrared blaster, one brand's codes at a time, asking you whether the sound dipped. Whatever works is chosen; you can still change it."
         val fields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         fields.addView(field("TV address (blank: search the Wi-Fi)", host, "host"))
         fields.addView(field("Sharp port", port.toString(), "port", InputType.TYPE_CLASS_NUMBER))
@@ -199,12 +214,15 @@ class SetupWizardActivity : AppCompatActivity() {
         val find = MaterialButton(this).apply { text = "Find my TV"; isEnabled = !checking }
         content.addView(find)
         content.addView(note("Wi-Fi:", bold = true)); content.addView(TextView(this).apply { tag = "rowNet"; text = netLine })
-        // Vizio: the PIN the set shows during pairing
-        val pinRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; tag = "pinRow"; visibility = if (vizioReqToken.isNotBlank() && vizioToken.isBlank()) View.VISIBLE else View.GONE }
-        val pinField = EditText(this).apply { hint = "PIN on the Vizio's screen"; inputType = InputType.TYPE_CLASS_NUMBER; tag = "pin" }
-        pinRow.addView(pinField, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        pinRow.addView(MaterialButton(this).apply { text = "Pair"; setOnClickListener { val pin = pinField.text.toString().trim(); if (pin.isNotBlank()) Thread { vizioPair(pin) }.start() } })
-        content.addView(pinRow)
+        // A code the set shows once: Vizio's PIN, Android TV's six characters, Hisense's four digits, a Philips PIN.
+        val codeRow = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; tag = "codeRow"; visibility = if (codeFor != null) View.VISIBLE else View.GONE }
+        codeRow.addView(TextView(this).apply { tag = "codeLabel"; text = codeLabel; setPadding(0, 6, 0, 0) })
+        val codeLine = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val codeField = EditText(this).apply { hint = "the code on the TV"; tag = "code" }
+        codeLine.addView(codeField, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        codeLine.addView(MaterialButton(this).apply { text = "Pair"; setOnClickListener { val code = codeField.text.toString().trim(); if (code.isNotBlank()) { codeField.setText(""); codeEntered(code) } } })
+        codeRow.addView(codeLine)
+        content.addView(codeRow)
         // A key-only path (Samsung, Roku, Vizio) has no readback: the owner says whether the set muted.
         val askRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; tag = "askRow"; visibility = if (askingPath != null) View.VISIBLE else View.GONE }
         askRow.addView(note("Did the TV mute and unmute?  "))
@@ -257,7 +275,8 @@ class SetupWizardActivity : AppCompatActivity() {
             content.findViewWithTag<TextView>("rowIr")?.text = irLine
             content.findViewWithTag<View>("irAsk")?.visibility = if (irAsked && irWorks == null) View.VISIBLE else View.GONE
             content.findViewWithTag<View>("askRow")?.visibility = if (askingPath != null) View.VISIBLE else View.GONE
-            content.findViewWithTag<View>("pinRow")?.visibility = if (vizioReqToken.isNotBlank() && vizioToken.isBlank()) View.VISIBLE else View.GONE
+            content.findViewWithTag<View>("codeRow")?.visibility = if (codeFor != null) View.VISIBLE else View.GONE
+            content.findViewWithTag<TextView>("codeLabel")?.text = codeLabel
             content.findViewWithTag<EditText>("host")?.let { if (it.text.toString().trim() != host) it.setText(host) }
         }
     }
@@ -329,6 +348,9 @@ class SetupWizardActivity : AppCompatActivity() {
                 TvPathKind.UPNP -> UpnpRenderer(p.detail).getVolume()
                 TvPathKind.SONY -> if (sonyPsk.isBlank()) { netLine += "\n• Sony at ${t.ip}: type the pre-shared key above and press Find my TV again"; null } else SonyBravia(t.ip, sonyPsk).getVolume()
                 TvPathKind.LG -> { netLine += "\n• LG at ${t.ip}: allow AdHush on the TV now (a prompt is on the screen) …"; refreshTvRows(); val lg = LgWebOs(t.ip, lgKey.ifBlank { null }); lg.connect()?.let { lgKey = it }; val v = lg.getVolume(); lg.close(); v }
+                TvPathKind.ANDROID_TV -> tryAndroidTv(t, p)
+                TvPathKind.HISENSE -> tryHisense(t, p)
+                TvPathKind.PHILIPS -> tryPhilips(t, p)
                 else -> null
             }
         } catch (e: Exception) { netLine += "\n• ${p.kind.label} at ${t.ip}: ${e.message}"; null }
@@ -336,6 +358,62 @@ class SetupWizardActivity : AppCompatActivity() {
         chosen = p; chosenBrand = t.brand; chosenModel = t.model.ifBlank { t.name }; host = t.ip; netWorks = true; tvVolume = vol
         if (p.kind == TvPathKind.UPNP) upnpUrl = p.detail
         return true
+    }
+
+    /** Shows the code row for [p] and blocks the caller (a background thread) until the owner types one, or two minutes pass. */
+    private fun waitForCode(p: TvPath, label: String): String? {
+        typedCode.clear(); codeFor = p; codeLabel = label; refreshTvRows()
+        val code = typedCode.poll(120, java.util.concurrent.TimeUnit.SECONDS)
+        codeFor = null; refreshTvRows()
+        return code
+    }
+
+    /** The Pair button: a Vizio pairs right here; the other families are waiting for the code on their own thread. */
+    private fun codeEntered(code: String) {
+        val p = codeFor ?: return
+        if (p.kind == TvPathKind.VIZIO) { codeFor = null; refreshTvRows(); Thread { vizioPair(code) }.start() } else typedCode.offer(code)
+    }
+
+    private fun tryAndroidTv(t: FoundTv, p: TvPath): Int? {
+        val id = atvIdentity ?: (if (atvBlob.isNotBlank()) ClientIdentity.deserialize(atvBlob) else ClientIdentity.generate()).also { atvIdentity = it; atvBlob = it.serialize() }
+        val tv = AndroidTvRemote(t.ip, id)
+        val paired = try { tv.connect(); true } catch (e: Exception) { false }
+        if (!paired) {
+            netLine += "\n• Android TV at ${t.ip}: pairing — a code appears on the TV; type it below"; refreshTvRows()
+            val ok = tv.pair { waitForCode(p, "Android TV at ${t.ip}: the six characters on the screen") }
+            if (!ok) { netLine += "\n• Android TV at ${t.ip}: pairing refused or no code typed"; return null }
+            tv.connect()
+        }
+        var v: Int? = null
+        for (i in 0 until 10) { v = tv.getVolume(); if (v != null) break; Thread.sleep(300) }
+        tv.close()
+        return v ?: 0   // connected and active: the set reports its level as soon as it changes
+    }
+
+    private fun tryHisense(t: FoundTv, p: TvPath): Int? {
+        if (hisenseClientId.isBlank()) hisenseClientId = HisenseVidaa.newClientId()
+        val tv = HisenseVidaa(t.ip, hisenseClientId)
+        val authorised = try { tv.connect() } catch (e: Exception) { netLine += "\n• Hisense at ${t.ip}: ${e.message} (a set from 2022 on wants Hisense's own client certificate, which AdHush does not carry)"; return null }
+        if (!authorised) {
+            val code = waitForCode(p, "Hisense at ${t.ip}: the four digits on the screen") ?: return null
+            if (!tv.authenticate(code)) { netLine += "\n• Hisense at ${t.ip}: the set refused the code"; tv.close(); return null }
+        }
+        val v = tv.getVolume(); tv.close()
+        return v
+    }
+
+    private fun tryPhilips(t: FoundTv, p: TvPath): Int? {
+        val version = p.detail.toIntOrNull() ?: 1
+        philipsVersion = version
+        if (version >= 6 && (philipsId.isBlank() || philipsKey.isBlank())) {
+            val id = "adhush-" + java.util.UUID.randomUUID().toString().take(8)
+            val tv = PhilipsJointSpace(t.ip, 6)
+            val start = tv.pairRequest(id)
+            val pin = waitForCode(p, "Philips at ${t.ip}: the PIN on the screen") ?: return null
+            if (!tv.pairGrant(id, start, pin)) { netLine += "\n• Philips at ${t.ip}: the set refused the PIN"; return null }
+            philipsId = id; philipsKey = start.authKey
+        }
+        return PhilipsJointSpace(t.ip, version, philipsId, philipsKey).getVolume()
     }
 
     /** Fire MUTE twice over the next key-only path and ask; runs until one is confirmed or the queue is empty. */
@@ -351,7 +429,7 @@ class SetupWizardActivity : AppCompatActivity() {
                     if (vizioToken.isBlank()) {
                         if (vizioDeviceId.isBlank()) vizioDeviceId = "adhush-" + java.util.UUID.randomUUID().toString().take(8)
                         vizioReqToken = VizioSmartCast(p.ip, null).pairStart(vizioDeviceId)
-                        askingPath = p
+                        askingPath = p; codeFor = p; codeLabel = "Vizio at ${p.ip}: the PIN on its screen"
                         netLine += "\n• Vizio at ${p.ip}: type the PIN on its screen and press Pair"; refreshTvRows(); return
                     }
                     VizioSmartCast(p.ip, vizioToken)
@@ -618,6 +696,10 @@ class SetupWizardActivity : AppCompatActivity() {
         if (lgKey.isNotBlank()) settings.lgClientKey = lgKey
         if (vizioToken.isNotBlank()) { settings.vizioToken = vizioToken; settings.vizioDeviceId = vizioDeviceId }
         irChosen?.let { settings.irCodeSet = it }
+        if (atvBlob.isNotBlank()) settings.androidTvIdentity = atvBlob
+        if (hisenseClientId.isNotBlank()) settings.hisenseClientId = hisenseClientId
+        if (philipsId.isNotBlank()) { settings.philipsDeviceId = philipsId; settings.philipsKey = philipsKey }
+        settings.philipsVersion = philipsVersion
         settings.normalVolume = p.normalVolume; settings.duckLevel = p.duckLevel
         settings.silence = p.silence; settings.loudness = p.loudness; settings.fingerprints = p.fingerprints; settings.clock = p.clock; settings.jingles = p.jingles
         settings.camera = p.camera; settings.cameraTarget = p.cameraTarget; settings.cameraZoom = p.cameraZoom; settings.captions = p.captions

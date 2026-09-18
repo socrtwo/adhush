@@ -99,6 +99,9 @@ SCTE-35 from a transport stream, and the crowd feed.
 ADR 0025: drivers for Sony, LG, UPnP, Samsung, Roku and Vizio, infrared
 for seven brands, and a finder the wizard uses to prove each path.
 
+## Phase 18 — the other families (done, 0.27.0)
+ADR 0026: Android TV / Google TV, Hisense VIDAA and Philips JointSpace.
+
 ## Beyond the roadmap
 Start with `docs/ideas-backlog.md`: the parental-rating bug as an unmute
 cue, ad-unit length quantisation and uniform-colour separators are the

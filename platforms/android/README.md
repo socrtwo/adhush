@@ -153,7 +153,9 @@ Since 0.26.0 the phone is not only for a Sharp. The wizard's **Find my
 TV** asks every set on the Wi-Fi who it is and proves each way in: a
 Sharp's control port, a Sony Bravia (type its pre-shared key), an LG
 webOS (allow AdHush on the set once), any DLNA set over UPnP, a Samsung's
-remote channel (allow once), a Roku TV, a Vizio SmartCast (a PIN once).
+remote channel (allow once), a Roku TV, a Vizio SmartCast (a PIN once), an
+Android TV or Google TV (a six-character code once), a Hisense VIDAA (four
+digits once on newer sets), a Philips (a PIN once on the newer sets).
 Sets that read their volume back are ducked to an exact level; the others
 are stepped with key presses. The TV page's fourth radio shows what was
 found; Sharp's serial cable and infrared for seven brands remain (ADR 0025).

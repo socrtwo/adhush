@@ -44,6 +44,12 @@ class Settings(context: Context) {
     var lgClientKey: String get() = prefs.getString("lg_key", "") ?: ""; set(v) = prefs.edit().putString("lg_key", v).apply()
     var vizioToken: String get() = prefs.getString("vizio_token", "") ?: ""; set(v) = prefs.edit().putString("vizio_token", v).apply()
     var vizioDeviceId: String get() = prefs.getString("vizio_device", "") ?: ""; set(v) = prefs.edit().putString("vizio_device", v).apply()
+    /** Android TV: the phone's own certificate (PKCS#12, base64). Hisense: the client id the set authorised. Philips: the paired id and key, and which JointSpace. */
+    var androidTvIdentity: String get() = prefs.getString("atv_identity", "") ?: ""; set(v) = prefs.edit().putString("atv_identity", v).apply()
+    var hisenseClientId: String get() = prefs.getString("hisense_client", "") ?: ""; set(v) = prefs.edit().putString("hisense_client", v).apply()
+    var philipsDeviceId: String get() = prefs.getString("philips_id", "") ?: ""; set(v) = prefs.edit().putString("philips_id", v).apply()
+    var philipsKey: String get() = prefs.getString("philips_key", "") ?: ""; set(v) = prefs.edit().putString("philips_key", v).apply()
+    var philipsVersion: Int get() = prefs.getInt("philips_version", 1); set(v) = prefs.edit().putInt("philips_version", v).apply()
     /** Which brand's infrared codes the blaster sends (IrCodeSets); "sharp" uses the address and codes typed on the TV page. */
     var irCodeSet: String get() = prefs.getString("ir_codes", "sharp") ?: "sharp"; set(v) = prefs.edit().putString("ir_codes", v).apply()
     /** Watch the screen with the back camera for the network bug (ADR 0011). */

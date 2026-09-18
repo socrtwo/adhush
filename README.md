@@ -17,8 +17,8 @@ methods including offline speech, on-device and cloud AI judges, the channel
 bug or a news ticker through the camera, and can learn a channel's
 commercials from its live stream before the first evening at the TV. Both
 share the same ideas; `docs/adr/` records every decision. The phone drives
-Sharp, Samsung, LG, Sony, Roku TV, Vizio and any DLNA set; its wizard
-finds out which one it is talking to.
+Sharp, Samsung, LG, Sony, Roku TV, Vizio, Android TV, Hisense, Philips and
+any DLNA set; its wizard finds out which one it is talking to.
 
 ## Get it
 

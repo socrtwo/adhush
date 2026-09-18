@@ -28,7 +28,11 @@ import io.adhush.core.FileJingleStore
 import io.adhush.core.JingleDetector
 import io.adhush.core.RemoteKey
 import io.adhush.core.press
+import io.adhush.core.AndroidTvRemote
+import io.adhush.core.ClientIdentity
+import io.adhush.core.HisenseVidaa
 import io.adhush.core.LevelController
+import io.adhush.core.PhilipsJointSpace
 import io.adhush.core.LgWebOs
 import io.adhush.core.RokuEcp
 import io.adhush.core.SamsungTizen
@@ -175,8 +179,9 @@ class AdHushService : Service(), LifecycleOwner {
             update("microphone permission missing"); stopSelf(); return
         }
         // The 0.13 log: a blank address was tried as ":10002" every five seconds. Refuse to start instead.
-        if (settings.control in setOf("ip", "sony", "lg", "samsung", "roku", "vizio") && settings.host.isBlank()) { update("no TV address — run the wizard's Find my TV, or type it on the TV page and Save"); stopSelf(); return }
+        if (settings.control in setOf("ip", "sony", "lg", "samsung", "roku", "vizio", "androidtv", "hisense", "philips") && settings.host.isBlank()) { update("no TV address — run the wizard's Find my TV, or type it on the TV page and Save"); stopSelf(); return }
         if (settings.control == "upnp" && settings.upnpControlUrl.isBlank()) { update("no renderer address — run the wizard's Find my TV"); stopSelf(); return }
+        if (settings.control == "androidtv" && settings.androidTvIdentity.isBlank()) { update("Android TV is not paired — run the wizard's Find my TV"); stopSelf(); return }
         if (settings.methodsOn == 0) { update("no method is switched on — turn one on under Methods"); stopSelf(); return }
         val persist = PrefsDuckPersistence(this)
         keyDriver = null
@@ -196,6 +201,10 @@ class AdHushService : Service(), LifecycleOwner {
             "samsung" -> { transport = null; val d = SamsungTizen(settings.host, settings.samsungToken.ifBlank { null }); keyDriver = d; StepVolumeController(d, persist, settings.duckLevel, settings.normalVolume) }
             "roku" -> { transport = null; val d = RokuEcp(settings.host); keyDriver = d; StepVolumeController(d, persist, settings.duckLevel, settings.normalVolume) }
             "vizio" -> { transport = null; val d = VizioSmartCast(settings.host, settings.vizioToken.ifBlank { null }); keyDriver = d; StepVolumeController(d, persist, settings.duckLevel, settings.normalVolume) }
+            // The other families (ADR 0026): all three read the volume back.
+            "androidtv" -> { transport = null; LevelController(AndroidTvRemote(settings.host, ClientIdentity.deserialize(settings.androidTvIdentity)), persist, settings.duckLevel, settings.normalVolume, settings.useMute) }
+            "hisense" -> { transport = null; LevelController(HisenseVidaa(settings.host, settings.hisenseClientId.ifBlank { HisenseVidaa.newClientId() }), persist, settings.duckLevel, settings.normalVolume, settings.useMute) }
+            "philips" -> { transport = null; LevelController(PhilipsJointSpace(settings.host, settings.philipsVersion, settings.philipsDeviceId, settings.philipsKey), persist, settings.duckLevel, settings.normalVolume, settings.useMute) }
             else -> {
                 val t = SocketTransport(settings.host, settings.port, 2500, settings.login); transport = t
                 SharpController(SharpIpClient(t), persist, duckLevel = settings.duckLevel, normalVolume = settings.normalVolume, useMuteInstead = settings.useMute)
@@ -551,6 +560,9 @@ class AdHushService : Service(), LifecycleOwner {
                 d is RokuEcp -> d.press(key)
                 d is SamsungTizen -> d.press(key)
                 d is VizioSmartCast -> d.press(key)
+                c is LevelController && c.device is AndroidTvRemote -> (c.device as AndroidTvRemote).press(key)
+                c is LevelController && c.device is HisenseVidaa -> (c.device as HisenseVidaa).press(key)
+                c is LevelController && c.device is PhilipsJointSpace -> (c.device as PhilipsJointSpace).press(key)
                 c is LevelController && key == RemoteKey.MUTE -> c.device.setMute(!c.ducked)
                 else -> { main.post { update("this connection (${settings.control}) has no remote keys beyond volume and mute") }; return }
             }

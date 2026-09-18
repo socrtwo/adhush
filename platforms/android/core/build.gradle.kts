@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "io.adhush"
-version = "0.26.0"
+version = "0.27.0"
 
 kotlin {
     compilerOptions {
@@ -17,6 +17,8 @@ java {
 }
 
 dependencies {
+    // A self-signed client certificate for Android TV's remote protocol (ADR 0026); nothing else needs it.
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

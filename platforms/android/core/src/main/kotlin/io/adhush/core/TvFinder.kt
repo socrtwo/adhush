@@ -13,7 +13,10 @@ enum class TvPathKind(val wire: String, val label: String, val exact: Boolean) {
     UPNP("upnp", "UPnP renderer", true),
     SAMSUNG("samsung", "Samsung remote channel (allow it on the set once)", false),
     ROKU("roku", "Roku TV", false),
-    VIZIO("vizio", "Vizio SmartCast (PIN on the screen once)", false);
+    VIZIO("vizio", "Vizio SmartCast (PIN on the screen once)", false),
+    ANDROID_TV("androidtv", "Android TV / Google TV (a code on the screen once)", true),
+    HISENSE("hisense", "Hisense VIDAA (a code on the screen once)", true),
+    PHILIPS("philips", "Philips JointSpace (a PIN on the screen once on the newer sets)", true);
 
     companion object { fun ofWire(w: String): TvPathKind? = entries.firstOrNull { it.wire == w } }
 }
@@ -25,7 +28,7 @@ class FoundTv(val ip: String, var brand: String, var model: String, var name: St
     /** Exact-volume paths first, then key paths, in the order the wizard tries them. */
     fun ordered(): List<TvPath> = paths.sortedBy { PRIORITY.indexOf(it.kind) }
     override fun toString() = "$brand ${model.ifBlank { name }} at $ip: " + paths.joinToString { it.kind.label }
-    companion object { val PRIORITY = listOf(TvPathKind.SHARP, TvPathKind.SONY, TvPathKind.LG, TvPathKind.UPNP, TvPathKind.SAMSUNG, TvPathKind.ROKU, TvPathKind.VIZIO) }
+    companion object { val PRIORITY = listOf(TvPathKind.SHARP, TvPathKind.SONY, TvPathKind.LG, TvPathKind.PHILIPS, TvPathKind.HISENSE, TvPathKind.UPNP, TvPathKind.ANDROID_TV, TvPathKind.SAMSUNG, TvPathKind.ROKU, TvPathKind.VIZIO) }
 }
 
 /**
@@ -37,7 +40,7 @@ class FoundTv(val ip: String, var brand: String, var model: String, var name: St
  * subnet is swept for the brand ports. Nothing here changes a set.
  */
 object TvFinder {
-    val BRAND_PORTS = listOf(10002, 8060, 8001, 3000, 7345, 80)
+    val BRAND_PORTS = listOf(10002, 8060, 8001, 3000, 7345, 80, 6467, 36669, 1925, 1926)
 
     /** A maker's name from what SSDP and the description say. */
     fun inferBrand(server: String, manufacturer: String, model: String): String {
@@ -125,6 +128,9 @@ object TvFinder {
         if (portOpen(ip, 80)) SonyBravia.probe(ip)?.let { info -> synchronized(t) { t.brand = "Sony"; if (t.model.isBlank()) t.model = info.model }; add(TvPathKind.SONY) }
         if (portOpen(ip, 7345) && VizioSmartCast.probe(ip)) { synchronized(t) { t.brand = "Vizio" }; add(TvPathKind.VIZIO) }
         if (portOpen(ip, 3000) || portOpen(ip, 3001)) { synchronized(t) { if (t.brand.isBlank()) t.brand = "LG" }; if (t.brand == "LG") add(TvPathKind.LG) }
+        if (AndroidTvRemote.probe(ip)) { synchronized(t) { if (t.brand.isBlank()) t.brand = "Android TV" }; add(TvPathKind.ANDROID_TV) }
+        if (HisenseVidaa.probe(ip)) { synchronized(t) { if (t.brand.isBlank() || t.brand == "Android TV") t.brand = "Hisense" }; add(TvPathKind.HISENSE) }
+        if (portOpen(ip, 1926) || portOpen(ip, 1925)) PhilipsJointSpace.probe(ip)?.let { info -> synchronized(t) { t.brand = "Philips"; if (t.model.isBlank()) t.model = info.model; if (t.name.isBlank()) t.name = info.name }; add(TvPathKind.PHILIPS, info.version.toString()) }
         if (portOpen(ip, sharpPort)) {
             val vol = try { SocketTransport(ip, sharpPort, 1500, sharpLogin).use { SharpIpClient(it).queryVolume() } } catch (e: Exception) { null }
             if (vol != null) { synchronized(t) { t.brand = "Sharp" }; add(TvPathKind.SHARP, vol.toString()) }
