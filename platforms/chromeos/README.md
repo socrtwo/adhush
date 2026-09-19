@@ -5,7 +5,7 @@ Two good options, and they combine.
 **Core in the Linux container (Crostini).** Same as Linux:
 
 ```
-pip install adhush-0.6.0-py3-none-any.whl
+pip install adhush-<ver>-py3-none-any.whl  # the wheel from the release
 adhush run                     # [ipc] enabled; serves the web app
 adhush service install         # systemd --user inside the container
 ```

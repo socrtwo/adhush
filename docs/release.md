@@ -151,7 +151,7 @@ the Python listener and the phone, and three sizes of local AI on Android
 ## Reproducing the artifacts
 
 ```
-python -m build                       # dist/adhush-0.17.0-py3-none-any.whl, .tar.gz
+python -m build                       # dist/adhush-<ver>-py3-none-any.whl, .tar.gz
 (cd platforms/web && zip -r ../../dist/adhush-web-0.28.4.zip .)
 ```
 
