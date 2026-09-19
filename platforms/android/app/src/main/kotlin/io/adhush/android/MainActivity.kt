@@ -58,6 +58,8 @@ class MainActivity : AppCompatActivity() {
         log("stream learning started — play the channel's live stream in Chrome and leave it playing")
     }
     private val importLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) importMemory(uri) }
+    /** "Save to a file": the system's file picker, so the log lands in Downloads (or anywhere) without a share sheet. */
+    private val saveLogLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri -> if (uri != null) writeLogTo(uri) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -76,12 +78,15 @@ class MainActivity : AppCompatActivity() {
         }
         buildHelp()
         findViewById<Button>(R.id.shareLog).setOnClickListener { shareLog() }
+        findViewById<Button>(R.id.saveLog).setOnClickListener { saveLog() }
+        findViewById<Button>(R.id.forgetMemory).setOnClickListener { forgetMemory() }
         findViewById<Button>(R.id.clearLog).setOnClickListener { AppLog.clear(); refreshLog(); log("log cleared") }
         findViewById<Button>(R.id.save).setOnClickListener { save(); log("saved") }
         findViewById<Button>(R.id.test).setOnClickListener { runTest() }
         findViewById<Button>(R.id.testHome).setOnClickListener { runTest() }
         openPage(intent)
-        if (!settings.wizardOffered) { settings.wizardOffered = true; startActivity(Intent(this, SetupWizardActivity::class.java)) }   // once, on first run; Not now keeps the defaults
+        // The wizard is a button on this page (and in the toolbar menu), never a window that opens by itself.
+        settings.wizardOffered = true
         findViewById<Button>(R.id.start).setOnClickListener { save(); if (checkBeforeStart()) startWithPermissions(null) }
         findViewById<Button>(R.id.stop).setOnClickListener { serviceAction(AdHushService.ACTION_STOP) }
         findViewById<Button>(R.id.notAd).setOnClickListener { serviceAction(AdHushService.ACTION_NOT_AD) }
@@ -92,7 +97,15 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.duckMore).setOnClickListener { serviceAction(AdHushService.ACTION_DUCK_MORE) }
         findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).apply {
             inflateMenu(R.menu.toolbar)
-            setOnMenuItemClickListener { item -> if (item.itemId == R.id.action_remote) { save(); startActivity(Intent(this@MainActivity, RemoteActivity::class.java)); true } else false }
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_remote -> { save(); startActivity(Intent(this@MainActivity, RemoteActivity::class.java)); true }
+                    R.id.action_wizard -> { save(); startActivity(Intent(this@MainActivity, SetupWizardActivity::class.java)); true }
+                    R.id.action_forget -> { forgetMemory(); true }
+                    R.id.action_save_log -> { saveLog(); true }
+                    else -> false
+                }
+            }
         }
         findViewById<Button>(R.id.openRemote).setOnClickListener { save(); startActivity(Intent(this, RemoteActivity::class.java)) }
         findViewById<Button>(R.id.wizard).setOnClickListener { save(); startActivity(Intent(this, SetupWizardActivity::class.java)) }
@@ -225,6 +238,57 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshLog() { findViewById<TextView>(R.id.log).text = AppLog.tail(150).ifEmpty { "(the log is empty)" } }
 
+    /** "Save to a file": today's date in the name; the picker's default folder is Downloads. */
+    private fun saveLog() {
+        if (!AppLog.file(this).isFile) { log("the log is empty"); return }
+        val stamp = java.text.SimpleDateFormat("yyyy-MM-dd-HHmm", java.util.Locale.US).format(java.util.Date())
+        saveLogLauncher.launch("adhush-$stamp.log")
+    }
+
+    private fun writeLogTo(uri: android.net.Uri) {
+        thread {
+            val result = try {
+                contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                    val f = AppLog.file(this)
+                    val older = java.io.File(f.path + ".1")
+                    var bytes = 0L
+                    if (older.isFile) older.inputStream().use { bytes += it.copyTo(out) }
+                    if (f.isFile) f.inputStream().use { bytes += it.copyTo(out) }
+                    "log saved (${bytes / 1024} KB)"
+                } ?: "could not open the file to write"
+            } catch (e: Exception) { AppLog.e("app", "saving the log failed", e); "saving the log failed: ${e.message}" }
+            runOnUiThread { log(result) }
+        }
+    }
+
+    /** "Forget what it learned…": tick what to drop; the files go, the service reads them at its next start. */
+    private fun forgetMemory() {
+        if (AdHushService.running != null) { log("stop AdHush first — it is reading its memory right now"); return }
+        val ads = io.adhush.core.FileFingerprintStore(java.io.File(filesDir, AdHushService.ADS_FILE)).count()
+        val jingles = io.adhush.core.FileJingleStore(java.io.File(filesDir, AdHushService.JINGLES_FILE)).load().size
+        val scripts = io.adhush.core.FileScriptStore(java.io.File(filesDir, AdHushService.SCRIPTS_FILE)).count()
+        val clock = java.io.File(filesDir, AdHushService.CLOCK_FILE).isFile
+        val items = arrayOf(
+            "Remembered breaks ($ads) — what Is an ad / Show's back and the automatic methods learned",
+            "Break jingles ($jingles known or candidate)",
+            "The break clock" + if (clock) "" else " (empty)",
+            "Scripts ($scripts) — the words of remembered breaks",
+        )
+        val ticked = booleanArrayOf(true, true, false, false)
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("Forget what it learned")
+            .setMultiChoiceItems(items, ticked) { _, i, on -> ticked[i] = on }
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Forget") { _, _ ->
+                val files = listOf(AdHushService.ADS_FILE, AdHushService.JINGLES_FILE, AdHushService.CLOCK_FILE, AdHushService.SCRIPTS_FILE)
+                val gone = ArrayList<String>()
+                for ((i, name) in files.withIndex()) if (ticked[i]) { java.io.File(filesDir, name).delete(); gone.add(items[i].substringBefore(" (").substringBefore(" —")) }
+                log(if (gone.isEmpty()) "nothing forgotten" else "forgot: ${gone.joinToString(", ")} — it starts learning again at the next Start")
+                showStatus(AdHushService.lastText, false, false, false)
+            }
+            .show()
+    }
+
     /** The rolling log file, handed to mail, Drive or messages so a crash can be diagnosed. */
     private fun shareLog() {
         val file = AppLog.file(this)
@@ -270,6 +334,7 @@ class MainActivity : AppCompatActivity() {
         save()
         val tier = LocalJudge.tier(settings.localModelSize)
         if (LocalJudge.isInstalled(this, tier)) { log("${tier.label} is already installed"); return }
+        if (LocalJudge.installing) { log("the download is still running — one press is enough"); return }
         val url = settings.localModelUrl.ifBlank { tier.url }
         log("downloading ${tier.label} (${tier.sizeMb} MB) — keep the app open, Wi-Fi recommended …")
         thread {
@@ -439,6 +504,7 @@ class MainActivity : AppCompatActivity() {
     /** A test line goes to the Home card, the Log page and the log file. */
     private fun testLine(line: String) {
         log(line)
+        findViewById<View>(R.id.testCard).visibility = View.VISIBLE
         val v = findViewById<TextView>(R.id.testResult)
         v.text = (v.text.toString() + "\n" + line).trim().lines().takeLast(14).joinToString("\n")
     }

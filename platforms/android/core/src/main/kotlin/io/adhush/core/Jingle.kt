@@ -30,7 +30,9 @@ enum class JingleKind(val wire: String) { OPEN("open"), CLOSE("close");
 
 class Jingle(val id: Int, val kind: JingleKind, val blocks: List<Int>, var hits: Int, var falseHits: Int, val createdTs: Double,
              /** Local hours of day this sting opened (or closed) a break in. */
-             val hours: MutableSet<Int> = HashSet())
+             val hours: MutableSet<Int> = HashSet(),
+             /** Wall time of the last break that counted as a hit; 0 when unknown (ADR 0027, amended). */
+             var lastWall: Double = 0.0)
 
 /** The chroma word of the same block transposed up by [semitones] (down when negative): class c lives in bit 11 - c. */
 fun pitchRotate(bits: Int, semitones: Int): Int {
@@ -61,7 +63,8 @@ class FileJingleStore(private val file: File? = null) : JingleStore {
             val p = line.split('\t')
             if (p[0] == "j" && p.size >= 7) runCatching {
                 val hours = if (p.size > 7) p[7].split(',').filter { it.isNotEmpty() }.map { it.toInt() }.toHashSet() else HashSet()  // v1 rows carry none
-                out.add(Jingle(p[1].toInt(), JingleKind.of(p[2]), p[6].split(',').filter { it.isNotEmpty() }.map { it.toInt() }, p[3].toInt(), p[4].toInt(), p[5].toDouble(), hours))
+                val lastWall = if (p.size > 8) p[8].toDoubleOrNull() ?: 0.0 else 0.0
+                out.add(Jingle(p[1].toInt(), JingleKind.of(p[2]), p[6].split(',').filter { it.isNotEmpty() }.map { it.toInt() }, p[3].toInt(), p[4].toInt(), p[5].toDouble(), hours, lastWall))
             }
         }
         return out
@@ -71,8 +74,8 @@ class FileJingleStore(private val file: File? = null) : JingleStore {
         f.parentFile?.mkdirs()
         val tmp = File(f.path + ".tmp")
         tmp.bufferedWriter().use { w ->
-            w.write("# adhush jingles v2\tid\tkind\thits\tfalse_hits\tcreated\tblocks\thours\n")
-            for (j in jingles) w.write("j\t${j.id}\t${j.kind.wire}\t${j.hits}\t${j.falseHits}\t${j.createdTs}\t${j.blocks.joinToString(",")}\t${j.hours.sorted().joinToString(",")}\n")
+            w.write("# adhush jingles v2\tid\tkind\thits\tfalse_hits\tcreated\tblocks\thours\tlast_wall\n")
+            for (j in jingles) w.write("j\t${j.id}\t${j.kind.wire}\t${j.hits}\t${j.falseHits}\t${j.createdTs}\t${j.blocks.joinToString(",")}\t${j.hours.sorted().joinToString(",")}\t${j.lastWall}\n")
         }
         if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
     }
@@ -103,6 +106,10 @@ data class JingleConfig(
     val familyPenalty: Double = 0.05,
     /** ADR 0027, hours: at an hour the sting has opened breaks in before, it is matched this much more loosely. */
     val hourBonus: Double = 0.03,
+    /** A break shorter than this teaches nothing: a three-second duck is a false match, not a break (ADR 0027, amended). */
+    val minBreakS: Double = 20.0,
+    /** Two hearings closer together than this count as one: one teaching session cannot promote a sting by itself. */
+    val hitSpacingS: Double = 1800.0,
 )
 
 class JingleDetector(private val store: JingleStore, private val cfg: JingleConfig = JingleConfig()) : Detector {
@@ -122,6 +129,7 @@ class JingleDetector(private val store: JingleStore, private val cfg: JingleConf
     private var lastTs = 0.0
     private var hour: Int? = null
     private var pendingCloseHour: Int? = null
+    private var pendingCloseWall: Double? = null
     private val stingBlocks: Int get() = max(2, (cfg.jingleS / cfg.sampleIntervalS).toInt())
     private val candidateBlocks: Int get() = max(stingBlocks, (cfg.candidateS / cfg.sampleIntervalS).toInt())
 
@@ -203,8 +211,8 @@ class JingleDetector(private val store: JingleStore, private val cfg: JingleConf
         lastTs = ts
         pendingClose?.let { end ->
             if (ts >= end + cfg.candidateS - 2.0) {
-                pendingClose = null; val h = pendingCloseHour; pendingCloseHour = null
-                addCandidate(JingleKind.CLOSE, blocksBetween(end - 2.0, end + cfg.candidateS - 2.0), ts, h)
+                pendingClose = null; val h = pendingCloseHour; pendingCloseHour = null; val w = pendingCloseWall; pendingCloseWall = null
+                addCandidate(JingleKind.CLOSE, blocksBetween(end - 2.0, end + cfg.candidateS - 2.0), ts, h, w)
             }
         }
         val live = ring.takeLast(stingBlocks).map { it.second }
@@ -221,11 +229,16 @@ class JingleDetector(private val store: JingleStore, private val cfg: JingleConf
         else closeHitTs = ts
     }
 
-    private fun addCandidate(kind: JingleKind, blocks: List<Int>, ts: Double, hourOfDay: Int? = null) {
+    private fun addCandidate(kind: JingleKind, blocks: List<Int>, ts: Double, hourOfDay: Int? = null, wall: Double? = null) {
         if (blocks.size < stingBlocks) return
         val same = jingles.firstOrNull { it.kind == kind && sameSting(blocks, it.blocks) }
-        if (same != null) { same.hits++; if (hourOfDay != null) same.hours.add(hourOfDay); store.save(jingles); return }
-        jingles.add(Jingle(nextId++, kind, blocks, 1, 0, ts, if (hourOfDay != null) hashSetOf(hourOfDay) else HashSet()))
+        if (same != null) {
+            // Heard again within the spacing: the same session, not another break — it counts once.
+            if (wall != null && same.lastWall > 0.0 && wall - same.lastWall < cfg.hitSpacingS) return
+            same.hits++; if (hourOfDay != null) same.hours.add(hourOfDay); if (wall != null) same.lastWall = wall
+            store.save(jingles); return
+        }
+        jingles.add(Jingle(nextId++, kind, blocks, 1, 0, ts, if (hourOfDay != null) hashSetOf(hourOfDay) else HashSet(), wall ?: 0.0))
         // Keep the candidate list bounded: the oldest one-off candidates go first.
         while (jingles.count { it.hits < cfg.promoteHits } > cfg.maxCandidates) {
             val victim = jingles.filter { it.hits < cfg.promoteHits }.minByOrNull { it.createdTs } ?: break
@@ -240,10 +253,14 @@ class JingleDetector(private val store: JingleStore, private val cfg: JingleConf
      * end a closer candidate once they have been heard.
      */
     fun learnBreak(startTs: Double, endTs: Double, wallStart: Double? = null) {
+        if (endTs - startTs < cfg.minBreakS) return   // a duck that ended in seconds was no break
         val h = if (wallStart != null) localHour(wallStart) else hour
-        addCandidate(JingleKind.OPEN, blocksBetween(startTs - (cfg.candidateS - 2.0), startTs + 2.0), endTs, h)
-        pendingClose = endTs; pendingCloseHour = h
+        addCandidate(JingleKind.OPEN, blocksBetween(startTs - (cfg.candidateS - 2.0), startTs + 2.0), endTs, h, wallStart)
+        pendingClose = endTs; pendingCloseHour = h; pendingCloseWall = wallStart
     }
+
+    /** Forget every sting and candidate (the memory page's Forget). */
+    fun forgetAll() { jingles.clear(); openHitTs = null; openHitId = null; closeHitTs = null; pendingClose = null; store.save(jingles) }
 
     /** Wall-clock time passes: the hour of day steers which stings are trusted (ADR 0027). */
     fun tick(wall: Double) { hour = localHour(wall) }

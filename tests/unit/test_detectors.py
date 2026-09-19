@@ -454,6 +454,41 @@ class TestJingle:
             assert ("family=+0st/1.50x" in vote.reason) == (tol > 0), vote.reason
         assert agree[0.5] >= agree[0.0], agree
 
+    def test_short_ducks_teach_nothing_and_one_session_counts_once(self, tmp_path: Path) -> None:
+        """ADR 0027, amended: the loop the first evening showed — three-second ducks promoting show audio."""
+        from adhush.config import JingleConfig
+        from adhush.detect.jingle import JingleDetector
+
+        det = JingleDetector(JingleConfig(file=str(tmp_path / "j.tsv")))
+        det.warmup()
+        f = self._Feed(det)
+        rng = np.random.default_rng(9)
+        wall = 1.8e9
+        for i in range(3):  # ducks a few seconds long, as a false fingerprint match makes
+            self._programme(f, 10.0, rng)
+            self._sting(f, self.OPENER)
+            det.learn_break(f.ts - 2.0, f.ts + 1.0, wall + i * 20.0)
+        assert det.describe() == "learning (0 candidates; a sting must open 3 breaks)"
+        for i in range(3):  # three real breaks within twenty minutes: one hit
+            self._programme(f, 15.0, rng)
+            self._sting(f, self.OPENER)
+            start = f.ts + 1.0
+            self._programme(f, 25.0, rng)
+            det.learn_break(start, f.ts, wall + 100.0 + i * 600.0)
+            self._programme(f, 8.0, rng)
+        assert not det.promoted(), det.describe()
+        for i in range(2):  # two more, an hour apart each: promoted
+            self._programme(f, 15.0, rng)
+            self._sting(f, self.OPENER)
+            start = f.ts + 1.0
+            self._programme(f, 25.0, rng)
+            det.learn_break(start, f.ts, wall + 100.0 + 3600.0 * (i + 1))
+            self._programme(f, 8.0, rng)
+        assert [j.kind for j in det.promoted()] == ["open"], det.describe()
+        assert JingleDetector(JingleConfig(file=str(tmp_path / "j.tsv")))._jingles[0].last_wall > 0
+        det.forget_all()
+        assert not det.promoted() and not det._jingles
+
     def test_hours_admit_a_sting_a_break_early_and_round_trip(self, tmp_path: Path) -> None:
         """ADR 0027: two breaks at nine o'clock, and at nine the sting is trusted; at two it is not."""
         from adhush.config import JingleConfig
@@ -467,13 +502,13 @@ class TestJingle:
         det.warmup()
         f = self._Feed(det)
         rng = np.random.default_rng(3)
-        for _ in range(2):
+        for k in range(2):
             self._programme(f, 15.0, rng)
             self._sting(f, self.OPENER)
             start = f.ts + 1.0
             self._programme(f, 25.0, rng)
             self._sting(f, self.CLOSER)
-            det.learn_break(start, f.ts - 1.5, nine)
+            det.learn_break(start, f.ts - 1.5, nine + k * 2100.0)  # 35 min apart: two breaks, not one session
             self._programme(f, 8.0, rng)
         assert not det.promoted()  # two breaks, no clock: not yet
         det.tick(two)
@@ -488,7 +523,7 @@ class TestJingle:
         assert [j.hours for j in again.promoted() if False] == [] and any(j.hours == {9} for j in again._jingles)
         text = (tmp_path / "jingles.tsv").read_text()
         assert text.startswith("# adhush jingles v2")
-        (tmp_path / "jingles.tsv").write_text("\n".join(line.rsplit("\t", 1)[0] for line in text.splitlines()) + "\n")
+        (tmp_path / "jingles.tsv").write_text("\n".join("\t".join(line.split("\t")[:7]) for line in text.splitlines()) + "\n")
         legacy = JingleDetector(cfg)  # ... and v1 rows without them still load
         assert legacy._jingles and all(j.hours == set() for j in legacy._jingles)
 

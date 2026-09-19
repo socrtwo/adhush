@@ -68,6 +68,7 @@ class Jingle:
     false_hits: int
     created_ts: float
     hours: set[int] = field(default_factory=set)  # local hours this sting opened a break in
+    last_wall: float = 0.0  # wall time of the last break that counted as a hit; 0 unknown
 
 
 class JingleDetector(Detector):
@@ -91,6 +92,7 @@ class JingleDetector(Detector):
         self._last_ts = 0.0
         self._hour: int | None = None
         self._pending_close_hour: int | None = None
+        self._pending_close_wall: float | None = None
         self._load()
 
     # -- sizes ---------------------------------------------------------------
@@ -118,7 +120,8 @@ class JingleDetector(Detector):
                 continue
             blocks = [int(b) for b in p[6].split(",") if b]
             hours = {int(h) for h in p[7].split(",") if h} if len(p) > 7 else set()  # v1 lines carry none
-            self._jingles.append(Jingle(int(p[1]), p[2], blocks, int(p[3]), int(p[4]), float(p[5]), hours))
+            last_wall = float(p[8]) if len(p) > 8 and p[8] else 0.0
+            self._jingles.append(Jingle(int(p[1]), p[2], blocks, int(p[3]), int(p[4]), float(p[5]), hours, last_wall))
             self._next_id = max(self._next_id, int(p[1]) + 1)
 
     def _save(self) -> None:
@@ -127,10 +130,10 @@ class JingleDetector(Detector):
             return
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(path.suffix + ".tmp")
-        lines = ["# adhush jingles v2\tid\tkind\thits\tfalse_hits\tcreated\tblocks\thours"]
+        lines = ["# adhush jingles v2\tid\tkind\thits\tfalse_hits\tcreated\tblocks\thours\tlast_wall"]
         lines += [
             f"j\t{j.id}\t{j.kind}\t{j.hits}\t{j.false_hits}\t{j.created_ts}\t{','.join(map(str, j.blocks))}"
-            f"\t{','.join(map(str, sorted(j.hours)))}"
+            f"\t{','.join(map(str, sorted(j.hours)))}\t{j.last_wall}"
             for j in self._jingles
         ]
         tmp.write_text("\n".join(lines) + "\n")
@@ -222,7 +225,8 @@ class JingleDetector(Detector):
         if self._pending_close is not None and ts >= self._pending_close + self._cfg.candidate_s - 2.0:
             end, self._pending_close = self._pending_close, None
             hour, self._pending_close_hour = self._pending_close_hour, None
-            self._add_candidate("close", self._blocks_between(end - 2.0, end + self._cfg.candidate_s - 2.0), ts, hour)
+            wall, self._pending_close_wall = self._pending_close_wall, None
+            self._add_candidate("close", self._blocks_between(end - 2.0, end + self._cfg.candidate_s - 2.0), ts, hour, wall)
         live = [bits for _, bits in self._ring[-self._sting_blocks :]]
         if len(live) < self._sting_blocks:
             return
@@ -244,17 +248,26 @@ class JingleDetector(Detector):
         else:
             self._close_hit_ts = ts
 
-    def _add_candidate(self, kind: str, blocks: list[int], ts: float, hour: int | None = None) -> None:
+    def _add_candidate(
+        self, kind: str, blocks: list[int], ts: float, hour: int | None = None, wall: float | None = None,
+    ) -> None:
         if len(blocks) < self._sting_blocks:
             return
         for j in self._jingles:
             if j.kind == kind and self._same_sting(blocks, j.blocks):
+                # Heard again within the spacing: the same session, not another break; it counts once.
+                if wall is not None and j.last_wall > 0.0 and wall - j.last_wall < self._cfg.hit_spacing_s:
+                    return
                 j.hits += 1
                 if hour is not None:
                     j.hours.add(hour)
+                if wall is not None:
+                    j.last_wall = wall
                 self._save()
                 return
-        self._jingles.append(Jingle(self._next_id, kind, blocks, 1, 0, ts, {hour} if hour is not None else set()))
+        self._jingles.append(
+            Jingle(self._next_id, kind, blocks, 1, 0, ts, {hour} if hour is not None else set(), wall or 0.0)
+        )
         self._next_id += 1
         candidates = [j for j in self._jingles if j.hits < self._cfg.promote_hits]
         while len(candidates) > self._cfg.max_candidates:
@@ -271,11 +284,21 @@ class JingleDetector(Detector):
     def learn_break(self, start_ts: float, end_ts: float, wall_start: float | None = None) -> None:
         """A real break ran from ``start_ts`` to ``end_ts`` (media time); it
         began at ``wall_start`` on the viewer's clock when the engine has one."""
+        if end_ts - start_ts < self._cfg.min_break_s:
+            return  # a mute that ended in seconds was no break (ADR 0027, amended)
         hour = local_hour(wall_start) if wall_start is not None else self._hour
         lead = self._cfg.candidate_s - 2.0
-        self._add_candidate("open", self._blocks_between(start_ts - lead, start_ts + 2.0), end_ts, hour)
+        self._add_candidate("open", self._blocks_between(start_ts - lead, start_ts + 2.0), end_ts, hour, wall_start)
         self._pending_close = end_ts
         self._pending_close_hour = hour
+        self._pending_close_wall = wall_start
+
+    def forget_all(self) -> None:
+        """Drop every sting and candidate."""
+        self._jingles.clear()
+        self._open_hit_ts = self._open_hit_id = None
+        self._close_hit_ts = self._pending_close = None
+        self._save()
 
     def user_says_program(self, ts: float) -> None:
         if self._open_hit_id is not None and self._open_hit_ts is not None and ts - self._open_hit_ts < 60.0:

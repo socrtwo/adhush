@@ -238,7 +238,11 @@ class Engine(
                 if (start != null && learner != null && fingerprint != null) {
                     val duration = ts - start
                     when (src) {
-                        Source.FINGERPRINT -> adId?.let { if (matchKind(it) == AdKind.AD) learner.observeDuration(it, duration) }
+                        Source.FINGERPRINT -> adId?.let {
+                            // Ended within seconds on the show's own evidence: the record matched the show, not a break.
+                            if (duration < learner.falseMatchS) learner.falseMatch(it)
+                            else if (matchKind(it) == AdKind.AD) learner.observeDuration(it, duration)
+                        }
                         Source.FUSION -> learner.learnSegment(start, duration, fingerprint.audioBetween(start, start + 60.0))
                         Source.USER -> {
                             learner.learnMaterial(start, ts, fingerprint.audioBetween(start, ts))?.let { fingerprint.holdOffAfterLearning(ts) }

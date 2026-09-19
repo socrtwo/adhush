@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="adhush_primary">#1F5F8B</color>
+    <color name="adhush_on_primary">#FFFFFF</color>
+    <color name="adhush_status_bar">#1F5F8B</color>
     <color name="adhush_primary_container">#D3E4F5</color>
     <color name="adhush_on_primary_container">#0B2E47</color>
     <color name="adhush_secondary">#5C6F7B</color>

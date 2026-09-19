@@ -1,13 +1,51 @@
 <resources>
     <style name="Theme.AdHush" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/adhush_primary</item>
-        <item name="colorOnPrimary">@android:color/white</item>
+        <item name="colorOnPrimary">@color/adhush_on_primary</item>
         <item name="colorPrimaryContainer">@color/adhush_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/adhush_on_primary_container</item>
         <item name="colorSecondary">@color/adhush_secondary</item>
         <item name="colorSecondaryContainer">@color/adhush_secondary_container</item>
         <item name="colorOnSecondaryContainer">@color/adhush_on_secondary_container</item>
-        <item name="android:statusBarColor">@color/adhush_primary</item>
+        <item name="android:statusBarColor">@color/adhush_status_bar</item>
+        <item name="materialButtonStyle">@style/Widget.AdHush.Button</item>
+        <item name="materialButtonOutlinedStyle">@style/Widget.AdHush.Button.Outlined</item>
+        <item name="materialCardViewStyle">@style/Widget.AdHush.Card</item>
+    </style>
+    <!-- Buttons a thumb can hit from the sofa: taller, rounder, a little larger type. -->
+    <style name="Widget.AdHush.Button" parent="Widget.Material3.Button">
+        <item name="android:minHeight">52dp</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:insetTop">3dp</item>
+        <item name="android:insetBottom">3dp</item>
+        <item name="cornerRadius">14dp</item>
+    </style>
+    <style name="Widget.AdHush.Button.Tonal" parent="Widget.Material3.Button.TonalButton">
+        <item name="android:minHeight">52dp</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:insetTop">3dp</item>
+        <item name="android:insetBottom">3dp</item>
+        <item name="cornerRadius">14dp</item>
+    </style>
+    <style name="Widget.AdHush.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:minHeight">52dp</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:insetTop">3dp</item>
+        <item name="android:insetBottom">3dp</item>
+        <item name="cornerRadius">14dp</item>
+    </style>
+    <!-- A compact key on the remote: the same corner, a bigger glyph, no inset so the grid stays tight. -->
+    <style name="Widget.AdHush.Key" parent="Widget.Material3.Button.TonalButton">
+        <item name="android:minHeight">56dp</item>
+        <item name="android:textSize">17sp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:paddingStart">4dp</item>
+        <item name="android:paddingEnd">4dp</item>
+        <item name="cornerRadius">14dp</item>
+    </style>
+    <style name="Widget.AdHush.Card" parent="Widget.Material3.CardView.Outlined">
+        <item name="cardCornerRadius">18dp</item>
     </style>
     <!-- The splash: a deep blue field with the app's mark, then the real theme. -->
     <style name="Theme.AdHush.Splash" parent="Theme.SplashScreen">

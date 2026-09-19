@@ -128,7 +128,36 @@ class TeachModeTest {
         r.feed(show.take(50))
         r.engine.confirmAd(r.now); r.feed(adA.take(20)); r.engine.showIsBack(r.now)
         assertEquals(0, store.count(), "2 s is a slip of the finger")
+        r.feed(show.take(50))
+        r.engine.confirmAd(r.now); r.feed(adA.take(120)); r.engine.showIsBack(r.now)
+        assertEquals(0, store.count(), "12 s is a slip of the finger too (ADR 0027, amended)")
         assertFalse(r.engine.showIsBack(r.now), "nothing to end")
+    }
+
+    @Test fun `a remembered break that keeps ducking for seconds is forgotten after two false matches`() {
+        val store = FileFingerprintStore()
+        val ctl = FakeController()
+        // A detector that says "programme present" the moment the set is ducked, like a closer learned from the show.
+        val witness = object : Detector {
+            override val name = "witness"; var ducked = false
+            override fun warmup() {}; override fun observeAudio(block: AudioBlock) {}
+            override fun audioDucked(ts: Double, ducked: Boolean) { this.ducked = ducked }
+            override val programPresent: Boolean get() = ducked
+            override val voting: Boolean get() = false
+            override fun vote(ts: Double) = vote(ts, 0.0, "witness")
+        }
+        val matcher = AudioMatcher(store, FingerprintConfig())
+        val fp = AudioFingerprintDetector(FingerprintConfig(), matcher)
+        val engine = Engine(listOf(MicSilenceDetector(), witness), Fusion(FusionConfig(), mapOf("fingerprint" to 0.3), listOf("silence", "fingerprint")), AdStateMachine(FusionConfig()), ctl, fp, AudioLearner(store, matcher, FingerprintConfig()), store)
+        val r = Run(engine, ctl)
+        r.feed(show.take(100))
+        r.engine.confirmAd(r.now); r.feed(adA); r.feed(adB); r.engine.showIsBack(r.now)
+        assertEquals(1, store.count())
+        r.feed(show.take(100))
+        // The remembered break plays again: matched, ducked, and ended within seconds by the witness — twice.
+        r.feed(adA); r.feed(show.take(100)); r.feed(adB); r.feed(show.take(100))
+        assertTrue(r.ctl.mutes >= 3, "the record matched again: ${r.muteTimes}")
+        assertEquals(0, store.count(), "two false matches forget the record")
     }
 
     @Test fun `the ceiling ends a forgotten teach session and still learns it`() {

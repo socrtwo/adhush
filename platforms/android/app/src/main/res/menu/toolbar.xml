@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
     <item android:id="@+id/action_remote" android:icon="@drawable/ic_remote" android:title="Remote" app:showAsAction="always" />
+    <item android:id="@+id/action_wizard" android:title="Set-up wizard" app:showAsAction="never" />
+    <item android:id="@+id/action_forget" android:title="Forget what it learned…" app:showAsAction="never" />
+    <item android:id="@+id/action_save_log" android:title="Save the log to a file" app:showAsAction="never" />
 </menu>

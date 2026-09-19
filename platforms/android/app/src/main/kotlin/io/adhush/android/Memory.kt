@@ -21,7 +21,7 @@ import java.util.zip.ZipOutputStream
  */
 object Memory {
     const val ZIP = "adhush-memory.zip"
-    private const val ADS = "ads.tsv"
+    private const val ADS = AdHushService.ADS_FILE
     private val FILES = listOf(ADS, AdHushService.SCRIPTS_FILE, AdHushService.CLOCK_FILE, AdHushService.JINGLES_FILE)
 
     fun export(context: Context): File {

@@ -102,9 +102,10 @@ for seven brands, and a finder the wizard uses to prove each path.
 ## Phase 18 — the other families (done, 0.27.0)
 ADR 0026: Android TV / Google TV, Hisense VIDAA and Philips JointSpace.
 
-## Phase 19 — families, stingers and hours (done, 0.28.0)
+## Phase 19 — families, stingers and hours (done, 0.28.0; amended 0.28.1)
 ADR 0027: jingle family matching (pitch and tempo), the segment stinger
-detector, and the hour of day on every learned jingle.
+detector, and the hour of day on every learned jingle. 0.28.1 closed the
+learning loop the first evening showed and gave the phone a Forget button.
 
 ## Beyond the roadmap
 Start with `docs/ideas-backlog.md`: the parental-rating bug as an unmute

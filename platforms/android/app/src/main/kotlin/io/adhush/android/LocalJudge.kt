@@ -76,9 +76,19 @@ class LocalJudge(modelFile: File) : TranscriptJudge, AutoCloseable {
         fun chatPrompt(system: String, user: String): String =
             "<|im_start|>system\n$system<|im_end|>\n<|im_start|>user\n$user<|im_end|>\n<|im_start|>assistant\n"
 
+        /** True while a download runs: a second press must not start a second writer on the same file. */
+        @Volatile var installing = false
+            private set
+
         /** Download the chosen size once; progress is 0..100. Blocking — call off the main thread. Resumable on retry. */
         fun install(context: Context, url: String, onProgress: (Int) -> Unit, tier: Tier = tier(context)) {
+            synchronized(this) { check(!installing) { "a download is already running — wait for it to finish" }; installing = true }
+            try { installLocked(context, url, onProgress, tier) } finally { installing = false }
+        }
+
+        private fun installLocked(context: Context, url: String, onProgress: (Int) -> Unit, tier: Tier) {
             val target = modelFile(context, tier); target.parentFile?.mkdirs()
+            if (isInstalled(context, tier)) { onProgress(100); return }
             val part = File(target.path + ".part")
             val have = if (part.isFile) part.length() else 0L
             val conn = URL(url).openConnection() as HttpURLConnection
@@ -93,7 +103,8 @@ class LocalJudge(modelFile: File) : TranscriptJudge, AutoCloseable {
                 val buf = ByteArray(256 * 1024); var got = if (resuming) have else 0L; var n: Int
                 while (inp.read(buf).also { n = it } > 0) { out.write(buf, 0, n); got += n; if (total > 0) onProgress((got * 100 / total).toInt().coerceIn(0, 99)) }
             } }
-            if (!part.renameTo(target)) { target.delete(); part.renameTo(target) }
+            // Never delete a finished model to make room for a part that is not there (the double-press bug of 0.28.0).
+            if (part.isFile && !part.renameTo(target)) { target.delete(); if (!part.renameTo(target)) throw IllegalStateException("could not move the model into place") }
             onProgress(100)
         }
     }

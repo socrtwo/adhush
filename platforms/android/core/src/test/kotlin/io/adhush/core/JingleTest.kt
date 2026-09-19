@@ -64,6 +64,23 @@ class JingleTest {
         }
     }
 
+    @Test fun `a three-second duck teaches nothing and two hearings in one session count once`() {
+        val det = JingleDetector(MemStore()); det.warmup()
+        val f = Feeder(det); val rnd = Random(9)
+        val wall = 1_800_000_000.0
+        // Three "breaks" a few seconds long, as a false fingerprint match makes: no candidates at all.
+        repeat(3) { programme(f, 10.0, rnd); sting(f, opener); det.learnBreak(f.ts - 2.0, f.ts + 1.0, wall + it * 20.0) }
+        assertEquals("learning (0 candidates; a sting must open 3 breaks)", det.describe())
+        // Three real breaks within twenty minutes of each other: one hit, not three.
+        repeat(3) { programme(f, 15.0, rnd); sting(f, opener); val s = f.ts + 1.0; programme(f, 25.0, rnd); det.learnBreak(s, f.ts, wall + 100.0 + it * 600.0); programme(f, 8.0, rnd) }
+        assertTrue(det.promoted().isEmpty(), det.describe())
+        // Two more, each half an hour apart from the last that counted: promoted.
+        repeat(2) { programme(f, 15.0, rnd); sting(f, opener); val s = f.ts + 1.0; programme(f, 25.0, rnd); det.learnBreak(s, f.ts, wall + 100.0 + 3600.0 * (it + 1)); programme(f, 8.0, rnd) }
+        assertEquals(1, det.promoted().count { it.kind == JingleKind.OPEN }, det.describe())
+        det.forgetAll()
+        assertTrue(det.promoted().isEmpty())
+    }
+
     @Test fun `two breaks at nine o'clock trust the sting at nine, not at two, and the hours round-trip`() {
         val cal = java.util.Calendar.getInstance()
         cal.set(2026, 8, 18, 9, 5, 0); val nine = cal.timeInMillis / 1000.0
@@ -72,7 +89,7 @@ class JingleTest {
         val store = MemStore()
         val det = JingleDetector(store); det.warmup()
         val f = Feeder(det); val rnd = Random(3)
-        repeat(2) { programme(f, 15.0, rnd); sting(f, opener); val s = f.ts + 1.0; programme(f, 25.0, rnd); sting(f, closer); det.learnBreak(s, f.ts - 1.5, nine); programme(f, 8.0, rnd) }
+        repeat(2) { k -> programme(f, 15.0, rnd); sting(f, opener); val s = f.ts + 1.0; programme(f, 25.0, rnd); sting(f, closer); det.learnBreak(s, f.ts - 1.5, nine + k * 2100.0); programme(f, 8.0, rnd) }
         assertTrue(det.promoted().isEmpty(), "two breaks and no clock: not yet")
         det.tick(two); assertTrue(det.promoted().isEmpty(), "not at two o'clock")
         det.tick(nine + 600.0)
@@ -87,7 +104,7 @@ class JingleTest {
         FileJingleStore(file).save(store.saved)
         assertTrue(file.readText().startsWith("# adhush jingles v2"))
         assertTrue(FileJingleStore(file).load().any { it.hours == setOf(9) })
-        file.writeText(file.readLines().joinToString("\n") { it.substringBeforeLast('\t') } + "\n")
+        file.writeText(file.readLines().joinToString("\n") { it.split('\t').take(7).joinToString("\t") } + "\n")
         val legacy = FileJingleStore(file).load()
         assertTrue(legacy.isNotEmpty() && legacy.all { it.hours.isEmpty() })
         dir.deleteRecursively()
@@ -129,7 +146,7 @@ class JingleTest {
     @Test fun `Not an ad after a jingle duck demotes it`() {
         val det = JingleDetector(MemStore()); det.warmup()
         val f = Feeder(det); val rnd = Random(5)
-        repeat(3) { programme(f, 12.0, rnd); sting(f, opener); val s = f.ts + 1.0; programme(f, 20.0, rnd); det.learnBreak(s, f.ts); programme(f, 6.0, rnd) }
+        repeat(3) { programme(f, 12.0, rnd); sting(f, opener); val s = f.ts + 1.0; programme(f, 25.0, rnd); det.learnBreak(s, f.ts); programme(f, 6.0, rnd) }
         assertEquals(1, det.promoted().size)
         sting(f, opener); assertEquals(1.0, det.vote(f.ts).confidence)
         det.userSaysProgramme(f.ts)          // wrong once: falseHits 1 < hits 3, still promoted

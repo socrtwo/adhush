@@ -284,6 +284,11 @@ class JingleConfig:
     # ADR 0027, time of day: a sting heard at an hour it has opened breaks in
     # before is trusted sooner (one hit earlier) and matched a little more loosely.
     hour_bonus: float = 0.03
+    # ADR 0027, amended: a break shorter than this teaches nothing (a duck that
+    # ended in seconds was a false match), and two hearings closer together
+    # than hit_spacing_s count as one (one teaching session cannot promote).
+    min_break_s: float = 20.0
+    hit_spacing_s: float = 1800.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -364,6 +369,15 @@ class FingerprintConfig:
     snap_min_samples: int = 3
     # Minimum fraction of agreeing chroma bits for audio corroboration.
     audio_min_agreement: float = 0.7
+    # ADR 0027, amended. A taught break ("Is an ad" … "Show's back") shorter
+    # than min_material_s is a slip of the finger; longer than max_material_s
+    # ran into the show and is cut there. A remembered break whose mute ends
+    # sooner than false_match_s (the show's own evidence ended it) is a false
+    # match, and false_match_limit of them forget the record.
+    min_material_s: float = 30.0
+    max_material_s: float = 360.0
+    false_match_s: float = 10.0
+    false_match_limit: int = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -643,6 +657,8 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
             tempo_tolerance=float(jng.get("tempo_tolerance", _JINGLE_DEFAULTS.tempo_tolerance)),
             family_penalty=float(jng.get("family_penalty", _JINGLE_DEFAULTS.family_penalty)),
             hour_bonus=float(jng.get("hour_bonus", _JINGLE_DEFAULTS.hour_bonus)),
+            min_break_s=float(jng.get("min_break_s", _JINGLE_DEFAULTS.min_break_s)),
+            hit_spacing_s=float(jng.get("hit_spacing_s", _JINGLE_DEFAULTS.hit_spacing_s)),
         ),
         aspect_change=AspectChangeConfig(
             bar_luma=float(asp.get("bar_luma", _ASPECT_DEFAULTS.bar_luma)),
@@ -794,6 +810,10 @@ def load_config(path: Path, profiles_dir: Path | None = None) -> Config:
         audio_min_agreement=float(
             fp.get("audio_min_agreement", _FP_DEFAULTS.audio_min_agreement)
         ),
+        min_material_s=float(fp.get("min_material_s", _FP_DEFAULTS.min_material_s)),
+        max_material_s=float(fp.get("max_material_s", _FP_DEFAULTS.max_material_s)),
+        false_match_s=float(fp.get("false_match_s", _FP_DEFAULTS.false_match_s)),
+        false_match_limit=int(fp.get("false_match_limit", _FP_DEFAULTS.false_match_limit)),
     )
     if fingerprint.hamming_threshold < 0 or fingerprint.confirm_hits < 1:
         raise ConfigError("fingerprint thresholds out of range")

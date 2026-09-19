@@ -40,7 +40,10 @@ object Help {
         "Press Is an ad the moment a commercial break starts. The TV ducks and stays ducked. Press Show's back the second your show returns. " +
         "Everything in between — the sound (as numbers, never a recording) and the words — is filed as commercial material.\n\n" +
         "After five or six breaks the app recognises those commercials on its own, in any order, and ducks within a few seconds. " +
-        "Pressed Is an ad by mistake? Not an ad cancels it without learning anything.")
+        "Pressed Is an ad by mistake? Not an ad cancels it without learning anything.\n\n" +
+        "Two guards (0.28.1): a bracket shorter than half a minute is taken as a slip of the finger and not kept, and one longer than six minutes is cut there — you forgot Show's back and the show ran into it. " +
+        "A remembered break that keeps ducking for only a few seconds (the show's own evidence ends it at once) was the show, not a break: two such false matches forget it. " +
+        "Forget what it learned… under Methods (or the ⋮ menu) wipes the remembered breaks, jingles, clock or scripts when a bad evening has taught it nonsense.")
 
     val SILENCE = Topic("Method 1 — Quiet gaps",
         "Broadcasters leave a short silence (a fraction of a second) between the show and each commercial, and between commercials. " +
@@ -128,7 +131,7 @@ object Help {
         "A good starting set: the three sound methods on, plus the camera once you have set the bug or ticker up, plus captions if the TV shows them, plus one AI judge as a tie-breaker. The set-up wizard on the Home page measures the room and the camera and suggests exactly that.")
 
     val WIZARD = Topic("The set-up wizard",
-        "Three minutes, once, from the Home page. Find my TV asks every set on the Wi-Fi who it is — Sharp, Samsung, LG, Sony, Roku TV, Vizio, Android TV and Google TV, Hisense, Philips, any DLNA set — and proves each way in: a set that reads its volume back is ducked exactly; one that only takes keys (Samsung, Roku, Vizio) is stepped, and the wizard fires MUTE twice and asks whether it muted. A Sony needs the pre-shared key from its own menu; an LG or Samsung asks you to allow AdHush on the screen once; a Vizio shows a PIN once. Then the serial cable if an adapter is plugged in, then the infrared blaster, one brand's codes at a time. Whatever answers is chosen, network first. Then it asks where the phone sits, listens to fifteen seconds of the show and ten seconds of the room with the TV muted, and looks through the camera for eight seconds to see whether the whole TV is in view.\n\n" +
+        "Three minutes, once, from the Set-up wizard button on the Home page (it never opens by itself). Find my TV asks every set on the Wi-Fi who it is — Sharp, Samsung, LG, Sony, Roku TV, Vizio, Android TV and Google TV, Hisense, Philips, any DLNA set — and proves each way in: a set that reads its volume back is ducked exactly; one that only takes keys (Samsung, Roku, Vizio) is stepped, and the wizard fires MUTE twice and asks whether it muted. A Sony needs the pre-shared key from its own menu; an LG or Samsung asks you to allow AdHush on the screen once; a Vizio shows a PIN once. Then the serial cable if an adapter is plugged in, then the infrared blaster, one brand's codes at a time. Whatever answers is chosen, network first. Then it asks where the phone sits, listens to fifteen seconds of the show and ten seconds of the room with the TV muted, and looks through the camera for eight seconds to see whether the whole TV is in view.\n\n" +
         "From those numbers it suggests which methods to switch on, the duck level (a loud room means a higher duck level, so the phone can still hear the ducked set and bring the show back on time), the camera zoom, the local AI size this phone can carry, and what to do next — then writes the settings and opens the Methods page, where every one of them can be changed. Nothing is recorded: the wizard keeps numbers, never audio or pictures.")
 
     val TEST = Topic("Test mode",

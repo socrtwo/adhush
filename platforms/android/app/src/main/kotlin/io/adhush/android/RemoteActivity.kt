@@ -5,8 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.content.res.ColorStateList
+import android.view.View
 import android.widget.Button
-import android.widget.GridLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -51,18 +53,7 @@ class RemoteActivity : AppCompatActivity() {
                 R.id.rDuck180 to 180, R.id.rDuck210 to 210, R.id.rDuck240 to 240, R.id.rDuck270 to 270, R.id.rDuck300 to 300))
             findViewById<Button>(id).setOnClickListener { serviceAction(AdHushService.ACTION_DUCK_FOR) { it.putExtra(AdHushService.EXTRA_SECONDS, secs) } }
         findViewById<Button>(R.id.rDuckMore).setOnClickListener { serviceAction(AdHushService.ACTION_DUCK_MORE) }
-        val grid = findViewById<GridLayout>(R.id.keys)
-        for (key in LAYOUT) {
-            val b = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle)
-            b.text = key?.label ?: ""
-            b.isEnabled = key != null
-            b.insetTop = 0; b.insetBottom = 0
-            val lp = GridLayout.LayoutParams(GridLayout.spec(GridLayout.UNDEFINED, 1f), GridLayout.spec(GridLayout.UNDEFINED, 1f))
-            lp.width = 0
-            b.layoutParams = lp
-            if (key != null) b.setOnClickListener { press(key) }
-            grid.addView(b)
-        }
+        buildKeys(findViewById(R.id.keys))
         findViewById<TextView>(R.id.remoteStatus).text = AdHushService.lastText
         if (settings.control == "ir") findViewById<TextView>(R.id.remoteNote).text = "Infrared control knows only volume and mute; the TV keys need the network or the serial cable (TV page)."
     }
@@ -79,6 +70,64 @@ class RemoteActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() { super.onDestroy(); closeOwn(); io.shutdown() }
+
+    /**
+     * The keys laid out the way a hand expects them (ADR 0027, amended): power
+     * and input up top, the volume and channel rockers either side of a real
+     * D-pad, the number pad below, transport and the odd keys last. Every key
+     * is 56 dp tall; the rockers and OK are taller still.
+     */
+    private fun buildKeys(column: LinearLayout) {
+        column.removeAllViews()
+        fun key(key: RemoteKey?, parent: LinearLayout, tall: Boolean = false, accent: Int? = null): MaterialButton {
+            val b = layoutInflater.inflate(R.layout.item_key, parent, false) as MaterialButton
+            if (parent.orientation == LinearLayout.VERTICAL) (b.layoutParams as LinearLayout.LayoutParams).apply { width = LinearLayout.LayoutParams.MATCH_PARENT; weight = 0f }   // a rocker fills its column
+            b.text = key?.label ?: ""
+            if (key == null) { b.visibility = View.INVISIBLE; b.isEnabled = false }
+            if (tall) b.minHeight = (72 * resources.displayMetrics.density).toInt()
+            if (accent != null) { b.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, accent)); b.setTextColor(android.graphics.Color.WHITE) }
+            if (key != null) b.setOnClickListener { press(key) }
+            parent.addView(b)
+            return b
+        }
+        fun row(vararg keys: RemoteKey?, tall: Boolean = false, accents: Map<RemoteKey, Int> = emptyMap()): LinearLayout {
+            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT) }
+            for (k in keys) key(k, r, tall, k?.let { accents[it] })
+            column.addView(r)
+            return r
+        }
+        fun heading(text: String) {
+            column.addView(TextView(this).apply {
+                this.text = text; setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_LabelLarge)
+                setPadding((6 * resources.displayMetrics.density).toInt(), (14 * resources.displayMetrics.density).toInt(), 0, (2 * resources.displayMetrics.density).toInt())
+            })
+        }
+        row(RemoteKey.POWER, RemoteKey.INPUT, RemoteKey.MUTE, accents = mapOf(RemoteKey.POWER to R.color.adhush_ducked, RemoteKey.MUTE to R.color.adhush_teaching))
+        // Volume rocker | D-pad | channel rocker.
+        val cluster = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT) }
+        fun col(weight: Float) = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, weight) }
+        val vol = col(1f); key(RemoteKey.VOL_UP, vol, tall = true); key(RemoteKey.VOL_DOWN, vol, tall = true)
+        val pad = col(2f)
+        for (line in listOf(listOf(null, RemoteKey.UP, null), listOf(RemoteKey.LEFT, RemoteKey.ENTER, RemoteKey.RIGHT), listOf(null, RemoteKey.DOWN, null))) {
+            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT) }
+            for (k in line) key(k, r, accent = if (k == RemoteKey.ENTER) R.color.adhush_primary else null)
+            pad.addView(r)
+        }
+        val ch = col(1f); key(RemoteKey.CH_UP, ch, tall = true); key(RemoteKey.CH_DOWN, ch, tall = true)
+        cluster.addView(vol); cluster.addView(pad); cluster.addView(ch)
+        column.addView(cluster)
+        row(RemoteKey.MENU, RemoteKey.RETURN, RemoteKey.EXIT, RemoteKey.SMART)
+        heading("Channels")
+        row(RemoteKey.DIGIT_1, RemoteKey.DIGIT_2, RemoteKey.DIGIT_3)
+        row(RemoteKey.DIGIT_4, RemoteKey.DIGIT_5, RemoteKey.DIGIT_6)
+        row(RemoteKey.DIGIT_7, RemoteKey.DIGIT_8, RemoteKey.DIGIT_9)
+        row(RemoteKey.DOT, RemoteKey.DIGIT_0, RemoteKey.ENT)
+        row(RemoteKey.FLASHBACK, RemoteKey.FAV)
+        heading("Playback and picture")
+        row(RemoteKey.REW, RemoteKey.PLAY, RemoteKey.PAUSE, RemoteKey.FF)
+        row(RemoteKey.DISPLAY, RemoteKey.CC, RemoteKey.AUDIO, RemoteKey.SLEEP)
+        row(RemoteKey.AV_MODE, RemoteKey.VIEW_MODE, RemoteKey.FREEZE, RemoteKey.NETFLIX)
+    }
 
     private fun say(line: String) { AppLog.i("remote", line); runOnUiThread { findViewById<TextView>(R.id.remoteStatus).text = line } }
 
@@ -122,17 +171,4 @@ class RemoteActivity : AppCompatActivity() {
 
     private fun closeOwn() { val t = ownTransport; own = null; ownTransport = null; if (t != null) io.execute { runCatching { t.close() } } }
 
-    companion object {
-        /** Five columns; null is a spacer. */
-        val LAYOUT: List<RemoteKey?> = listOf(
-            RemoteKey.POWER, RemoteKey.INPUT, RemoteKey.DISPLAY, RemoteKey.CC, RemoteKey.SLEEP,
-            RemoteKey.DIGIT_1, RemoteKey.DIGIT_2, RemoteKey.DIGIT_3, RemoteKey.VOL_UP, RemoteKey.CH_UP,
-            RemoteKey.DIGIT_4, RemoteKey.DIGIT_5, RemoteKey.DIGIT_6, RemoteKey.VOL_DOWN, RemoteKey.CH_DOWN,
-            RemoteKey.DIGIT_7, RemoteKey.DIGIT_8, RemoteKey.DIGIT_9, RemoteKey.MUTE, RemoteKey.FLASHBACK,
-            RemoteKey.DOT, RemoteKey.DIGIT_0, RemoteKey.ENT, RemoteKey.FAV, RemoteKey.AUDIO,
-            RemoteKey.MENU, RemoteKey.UP, RemoteKey.RETURN, RemoteKey.EXIT, RemoteKey.SMART,
-            RemoteKey.LEFT, RemoteKey.ENTER, RemoteKey.RIGHT, RemoteKey.AV_MODE, RemoteKey.VIEW_MODE,
-            RemoteKey.REW, RemoteKey.DOWN, RemoteKey.FF, RemoteKey.PLAY, RemoteKey.PAUSE,
-        )
-    }
 }

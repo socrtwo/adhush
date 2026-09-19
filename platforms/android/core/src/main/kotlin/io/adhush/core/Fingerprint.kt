@@ -26,8 +26,14 @@ data class FingerprintConfig(
      * last (the gap between two spots, a noisy second) before the duck is released.
      */
     val materialGraceS: Double = 5.0,
-    /** A taught break shorter than this is a slip of the finger, not material. */
-    val minMaterialS: Double = 5.0,
+    /** A taught break shorter than this is a slip of the finger, not material (ADR 0027, amended: half a minute). */
+    val minMaterialS: Double = 30.0,
+    /** A taught break longer than this ran into the show: only its first six minutes are kept. */
+    val maxMaterialS: Double = 360.0,
+    /** A remembered break whose duck ends sooner than this (the show's own evidence ended it) was a false match ... */
+    val falseMatchS: Double = 10.0,
+    /** ... and this many false matches forget the record, as Not an ad does at once. */
+    val falseMatchLimit: Int = 2,
     /** The rolling hold judges only this much of the most recent audio, so it lets go soon after a spot ends. */
     val materialRecentS: Double = 2.0,
 )
@@ -252,16 +258,31 @@ class AudioLearner(private val store: FingerprintStore, private val matcher: Aud
      * spots may come back in any order, alone, or cut down.
      */
     fun learnMaterial(startTs: Double, endTs: Double, audioBlocks: List<Pair<Double, Int>>): Int? {
-        val durationS = endTs - startTs
+        val end = minOf(endTs, startTs + cfg.maxMaterialS)   // a forgotten Show's back: keep the break, drop the show
+        val durationS = end - startTs
         if (durationS < cfg.minMaterialS) return null
-        val blocks = audioBlocks.filter { it.first in startTs..endTs }
+        val blocks = audioBlocks.filter { it.first in startTs..end }
         if (blocks.size < cfg.minVerifyBlocks) return null
         val id = store.addAd(durationS, blocks.map { Pair(it.first - startTs, it.second) }, startTs, AdKind.MATERIAL)
         matcher.refresh()
         return id
     }
 
-    fun forget(adId: Int) { store.deleteAd(adId); matcher.refresh() }
+    fun forget(adId: Int) { store.deleteAd(adId); matcher.refresh(); falseHits.remove(adId) }
+
+    private val falseHits = HashMap<Int, Int>()
+    val falseMatchS: Double get() = cfg.falseMatchS
+
+    /** A duck on this record ended almost at once on programme evidence: a false match. Enough of them forget the record; true when it did. */
+    fun falseMatch(adId: Int): Boolean {
+        val n = (falseHits[adId] ?: 0) + 1
+        falseHits[adId] = n
+        if (n < cfg.falseMatchLimit) return false
+        forget(adId); return true
+    }
+
+    /** Forget everything remembered (the memory page's Forget). */
+    fun forgetAll() { for (a in store.ads()) store.deleteAd(a.adId); falseHits.clear(); matcher.refresh() }
 
     fun observeDuration(adId: Int, durationS: Double) {
         val record = store.get(adId) ?: return

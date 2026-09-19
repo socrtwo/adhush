@@ -275,11 +275,23 @@ class Pipeline:
             return
         duration = ts - start
         if match is not None:
-            # Known ad: fold this airing's duration in. An early unmute
-            # (program evidence inside the window) shortens the estimate.
             self._fp.abort_match()
-            self._learner.observe_duration(match.ad_id, duration)
+            if duration < self._learner.false_match_s:
+                # Ended within seconds on the show's own evidence: the record
+                # matched the show, not a break (ADR 0027, amended).
+                if self._learner.false_match(match.ad_id) and self._matcher is not None:
+                    self._matcher.refresh()
+            else:
+                # Known ad: fold this airing's duration in. An early unmute
+                # (program evidence inside the window) shortens the estimate.
+                self._learner.observe_duration(match.ad_id, duration)
         else:
+            if confirm:
+                # A taught break: a slip of the finger teaches nothing, and one
+                # that ran into the show is cut at the longest break there is.
+                if duration < self._learner.min_material_s:
+                    return
+                duration = min(duration, self._learner.max_material_s)
             learned = self._learner.learn_segment(
                 start,
                 duration,

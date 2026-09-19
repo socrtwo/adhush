@@ -3,6 +3,38 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.28.1] - 2026-09-19
+### Fixed
+- **The first evening's loop** (ADR 0027, amended). A taught break that
+  ran into the show, two mis-taps of ten and forty seconds, and a jingle
+  "opener" cut from the show's own bed fed each other: remembered breaks
+  matched the show, a closer learned from the show ended every duck in
+  three seconds, and each three-second duck taught more jingles. Now, in
+  both cores: a break shorter than 20 s teaches the jingle learner
+  nothing; two hearings of a sting within half an hour count once, so one
+  session cannot promote it; a taught break under half a minute is a slip
+  of the finger and one over six minutes is cut there; a remembered break
+  whose duck ends within ten seconds on programme evidence is a false
+  match, and two of them forget the record.
+- Android: pressing Download twice started two writers on the same model
+  file and the second one deleted the finished model. One download at a
+  time, and a finished model is never deleted.
+### Added
+- Android: **Forget what it learned…** (Methods page, and the ⋮ menu):
+  tick remembered breaks, jingles, the break clock or scripts and they are
+  gone. **Save to a file** on the Log page (and the ⋮ menu) writes the log
+  through the system file picker, beside Share.
+### Changed
+- Android: the set-up wizard is a button on the Home page next to Start,
+  Stop, Test TV and Remote, labelled as the wizard on its own screen, and
+  never opens by itself. The Home page's timed ducks are a row of chips;
+  Is an ad and Show's back sit side by side; the test output appears only
+  once there is some. The remote is laid out like one: power, input and
+  mute on top, volume and channel rockers either side of a real D-pad,
+  then the number pad, transport and picture keys; every key is at least
+  56 dp tall. Buttons and cards are taller and rounder throughout, and
+  the app has proper dark-mode colours.
+
 ## [0.28.0] - 2026-09-18
 ### Added
 - **Jingle families** (ADR 0027): a learned sting is also recognised

@@ -211,7 +211,7 @@ class AdHushService : Service(), LifecycleOwner {
             }
         } } catch (e: Exception) { update("TV path ${settings.control}: ${e.message}"); stopSelf(); return }
         controller = ctl
-        val store = FileFingerprintStore(File(filesDir, "ads.tsv"))
+        val store = FileFingerprintStore(File(filesDir, ADS_FILE))
         val cameraOk = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         val logoWanted = settings.camera && cameraOk
         val captionsWanted = settings.captions && cameraOk
@@ -474,7 +474,7 @@ class AdHushService : Service(), LifecycleOwner {
             override fun onStop() { main.post { if (stream != null) { update("stream capture ended by Android — stream learning stopped"); stopSelf() } } }
         }, main)
         projection = mp
-        val store = FileFingerprintStore(File(filesDir, "ads.tsv")); streamStore = store
+        val store = FileFingerprintStore(File(filesDir, ADS_FILE)); streamStore = store
         val speechWanted = settings.speech && SpeechSource.isInstalled(this)
         val cloudWanted = settings.judgeCloud && settings.claudeKey.isNotBlank()
         val localWanted = settings.judgeLocal && LocalJudge.isInstalled(this)
@@ -677,6 +677,7 @@ class AdHushService : Service(), LifecycleOwner {
         const val EXTRA_SECONDS = "seconds"
         const val ACTION_KEY = "io.adhush.android.KEY"
         const val EXTRA_KEY = "key"
+        const val ADS_FILE = "ads.tsv"
         const val CLOCK_FILE = "clock.tsv"
         const val ACTION_STREAM_START = "io.adhush.android.STREAM_START"
         const val EXTRA_RESULT_CODE = "result_code"

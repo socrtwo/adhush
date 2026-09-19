@@ -363,7 +363,7 @@ ad** counts against the opener that fired and demotes it when it has been
 wrong as often as right. A channel with no sting never promotes anything.
 The learned stings live in `jingles.tsv` and travel with the shared memory.
 
-Since 0.28.0 (ADR 0027) a sting is also recognised transposed by up to two
+Since 0.28.1 (ADR 0027) a sting is also recognised transposed by up to two
 semitones or stretched by up to a tenth in tempo — the same house sting
 re-cut per show — at a slightly higher bar, and a re-cut heard live counts
 for the sting it resembles. Every jingle remembers the local hours it has
@@ -373,6 +373,25 @@ stinger** — the whoosh or hit on the cut, with no tune to learn — is a
 separate default-weight detector that rides on the Loudness method: a
 short noisy burst over the bed, then the level moves. It tips the balance
 for a couple of seconds and never ducks alone.
+
+## When it learned nonsense (0.28.1)
+
+A bad evening — a teach session that ran into the show, a couple of
+mis-taps — can leave the memory matching the show itself. Four guards now
+stop that feeding on itself (ADR 0027, amended): a break shorter than
+twenty seconds teaches the jingle learner nothing; two hearings of a sting
+within half an hour count once; a taught bracket under half a minute is a
+slip of the finger and one over six minutes is cut there; and a remembered
+break whose duck ends within ten seconds on the show's own evidence is a
+false match — two of them forget it. When that is not enough, **Forget
+what it learned…** (Methods page, or the ⋮ menu) wipes the remembered
+breaks, the jingles, the break clock or the scripts, each on its own tick.
+
+The Log page's **Save to a file** writes the log through the system file
+picker (Downloads by default) beside Share. The set-up wizard is a button
+on the Home page next to Start, Stop, Test TV and Remote, and never opens
+by itself; the remote is laid out like one, with the volume and channel
+rockers either side of a D-pad and a number pad below.
 
 ## Learn from a stream (0.19.0)
 

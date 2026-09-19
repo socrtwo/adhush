@@ -67,3 +67,33 @@ Three additions, in both cores, none of them a new configuration step.
 - A sting learned at nine in the morning that is also the nine-at-night
   sting simply collects both hours; the mechanism only ever admits a
   jingle earlier, never later.
+
+## Amendment (0.28.1, 2026-09-19)
+
+The first evening at a news channel showed the three additions feeding on
+polluted memories. A taught break that ran into the show, two mis-taps of
+ten and forty seconds, and a jingle "opener" cut from the show's own bed
+fed each other: remembered breaks matched the show; a closer learned from
+the show said *programme present* three seconds into every duck; and each
+three-second duck was "a real break" that taught more openers, which the
+hour-of-day rule then trusted after two. The set ducked for seconds every
+ten to twenty seconds.
+
+Four rules, in both cores, all default-on:
+
+- The jingle learner ignores a break shorter than `min_break_s` (20 s).
+- Two hearings of a sting closer together than `hit_spacing_s` (30 min,
+  by the wall clock) count as one hit: one session cannot promote it. Each
+  jingle keeps the wall time of its last counted hit (TSV column 9).
+- A taught break shorter than `min_material_s` (30 s) is a slip of the
+  finger and teaches nothing; longer than `max_material_s` (6 min) it is
+  cut there, since the viewer forgot to press Show's back.
+- A remembered break whose duck ends sooner than `false_match_s` (10 s)
+  was ended by the show's own evidence: a false match. `false_match_limit`
+  (2) of them forget the record, as "Not an ad" does at once.
+
+Family matching still counts a variant hearing as a hit for the sting it
+resembles; the spacing rule, not the family rule, is what stops one
+evening's bed music from becoming a jingle. The phone also gained a
+*Forget what it learned* button, because a bad evening is cheaper to erase
+than to unlearn.
