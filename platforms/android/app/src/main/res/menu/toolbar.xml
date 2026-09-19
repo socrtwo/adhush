@@ -4,4 +4,5 @@
     <item android:id="@+id/action_wizard" android:title="Set-up wizard" app:showAsAction="never" />
     <item android:id="@+id/action_forget" android:title="Forget what it learned…" app:showAsAction="never" />
     <item android:id="@+id/action_save_log" android:title="Save the log to a file" app:showAsAction="never" />
+    <item android:id="@+id/action_delete_partial" android:title="Delete partial model downloads" app:showAsAction="never" />
 </menu>

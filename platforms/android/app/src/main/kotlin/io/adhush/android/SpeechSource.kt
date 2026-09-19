@@ -83,29 +83,49 @@ class SpeechSource(modelDir: File, private val onWords: (List<Word>) -> Unit) {
         fun modelDir(context: Context) = File(File(context.filesDir, "speech"), modelName(context))
         fun isInstalled(context: Context) = File(modelDir(context), "am").isDirectory
 
-        /** Download the chosen model zip and unpack it; progress is 0..100. Blocking — call off the main thread. */
+        fun partFile(context: Context) = File(File(context.filesDir, "speech"), "${modelName(context)}.zip.part")
+        /** A stopped download waiting to be resumed, or null. */
+        fun partial(context: Context) = Downloads.partial(partFile(context))
+        fun deletePartials(context: Context): Int {
+            val root = File(context.filesDir, "speech")
+            root.listFiles { f -> f.isDirectory && f.name.endsWith(".tmp") }?.forEach { it.deleteRecursively() }
+            return Downloads.deletePartials(root)
+        }
+        @Volatile var installing = false
+            private set
+
+        /**
+         * Download the chosen model zip and unpack it; progress is 0..100.
+         * Blocking — call off the main thread. The zip resumes if it stopped
+         * and is checked against its expected size; it is unpacked into a
+         * folder of its own and moved into place whole, so a half model can
+         * never count as installed (0.28.4).
+         */
         fun install(context: Context, onProgress: (Int) -> Unit) {
-            val root = File(context.filesDir, "speech"); root.mkdirs()
-            val name = modelName(context)
-            val zip = File(root, "$name.zip")
-            val conn = URL(modelUrl(name)).openConnection() as HttpURLConnection
-            conn.connectTimeout = 15_000; conn.readTimeout = 30_000
-            val total = conn.contentLength.toLong()
-            conn.inputStream.use { inp -> FileOutputStream(zip).use { out ->
-                val buf = ByteArray(64 * 1024); var got = 0L; var n: Int
-                while (inp.read(buf).also { n = it } > 0) { out.write(buf, 0, n); got += n; if (total > 0) onProgress((got * 90 / total).toInt()) }
-            } }
-            ZipInputStream(zip.inputStream().buffered()).use { z ->
-                var e = z.nextEntry
-                while (e != null) {
-                    val f = File(root, e.name)
-                    if (!f.canonicalPath.startsWith(root.canonicalPath)) throw SecurityException("zip entry outside the model folder")
-                    if (e.isDirectory) f.mkdirs() else { f.parentFile?.mkdirs(); FileOutputStream(f).use { z.copyTo(it) } }
-                    e = z.nextEntry
+            synchronized(this) { check(!installing) { "a download is already running — wait for it to finish" }; installing = true }
+            try {
+                val root = File(context.filesDir, "speech"); root.mkdirs()
+                val name = modelName(context)
+                if (isInstalled(context)) { onProgress(100); return }
+                val part = partFile(context)
+                Downloads.fetch(modelUrl(name), part, { p -> onProgress(p * 90 / 100) }, 15_000, 30_000)
+                val tmp = File(root, "$name.tmp"); tmp.deleteRecursively(); tmp.mkdirs()
+                ZipInputStream(part.inputStream().buffered()).use { z ->
+                    var e = z.nextEntry
+                    while (e != null) {
+                        val f = File(tmp, e.name)
+                        if (!f.canonicalPath.startsWith(tmp.canonicalPath)) throw SecurityException("zip entry outside the model folder")
+                        if (e.isDirectory) f.mkdirs() else { f.parentFile?.mkdirs(); FileOutputStream(f).use { z.copyTo(it) } }
+                        e = z.nextEntry
+                    }
                 }
-            }
-            zip.delete()
-            onProgress(100)
+                val unpacked = File(tmp, name).takeIf { File(it, "am").isDirectory } ?: tmp.takeIf { File(it, "am").isDirectory }
+                    ?: throw java.io.IOException("the zip did not contain the model — press again to download it afresh").also { part.delete() }
+                val dir = modelDir(context); dir.deleteRecursively()
+                if (!unpacked.renameTo(dir)) throw java.io.IOException("could not move the model into place")
+                tmp.deleteRecursively(); part.delete()
+                onProgress(100)
+            } finally { installing = false }
         }
     }
 }

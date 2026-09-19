@@ -68,7 +68,13 @@ class LocalJudge(modelFile: File) : TranscriptJudge, AutoCloseable {
         fun tier(context: Context): Tier = tier(Settings(context).localModelSize)
         fun tier(key: String): Tier = TIERS.firstOrNull { it.key == key } ?: TIERS[0]
         fun modelFile(context: Context, tier: Tier = tier(context)) = File(File(context.filesDir, "llm"), tier.file)
-        fun isInstalled(context: Context, tier: Tier = tier(context)) = modelFile(context, tier).let { it.isFile && it.length() > 10_000_000 }
+        /** The file is there and, when its expected size is known, every byte of it. */
+        fun isInstalled(context: Context, tier: Tier = tier(context)): Boolean {
+            val f = modelFile(context, tier)
+            if (!f.isFile) return false
+            val expected = File(f.path + ".size").takeIf { it.isFile }?.readText()?.trim()?.toLongOrNull()
+            return if (expected != null) f.length() == expected else f.length() > 10_000_000
+        }
         /** Which sizes are already on the phone. */
         fun installed(context: Context): List<Tier> = TIERS.filter { isInstalled(context, it) }
 
@@ -80,32 +86,28 @@ class LocalJudge(modelFile: File) : TranscriptJudge, AutoCloseable {
         @Volatile var installing = false
             private set
 
-        /** Download the chosen size once; progress is 0..100. Blocking — call off the main thread. Resumable on retry. */
+        fun partFile(context: Context, tier: Tier = tier(context)) = File(modelFile(context, tier).path + ".part")
+        /** A stopped download waiting to be resumed, or null. */
+        fun partial(context: Context, tier: Tier = tier(context)) = Downloads.partial(partFile(context, tier))
+        fun deletePartials(context: Context) = Downloads.deletePartials(File(context.filesDir, "llm"))
+
+        /**
+         * Download the chosen size once; progress is 0..100. Blocking — call off
+         * the main thread. Resumes a stopped download; a short file is never
+         * installed (0.28.4). Its expected size is kept beside it, so a model
+         * counts as installed only when every byte is there.
+         */
         fun install(context: Context, url: String, onProgress: (Int) -> Unit, tier: Tier = tier(context)) {
             synchronized(this) { check(!installing) { "a download is already running — wait for it to finish" }; installing = true }
-            try { installLocked(context, url, onProgress, tier) } finally { installing = false }
-        }
-
-        private fun installLocked(context: Context, url: String, onProgress: (Int) -> Unit, tier: Tier) {
-            val target = modelFile(context, tier); target.parentFile?.mkdirs()
-            if (isInstalled(context, tier)) { onProgress(100); return }
-            val part = File(target.path + ".part")
-            val have = if (part.isFile) part.length() else 0L
-            val conn = URL(url).openConnection() as HttpURLConnection
-            conn.instanceFollowRedirects = true
-            conn.connectTimeout = 20_000; conn.readTimeout = 60_000
-            if (have > 0) conn.setRequestProperty("Range", "bytes=$have-")
-            val code = conn.responseCode
-            if (code !in 200..299) throw IllegalStateException("download failed: HTTP $code")
-            val resuming = code == 206
-            val total = (if (resuming) have else 0L) + conn.contentLengthLong.coerceAtLeast(0L)
-            conn.inputStream.use { inp -> FileOutputStream(part, resuming).use { out ->
-                val buf = ByteArray(256 * 1024); var got = if (resuming) have else 0L; var n: Int
-                while (inp.read(buf).also { n = it } > 0) { out.write(buf, 0, n); got += n; if (total > 0) onProgress((got * 100 / total).toInt().coerceIn(0, 99)) }
-            } }
-            // Never delete a finished model to make room for a part that is not there (the double-press bug of 0.28.0).
-            if (part.isFile && !part.renameTo(target)) { target.delete(); if (!part.renameTo(target)) throw IllegalStateException("could not move the model into place") }
-            onProgress(100)
+            try {
+                val target = modelFile(context, tier)
+                if (isInstalled(context, tier)) { onProgress(100); return }
+                val part = partFile(context, tier)
+                Downloads.fetch(url, part, onProgress)
+                File(target.path + ".size").writeText(part.length().toString())
+                Downloads.install(part, target)
+                onProgress(100)
+            } finally { installing = false }
         }
     }
 }

@@ -3,6 +3,25 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.28.4] - 2026-09-19
+### Changed
+- Android buttons change only when something real happened; the press
+  animation of 0.28.3 is gone. A button that started a job (a model
+  download, Test TV, an AI test, an import, saving the log) stays blue
+  and disabled with the job's progress as its label until the job ends,
+  so it cannot be pressed twice; then green with a tick or red with a
+  cross, and the label the outcome calls for.
+### Fixed
+- Model downloads can no longer leave a short file installed as if it
+  were whole. The bytes go to a `.part` file with the expected size kept
+  beside it; a download that stops short is an error saying how far it
+  got, the button reads Resume with the percentage, and the next press
+  continues from there. Only a part of exactly the expected size is moved
+  into place, and a model counts as installed only when every byte is
+  there. The speech model is unpacked into a folder of its own and moved
+  into place whole. Delete partial model downloads in the ⋮ menu throws a
+  stopped download away.
+
 ## [0.28.3] - 2026-09-19
 ### Added
 - Android: every button answers the finger. It dips when pressed, turns

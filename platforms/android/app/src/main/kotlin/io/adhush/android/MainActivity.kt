@@ -105,6 +105,7 @@ class MainActivity : AppCompatActivity() {
                     R.id.action_wizard -> { save(); startActivity(Intent(this@MainActivity, SetupWizardActivity::class.java)); true }
                     R.id.action_forget -> { forgetMemory(); true }
                     R.id.action_save_log -> { saveLog(); true }
+                    R.id.action_delete_partial -> { deletePartialDownloads(); true }
                     else -> false
                 }
             }
@@ -179,7 +180,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun speechModelLabel(): String {
         val which = if (findViewById<android.widget.RadioGroup>(R.id.speechModelChoice).checkedRadioButtonId == R.id.speechMedium) "medium" else "small"
-        return if (SpeechSource.isInstalled(this)) "Speech model ($which): installed" else "Download the $which speech model (${SpeechSource.SIZES_MB[which]} MB)"
+        if (SpeechSource.isInstalled(this)) return "Speech model ($which): installed"
+        SpeechSource.partial(this)?.let { return "Resume the $which speech model download (${Downloads.describePartial(it)})" }
+        return "Download the $which speech model (${SpeechSource.SIZES_MB[which]} MB)"
     }
 
     /** The status line, the card's colour, the chips and the buttons all follow the service. */
@@ -254,6 +257,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun writeLogTo(uri: android.net.Uri) {
+        Feedback.busy(findViewById<Button>(R.id.saveLog), "Saving…")
         thread {
             val result = try {
                 contentResolver.openOutputStream(uri, "wt")?.use { out ->
@@ -265,8 +269,17 @@ class MainActivity : AppCompatActivity() {
                     "log saved (${bytes / 1024} KB)"
                 } ?: "could not open the file to write"
             } catch (e: Exception) { AppLog.e("app", "saving the log failed", e); "saving the log failed: ${e.message}" }
-            runOnUiThread { log(result); if (result.startsWith("log saved")) Feedback.ok(findViewById<Button>(R.id.saveLog)) else Feedback.fail(findViewById<Button>(R.id.saveLog)) }
+            runOnUiThread { log(result); if (result.startsWith("log saved")) Feedback.ok(findViewById<Button>(R.id.saveLog), "Save to a file") else Feedback.fail(findViewById<Button>(R.id.saveLog), "Save to a file") }
         }
+    }
+
+    /** A stopped model download is kept for resuming; this throws it away so the next press starts afresh. */
+    private fun deletePartialDownloads() {
+        if (LocalJudge.installing || SpeechSource.installing) { log("a download is running — wait for it, or force-stop the app first"); return }
+        val n = LocalJudge.deletePartials(this) + SpeechSource.deletePartials(this)
+        log(if (n == 0) "no partial downloads to delete" else "deleted $n partial download file(s) — the next press starts from the beginning")
+        findViewById<Button>(R.id.localModel).text = localModelLabel()
+        findViewById<Button>(R.id.speechModel).text = speechModelLabel()
     }
 
     /** "Forget what it learned…": tick what to drop; the files go, the service reads them at its next start. */
@@ -322,37 +335,47 @@ class MainActivity : AppCompatActivity() {
     /** One-time 40 MB download of the offline recogniser's English model, into app-private storage. */
     private fun downloadSpeechModel() {
         save()
+        val b = findViewById<Button>(R.id.speechModel)
         if (SpeechSource.isInstalled(this)) { log("speech model is already installed"); return }
-        log("downloading the ${settings.speechModel} speech model (${SpeechSource.SIZES_MB[settings.speechModel]} MB) …")
+        if (SpeechSource.installing) { log("the speech model is still downloading — one press is enough"); return }
+        val which = settings.speechModel
+        log("downloading the $which speech model (${SpeechSource.SIZES_MB[which]} MB) …")
+        Feedback.busy(b, "Downloading the $which speech model…")
         thread {
             try {
                 var last = -1
-                SpeechSource.install(this) { p -> if (p / 10 != last / 10) { last = p; runOnUiThread { log("speech model: $p%") } } }
-                runOnUiThread { log("speech model installed — switch on Spoken words and Start"); findViewById<Button>(R.id.speechModel).text = speechModelLabel(); Feedback.ok(findViewById<Button>(R.id.speechModel)) }
-            } catch (e: Exception) { AppLog.e("speech", "model download failed", e); runOnUiThread { log("download failed: ${e.message}"); Feedback.fail(findViewById<Button>(R.id.speechModel)) } }
+                var shown = -1
+                SpeechSource.install(this) { p -> if (p != shown) { shown = p; runOnUiThread { Feedback.progress(b, "Downloading the $which speech model: $p %") } }; if (p / 10 != last / 10) { last = p; runOnUiThread { log("speech model: $p%") } } }
+                runOnUiThread { log("speech model installed — switch on Spoken words and Start"); Feedback.ok(b, speechModelLabel()) }
+            } catch (e: Exception) { AppLog.e("speech", "model download failed", e); runOnUiThread { log("download failed: ${e.message}"); Feedback.fail(b, speechModelLabel()) } }
         }
     }
 
     /** The download button's caption for the chosen size. */
     private fun localModelLabel(): String {
         val tier = LocalJudge.tier(settings.localModelSize)
-        return if (LocalJudge.isInstalled(this, tier)) "Local AI model: ${tier.label} installed" else "Download ${tier.label} (${tier.sizeMb} MB)"
+        if (LocalJudge.isInstalled(this, tier)) return "Local AI model: ${tier.label} installed"
+        LocalJudge.partial(this, tier)?.let { return "Resume the ${tier.label} download (${Downloads.describePartial(it)})" }
+        return "Download ${tier.label} (${tier.sizeMb} MB)"
     }
 
     /** One-time download of the chosen on-phone language model into app-private storage; resumes if interrupted. */
     private fun downloadLocalModel() {
         save()
         val tier = LocalJudge.tier(settings.localModelSize)
+        val b = findViewById<Button>(R.id.localModel)
         if (LocalJudge.isInstalled(this, tier)) { log("${tier.label} is already installed"); return }
         if (LocalJudge.installing) { log("the download is still running — one press is enough"); return }
         val url = settings.localModelUrl.ifBlank { tier.url }
         log("downloading ${tier.label} (${tier.sizeMb} MB) — keep the app open, Wi-Fi recommended …")
+        Feedback.busy(b, "Downloading ${tier.label}…")
         thread {
             try {
                 var last = -1
-                LocalJudge.install(this, url, { p -> if (p / 5 != last / 5) { last = p; runOnUiThread { log("${tier.label}: $p%") } } }, tier)
-                runOnUiThread { log("${tier.label} installed — switch on Local AI and Start"); findViewById<Button>(R.id.localModel).text = localModelLabel(); Feedback.ok(findViewById<Button>(R.id.localModel)) }
-            } catch (e: Exception) { AppLog.e("judge", "model download failed", e); runOnUiThread { log("download failed: ${e.message} — press again to resume"); Feedback.fail(findViewById<Button>(R.id.localModel)) } }
+                var shown = -1
+                LocalJudge.install(this, url, { p -> if (p != shown) { shown = p; runOnUiThread { Feedback.progress(b, "Downloading ${tier.label}: $p % — keep the app open") } }; if (p / 5 != last / 5) { last = p; runOnUiThread { log("${tier.label}: $p%") } } }, tier)
+                runOnUiThread { log("${tier.label} installed — switch on Local AI and Start"); Feedback.ok(b, localModelLabel()) }
+            } catch (e: Exception) { AppLog.e("judge", "model download failed", e); runOnUiThread { log("download failed: ${e.message}"); Feedback.fail(b, localModelLabel()) } }
         }
     }
 
@@ -367,6 +390,7 @@ class MainActivity : AppCompatActivity() {
             else { if (!LocalJudge.isInstalled(this)) { log("download the local AI model first"); return }; LocalJudge.APP_CONTEXT = applicationContext; LocalJudge(LocalJudge.modelFile(this)) }
         } catch (e: Exception) { AppLog.e("judge", "could not start the judge", e); log("could not start: ${e.message}"); return }
         log(if (cloud) "asking ${settings.claudeModel} …" else "asking the local AI (the first answer takes longer while the model loads) …")
+        Feedback.busy(findViewById<Button>(if (cloud) R.id.testClaude else R.id.testLocal), "Asking…")
         thread {
             try {
                 for (t in samples) {
@@ -375,8 +399,8 @@ class MainActivity : AppCompatActivity() {
                     val ms = System.currentTimeMillis() - t0
                     runOnUiThread { log("  \"${t.take(50)}…\" → " + (v?.let { "${if (it.commercial) "COMMERCIAL" else "SHOW"} ${"%.0f".format(it.confidence * 100)}%: ${it.reason}" } ?: "no clear answer") + " ($ms ms)") }
                 }
-                runOnUiThread { log("done — the first should say COMMERCIAL, the second SHOW"); Feedback.ok(findViewById<Button>(if (cloud) R.id.testClaude else R.id.testLocal)) }
-            } catch (e: Exception) { AppLog.e("judge", "test failed", e); runOnUiThread { log("✗ FAILED: ${e.message}"); Feedback.fail(findViewById<Button>(if (cloud) R.id.testClaude else R.id.testLocal)) } }
+                runOnUiThread { log("done — the first should say COMMERCIAL, the second SHOW"); Feedback.ok(findViewById<Button>(if (cloud) R.id.testClaude else R.id.testLocal), if (cloud) "Test Claude" else "Test the local AI") }
+            } catch (e: Exception) { AppLog.e("judge", "test failed", e); runOnUiThread { log("✗ FAILED: ${e.message}"); Feedback.fail(findViewById<Button>(if (cloud) R.id.testClaude else R.id.testLocal), if (cloud) "Test Claude" else "Test the local AI") } }
             finally { (judge as? AutoCloseable)?.let { runCatching { it.close() } } }
         }
     }
@@ -407,10 +431,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun importMemory(uri: android.net.Uri) {
         if (AdHushService.running != null) { log("stop AdHush first — the memory is read when it starts"); return }
+        Feedback.busy(findViewById<Button>(R.id.importMemory), "Importing…")
         thread {
             val result = try { contentResolver.openInputStream(uri)?.use { Memory.import(this, it) } ?: "could not open the file" }
             catch (e: Exception) { AppLog.e("memory", "import failed", e); "import failed: ${e.message}" }
-            runOnUiThread { log(result); if (result.startsWith("imported")) Feedback.ok(findViewById<Button>(R.id.importMemory)) else Feedback.fail(findViewById<Button>(R.id.importMemory)) }
+            runOnUiThread { log(result); if (result.startsWith("imported")) Feedback.ok(findViewById<Button>(R.id.importMemory), "Import memory from a file") else Feedback.fail(findViewById<Button>(R.id.importMemory), "Import memory from a file") }
         }
     }
 
@@ -506,6 +531,7 @@ class MainActivity : AppCompatActivity() {
     /** Test mode: the same exchange as a real duck, over whichever connection is chosen, printed line by line. */
     private fun runTest() {
         save()
+        Feedback.busy(findViewById<Button>(R.id.testHome), "Testing the TV…"); Feedback.busy(findViewById<Button>(R.id.test), "Testing the TV…")
         findViewById<TextView>(R.id.testResult).text = ""
         findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.nav).selectedItemId = R.id.nav_home
         // The Sharp allows one control connection: while the service holds it, the test must go through the service.
@@ -516,8 +542,8 @@ class MainActivity : AppCompatActivity() {
     /** A test line goes to the Home card, the Log page and the log file. */
     private fun testLine(line: String) {
         log(line)
-        if (line.startsWith("✓")) { Feedback.ok(findViewById<Button>(R.id.testHome)); Feedback.ok(findViewById<Button>(R.id.test)) }
-        if (line.startsWith("✗")) { Feedback.fail(findViewById<Button>(R.id.testHome)); Feedback.fail(findViewById<Button>(R.id.test)) }
+        if (line.startsWith("✓")) { Feedback.ok(findViewById<Button>(R.id.testHome), "Test TV"); Feedback.ok(findViewById<Button>(R.id.test), "Test TV") }
+        if (line.startsWith("✗") || line.startsWith("no ") || line.startsWith("not running") || line.startsWith("this phone has no")) { Feedback.fail(findViewById<Button>(R.id.testHome), "Test TV"); Feedback.fail(findViewById<Button>(R.id.test), "Test TV") }
         findViewById<View>(R.id.testCard).visibility = View.VISIBLE
         val v = findViewById<TextView>(R.id.testResult)
         v.text = (v.text.toString() + "\n" + line).trim().lines().takeLast(14).joinToString("\n")

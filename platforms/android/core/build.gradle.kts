@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "io.adhush"
-version = "0.28.3"
+version = "0.28.4"
 
 kotlin {
     compilerOptions {
