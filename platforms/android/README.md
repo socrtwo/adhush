@@ -363,7 +363,7 @@ ad** counts against the opener that fired and demotes it when it has been
 wrong as often as right. A channel with no sting never promotes anything.
 The learned stings live in `jingles.tsv` and travel with the shared memory.
 
-Since 0.28.3 (ADR 0027) a sting is also recognised transposed by up to two
+Since 0.28.0 (ADR 0027) a sting is also recognised transposed by up to two
 semitones or stretched by up to a tenth in tempo — the same house sting
 re-cut per show — at a slightly higher bar, and a re-cut heard live counts
 for the sting it resembles. Every jingle remembers the local hours it has
@@ -374,7 +374,29 @@ separate default-weight detector that rides on the Loudness method: a
 short noisy burst over the bed, then the level moves. It tips the balance
 for a couple of seconds and never ducks alone.
 
-## When it learned nonsense (0.28.3)
+## What the buttons tell you (0.28.4)
+
+A button changes only when something real happened, never as a flex for
+a tap that went nowhere. Three looks: **blue and greyed**, its label the
+job's progress ("Downloading Qwen 3: 43 %", "Testing the TV…"), for as
+long as the job it started is running, so a second press cannot start it
+twice; **green with a tick** for a second and a half once what it asked
+for went through; **red with a cross** when it did not (nothing running,
+the set did not answer, an override in the way; the Log page says which).
+Is an ad, Show's back, Not an ad, the timed ducks and every remote key
+turn green or red on the service's word, on the Home page and the remote
+alike. Start turns green and reads Running while AdHush runs; Stop turns
+red then. The teach buttons and the ducks are bright only when they would
+do something right now.
+
+Model downloads cannot leave a short file installed as if it were whole:
+the bytes go to a `.part` file with the expected size kept beside it, a
+download that stops short says how far it got and the button reads
+*Resume* with the percentage, and only a part of exactly the expected size
+is moved into place. **Delete partial model downloads** in the ⋮ menu
+throws a stopped download away.
+
+## When it learned nonsense (0.28.1)
 
 A bad evening — a teach session that ran into the show, a couple of
 mis-taps — can leave the memory matching the show itself. Four guards now
@@ -413,7 +435,7 @@ scripts and the clock between phones (ADR 0018).
 Android's own message: the player marks its window as protected (a DRM
 player does), so the mirrored picture is black, and since a player must
 opt in to being heard through playback capture, the sound is usually
-silence as well. Since 0.28.3 the Home card and the notification say
+silence as well. Since 0.28.2 the Home card and the notification say
 within eight seconds which of the two is happening and what to do: play
 the channel's website in Chrome instead, or play it out loud next to the
 phone and use the normal Start, which hears any player through the
