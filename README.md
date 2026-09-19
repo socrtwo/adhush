@@ -5,7 +5,7 @@ show returns. Nothing is uploaded, nothing is recorded, and no capture
 path is circumvented: it watches and listens the way a person in the room
 does, decides, and presses the volume for you.
 
-**Status 0.28.2: nineteen roadmap phases in, running in real living
+**Status 0.28.3: nineteen roadmap phases in, running in real living
 rooms.** Two implementations share one design, and `docs/adr/` records
 every decision behind both:
 

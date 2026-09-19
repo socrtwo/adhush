@@ -125,6 +125,10 @@ object Help {
         "Not an ad after a jingle duck counts against that jingle; enough wrong calls demote it. Stream learning teaches jingles too, from clean audio. The idea comes from the AdVent project, which measured that three seconds of a sting is enough to recognise it.\n\n" +
         "A channel re-cuts its sting per show, so a version a couple of semitones up or down, or a little faster or slower, counts as the same sting (a family). Each sting also remembers the hours of the day it has opened breaks in: at one of those hours it is trusted after two breaks instead of three. The short whoosh or hit on the cut into a segment — a burst of noise, then the level moves — is heard separately while Loudness is on; it tips the balance for a couple of seconds and never ducks alone.")
 
+    val BUTTONS = Topic("What the buttons tell you",
+        "Every button dips the moment it is pressed. When what it asked for went through it turns green with a tick for a second and a half; when it did not — nothing running, the set did not answer, an override in the way — it turns red with a cross, and the Log page says why. " +
+        "Start turns green and reads Running while AdHush runs; Stop turns red then. Is an ad, Show's back, Not an ad and the timed ducks are bright when they would do something right now and dimmed when they would not: Show's back and Not an ad only while the set is ducked, Is an ad only while it is not already teaching.")
+
     val METHODS = Topic("Choosing methods",
         "Any mix of the ten methods can be on, but AT LEAST ONE must be on or the app has nothing to go on and will refuse to start.\n\n" +
         "Quiet gaps, loudness jumps and the break clock are hints: two of them have to agree before the TV is ducked. Remembered breaks, the channel bug or ticker, spoken words, captions, the two AI judges and a learned break jingle are each strong enough to duck on their own.\n\n" +
@@ -139,7 +143,7 @@ object Help {
         "Test TV talks to the set the way the app does when a commercial comes on: it asks the volume, mutes and unmutes, ducks and restores, and prints every byte it sent and got back. " +
         "If the sound dips twice, the connection works. It uses whatever connection is chosen on the TV page — network, serial cable or infrared.")
 
-    val ALL = listOf(WIZARD, METHODS, BUG, TICKER, SCRIPT, DUCK, TEACH, TIMED, TEST, SILENCE, LOUDNESS, FINGERPRINTS, CAMERA, SPEECH, CAPTIONS, CLAUDE, LOCAL, CLOCK, JINGLE, STREAM)
+    val ALL = listOf(WIZARD, BUTTONS, METHODS, BUG, TICKER, SCRIPT, DUCK, TEACH, TIMED, TEST, SILENCE, LOUDNESS, FINGERPRINTS, CAMERA, SPEECH, CAPTIONS, CLAUDE, LOCAL, CLOCK, JINGLE, STREAM)
 
     fun show(context: Context, topic: Topic) {
         MaterialAlertDialogBuilder(context).setTitle(topic.title).setMessage(topic.body).setPositiveButton("Got it", null).show()

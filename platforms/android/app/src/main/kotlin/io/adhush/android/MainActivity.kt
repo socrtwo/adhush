@@ -38,6 +38,7 @@ class MainActivity : AppCompatActivity() {
             when (i.action) {
                 AdHushService.BROADCAST_STATUS -> showStatus(i.getStringExtra("text") ?: "", i.getBooleanExtra("running", AdHushService.running != null), i.getBooleanExtra("ducked", false), i.getBooleanExtra("teaching", false))
                 AdHushService.BROADCAST_TEST -> testLine(i.getStringExtra("line") ?: "")
+                AdHushService.BROADCAST_ACTION -> actionDone(i)
                 AdHushService.BROADCAST_SURVEY -> {
                     log("— survey saved; press Share survey to send the numbers (no audio is stored) —")
                     (i.getStringExtra("summary") ?: "").lines().reversed().forEach { log(it) }
@@ -56,6 +57,7 @@ class MainActivity : AppCompatActivity() {
             .putExtra(AdHushService.EXTRA_RESULT_CODE, r.resultCode).putExtra(AdHushService.EXTRA_RESULT_DATA, data)
         ContextCompat.startForegroundService(this, i)
         log("stream learning started — play the channel's live stream in Chrome and leave it playing")
+        Feedback.ok(findViewById<Button>(R.id.streamStart))
     }
     private val importLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) importMemory(uri) }
     /** "Save to a file": the system's file picker, so the log lands in Downloads (or anywhere) without a share sheet. */
@@ -77,24 +79,24 @@ class MainActivity : AppCompatActivity() {
             true
         }
         buildHelp()
-        findViewById<Button>(R.id.shareLog).setOnClickListener { shareLog() }
-        findViewById<Button>(R.id.saveLog).setOnClickListener { saveLog() }
-        findViewById<Button>(R.id.forgetMemory).setOnClickListener { forgetMemory() }
-        findViewById<Button>(R.id.clearLog).setOnClickListener { AppLog.clear(); refreshLog(); log("log cleared") }
-        findViewById<Button>(R.id.save).setOnClickListener { save(); log("saved") }
-        findViewById<Button>(R.id.test).setOnClickListener { runTest() }
-        findViewById<Button>(R.id.testHome).setOnClickListener { runTest() }
+        findViewById<Button>(R.id.shareLog).onTap { shareLog() }
+        findViewById<Button>(R.id.saveLog).onTap { saveLog() }
+        findViewById<Button>(R.id.forgetMemory).onTap { forgetMemory() }
+        findViewById<Button>(R.id.clearLog).onTap { b -> AppLog.clear(); refreshLog(); log("log cleared"); Feedback.ok(b) }
+        findViewById<Button>(R.id.save).onTap { b -> save(); log("saved"); Feedback.ok(b) }
+        findViewById<Button>(R.id.test).onTap { runTest() }
+        findViewById<Button>(R.id.testHome).onTap { runTest() }
         openPage(intent)
         // The wizard is a button on this page (and in the toolbar menu), never a window that opens by itself.
         settings.wizardOffered = true
-        findViewById<Button>(R.id.start).setOnClickListener { save(); if (checkBeforeStart()) startWithPermissions(null) }
-        findViewById<Button>(R.id.stop).setOnClickListener { serviceAction(AdHushService.ACTION_STOP) }
-        findViewById<Button>(R.id.notAd).setOnClickListener { serviceAction(AdHushService.ACTION_NOT_AD) }
-        findViewById<Button>(R.id.isAd).setOnClickListener { serviceAction(AdHushService.ACTION_IS_AD) }
-        findViewById<Button>(R.id.showBack).setOnClickListener { serviceAction(AdHushService.ACTION_SHOW_BACK) }
+        findViewById<Button>(R.id.start).onTap { save(); if (checkBeforeStart()) startWithPermissions(null) }
+        findViewById<Button>(R.id.stop).onTap { b -> serviceAction(AdHushService.ACTION_STOP, b) }
+        findViewById<Button>(R.id.notAd).onTap { b -> serviceAction(AdHushService.ACTION_NOT_AD, b) }
+        findViewById<Button>(R.id.isAd).onTap { b -> serviceAction(AdHushService.ACTION_IS_AD, b) }
+        findViewById<Button>(R.id.showBack).onTap { b -> serviceAction(AdHushService.ACTION_SHOW_BACK, b) }
         for ((id, secs) in DUCK_BUTTONS)
-            findViewById<Button>(id).setOnClickListener { serviceAction(AdHushService.ACTION_DUCK_FOR) { it.putExtra(AdHushService.EXTRA_SECONDS, secs) } }
-        findViewById<Button>(R.id.duckMore).setOnClickListener { serviceAction(AdHushService.ACTION_DUCK_MORE) }
+            findViewById<Button>(id).onTap { b -> serviceAction(AdHushService.ACTION_DUCK_FOR, b) { it.putExtra(AdHushService.EXTRA_SECONDS, secs) } }
+        findViewById<Button>(R.id.duckMore).onTap { b -> serviceAction(AdHushService.ACTION_DUCK_MORE, b) }
         findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).apply {
             inflateMenu(R.menu.toolbar)
             setOnMenuItemClickListener { item ->
@@ -107,21 +109,21 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        findViewById<Button>(R.id.openRemote).setOnClickListener { save(); startActivity(Intent(this, RemoteActivity::class.java)) }
-        findViewById<Button>(R.id.wizard).setOnClickListener { save(); startActivity(Intent(this, SetupWizardActivity::class.java)) }
-        findViewById<Button>(R.id.survey).setOnClickListener { save(); if (checkBeforeStart()) startWithPermissions(AdHushService.ACTION_SURVEY) }
-        findViewById<Button>(R.id.share).setOnClickListener { shareSurvey() }
-        findViewById<Button>(R.id.streamStart).setOnClickListener { startStreamLearning() }
-        findViewById<Button>(R.id.streamStop).setOnClickListener { serviceAction(AdHushService.ACTION_STOP) }
-        findViewById<Button>(R.id.shareMemory).setOnClickListener { shareMemory() }
-        findViewById<Button>(R.id.importMemory).setOnClickListener { importLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }
-        findViewById<Button>(R.id.cameraSetup).setOnClickListener { save(); startActivity(Intent(this, CameraSetupActivity::class.java)) }
-        findViewById<Button>(R.id.speechModel).setOnClickListener { downloadSpeechModel() }
-        findViewById<Button>(R.id.learnScripts).setOnClickListener { serviceAction(AdHushService.ACTION_LEARN_SCRIPTS) }
-        findViewById<Button>(R.id.localModel).setOnClickListener { downloadLocalModel() }
+        findViewById<Button>(R.id.openRemote).onTap { save(); startActivity(Intent(this, RemoteActivity::class.java)) }
+        findViewById<Button>(R.id.wizard).onTap { save(); startActivity(Intent(this, SetupWizardActivity::class.java)) }
+        findViewById<Button>(R.id.survey).onTap { save(); if (checkBeforeStart()) startWithPermissions(AdHushService.ACTION_SURVEY) }
+        findViewById<Button>(R.id.share).onTap { shareSurvey() }
+        findViewById<Button>(R.id.streamStart).onTap { startStreamLearning() }
+        findViewById<Button>(R.id.streamStop).onTap { b -> serviceAction(AdHushService.ACTION_STOP, b) }
+        findViewById<Button>(R.id.shareMemory).onTap { shareMemory() }
+        findViewById<Button>(R.id.importMemory).onTap { importLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }
+        findViewById<Button>(R.id.cameraSetup).onTap { save(); startActivity(Intent(this, CameraSetupActivity::class.java)) }
+        findViewById<Button>(R.id.speechModel).onTap { downloadSpeechModel() }
+        findViewById<Button>(R.id.learnScripts).onTap { b -> serviceAction(AdHushService.ACTION_LEARN_SCRIPTS, b) }
+        findViewById<Button>(R.id.localModel).onTap { downloadLocalModel() }
         findViewById<android.widget.RadioGroup>(R.id.localModelChoice).setOnCheckedChangeListener { _, _ -> save(); findViewById<Button>(R.id.localModel).text = localModelLabel() }
-        findViewById<Button>(R.id.testClaude).setOnClickListener { save(); testJudge(cloud = true) }
-        findViewById<Button>(R.id.testLocal).setOnClickListener { save(); testJudge(cloud = false) }
+        findViewById<Button>(R.id.testClaude).onTap { save(); testJudge(cloud = true) }
+        findViewById<Button>(R.id.testLocal).onTap { save(); testJudge(cloud = false) }
         // The ⓘ buttons: one explanation each.
         val info = mapOf(
             R.id.infoMethods to Help.METHODS, R.id.infoSilence to Help.SILENCE, R.id.infoLoudness to Help.LOUDNESS, R.id.infoFingerprints to Help.FINGERPRINTS,
@@ -214,6 +216,12 @@ class MainActivity : AppCompatActivity() {
         tint(R.id.survey, running && on["loudness"] == true, R.color.method_loudness)
         tint(R.id.testClaude, running && on["claude"] == true, R.color.method_claude)
         tint(R.id.localModel, running && on["local"] == true, R.color.method_local)
+        val teachingNow = teaching || text.startsWith("TEACHING")
+        findViewById<Button>(R.id.isAd).alpha = if (running && !teachingNow) 1f else 0.55f
+        findViewById<Button>(R.id.showBack).alpha = if (running && (teachingNow || ducking)) 1f else 0.55f
+        findViewById<Button>(R.id.notAd).alpha = if (running && ducking) 1f else 0.55f
+        for ((id, _) in DUCK_BUTTONS) findViewById<Button>(id).alpha = if (running) 1f else 0.55f
+        findViewById<Button>(R.id.duckMore).alpha = if (running) 1f else 0.55f
         findViewById<TextView>(R.id.dotTeach).setTextColor(ContextCompat.getColor(this, if (teaching || text.startsWith("TEACHING")) R.color.adhush_teaching else if (running) R.color.adhush_program else R.color.method_off))
         findViewById<TextView>(R.id.dotTest).setTextColor(ContextCompat.getColor(this, if (running) R.color.adhush_program else R.color.method_off))
         findViewById<TextView>(R.id.dotTv).setTextColor(ContextCompat.getColor(this, if (running) R.color.adhush_program else R.color.method_off))
@@ -257,7 +265,7 @@ class MainActivity : AppCompatActivity() {
                     "log saved (${bytes / 1024} KB)"
                 } ?: "could not open the file to write"
             } catch (e: Exception) { AppLog.e("app", "saving the log failed", e); "saving the log failed: ${e.message}" }
-            runOnUiThread { log(result) }
+            runOnUiThread { log(result); if (result.startsWith("log saved")) Feedback.ok(findViewById<Button>(R.id.saveLog)) else Feedback.fail(findViewById<Button>(R.id.saveLog)) }
         }
     }
 
@@ -284,6 +292,7 @@ class MainActivity : AppCompatActivity() {
                 val gone = ArrayList<String>()
                 for ((i, name) in files.withIndex()) if (ticked[i]) { java.io.File(filesDir, name).delete(); gone.add(items[i].substringBefore(" (").substringBefore(" —")) }
                 log(if (gone.isEmpty()) "nothing forgotten" else "forgot: ${gone.joinToString(", ")} — it starts learning again at the next Start")
+                if (gone.isNotEmpty()) Feedback.ok(findViewById<Button>(R.id.forgetMemory))
                 showStatus(AdHushService.lastText, false, false, false)
             }
             .show()
@@ -298,11 +307,12 @@ class MainActivity : AppCompatActivity() {
             .putExtra(Intent.EXTRA_STREAM, uri).putExtra(Intent.EXTRA_SUBJECT, "AdHush error log")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         startActivity(Intent.createChooser(send, "Share error log"))
+        Feedback.ok(findViewById<Button>(R.id.shareLog))
     }
 
     override fun onResume() {
         super.onResume()
-        val filter = IntentFilter(AdHushService.BROADCAST_STATUS).apply { addAction(AdHushService.BROADCAST_SURVEY); addAction(AdHushService.BROADCAST_TEST) }
+        val filter = IntentFilter(AdHushService.BROADCAST_STATUS).apply { addAction(AdHushService.BROADCAST_SURVEY); addAction(AdHushService.BROADCAST_TEST); addAction(AdHushService.BROADCAST_ACTION) }
         ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         refreshLog()
         findViewById<Button>(R.id.speechModel).text = speechModelLabel()
@@ -318,8 +328,8 @@ class MainActivity : AppCompatActivity() {
             try {
                 var last = -1
                 SpeechSource.install(this) { p -> if (p / 10 != last / 10) { last = p; runOnUiThread { log("speech model: $p%") } } }
-                runOnUiThread { log("speech model installed — switch on Spoken words and Start"); findViewById<Button>(R.id.speechModel).text = speechModelLabel() }
-            } catch (e: Exception) { AppLog.e("speech", "model download failed", e); runOnUiThread { log("download failed: ${e.message}") } }
+                runOnUiThread { log("speech model installed — switch on Spoken words and Start"); findViewById<Button>(R.id.speechModel).text = speechModelLabel(); Feedback.ok(findViewById<Button>(R.id.speechModel)) }
+            } catch (e: Exception) { AppLog.e("speech", "model download failed", e); runOnUiThread { log("download failed: ${e.message}"); Feedback.fail(findViewById<Button>(R.id.speechModel)) } }
         }
     }
 
@@ -341,8 +351,8 @@ class MainActivity : AppCompatActivity() {
             try {
                 var last = -1
                 LocalJudge.install(this, url, { p -> if (p / 5 != last / 5) { last = p; runOnUiThread { log("${tier.label}: $p%") } } }, tier)
-                runOnUiThread { log("${tier.label} installed — switch on Local AI and Start"); findViewById<Button>(R.id.localModel).text = localModelLabel() }
-            } catch (e: Exception) { AppLog.e("judge", "model download failed", e); runOnUiThread { log("download failed: ${e.message} — press again to resume") } }
+                runOnUiThread { log("${tier.label} installed — switch on Local AI and Start"); findViewById<Button>(R.id.localModel).text = localModelLabel(); Feedback.ok(findViewById<Button>(R.id.localModel)) }
+            } catch (e: Exception) { AppLog.e("judge", "model download failed", e); runOnUiThread { log("download failed: ${e.message} — press again to resume"); Feedback.fail(findViewById<Button>(R.id.localModel)) } }
         }
     }
 
@@ -365,8 +375,8 @@ class MainActivity : AppCompatActivity() {
                     val ms = System.currentTimeMillis() - t0
                     runOnUiThread { log("  \"${t.take(50)}…\" → " + (v?.let { "${if (it.commercial) "COMMERCIAL" else "SHOW"} ${"%.0f".format(it.confidence * 100)}%: ${it.reason}" } ?: "no clear answer") + " ($ms ms)") }
                 }
-                runOnUiThread { log("done — the first should say COMMERCIAL, the second SHOW") }
-            } catch (e: Exception) { AppLog.e("judge", "test failed", e); runOnUiThread { log("✗ FAILED: ${e.message}") } }
+                runOnUiThread { log("done — the first should say COMMERCIAL, the second SHOW"); Feedback.ok(findViewById<Button>(if (cloud) R.id.testClaude else R.id.testLocal)) }
+            } catch (e: Exception) { AppLog.e("judge", "test failed", e); runOnUiThread { log("✗ FAILED: ${e.message}"); Feedback.fail(findViewById<Button>(if (cloud) R.id.testClaude else R.id.testLocal)) } }
             finally { (judge as? AutoCloseable)?.let { runCatching { it.close() } } }
         }
     }
@@ -392,6 +402,7 @@ class MainActivity : AppCompatActivity() {
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         startActivity(Intent.createChooser(send, "Share this phone's memory"))
         log("memory file built (${file.length() / 1024} KB) — send it to the other phone and Import it there")
+        Feedback.ok(findViewById<Button>(R.id.shareMemory))
     }
 
     private fun importMemory(uri: android.net.Uri) {
@@ -399,7 +410,7 @@ class MainActivity : AppCompatActivity() {
         thread {
             val result = try { contentResolver.openInputStream(uri)?.use { Memory.import(this, it) } ?: "could not open the file" }
             catch (e: Exception) { AppLog.e("memory", "import failed", e); "import failed: ${e.message}" }
-            runOnUiThread { log(result) }
+            runOnUiThread { log(result); if (result.startsWith("imported")) Feedback.ok(findViewById<Button>(R.id.importMemory)) else Feedback.fail(findViewById<Button>(R.id.importMemory)) }
         }
     }
 
@@ -413,6 +424,7 @@ class MainActivity : AppCompatActivity() {
             .putExtra(Intent.EXTRA_STREAM, uri).putExtra(Intent.EXTRA_SUBJECT, "AdHush room survey ${file.name}")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         startActivity(Intent.createChooser(send, "Share survey"))
+        Feedback.ok(findViewById<Button>(R.id.share))
     }
 
     override fun onPause() { unregisterReceiver(receiver); super.onPause() }
@@ -504,6 +516,8 @@ class MainActivity : AppCompatActivity() {
     /** A test line goes to the Home card, the Log page and the log file. */
     private fun testLine(line: String) {
         log(line)
+        if (line.startsWith("✓")) { Feedback.ok(findViewById<Button>(R.id.testHome)); Feedback.ok(findViewById<Button>(R.id.test)) }
+        if (line.startsWith("✗")) { Feedback.fail(findViewById<Button>(R.id.testHome)); Feedback.fail(findViewById<Button>(R.id.test)) }
         findViewById<View>(R.id.testCard).visibility = View.VISIBLE
         val v = findViewById<TextView>(R.id.testResult)
         v.text = (v.text.toString() + "\n" + line).trim().lines().takeLast(14).joinToString("\n")
@@ -641,10 +655,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Control actions need a running service; the notification and tile go through the same door. */
-    private fun serviceAction(action: String, extras: (Intent) -> Unit = {}) {
+    private fun serviceAction(action: String, button: Button? = null, extras: (Intent) -> Unit = {}) {
         val control = action in listOf(AdHushService.ACTION_NOT_AD, AdHushService.ACTION_IS_AD, AdHushService.ACTION_SHOW_BACK, AdHushService.ACTION_LEARN_SCRIPTS, AdHushService.ACTION_TEST, AdHushService.ACTION_DUCK_FOR, AdHushService.ACTION_DUCK_MORE)
-        if (control && AdHushService.running == null) { log("not running — press Start first"); return }
+        if (control && AdHushService.running == null) { log("not running — press Start first"); Feedback.fail(button); return }
         ContextCompat.startForegroundService(this, Intent(this, AdHushService::class.java).setAction(action).also(extras))
+        if (action == AdHushService.ACTION_STOP) Feedback.ok(button)   // the service answers with its status, not a result
+    }
+
+    /** The service says whether a control action went through: the button that asked turns green or red. */
+    private fun actionDone(i: Intent) {
+        val ok = i.getBooleanExtra("ok", false)
+        val id = when (i.getStringExtra("action")) {
+            AdHushService.ACTION_NOT_AD -> R.id.notAd
+            AdHushService.ACTION_IS_AD -> R.id.isAd
+            AdHushService.ACTION_SHOW_BACK -> R.id.showBack
+            AdHushService.ACTION_DUCK_MORE -> R.id.duckMore
+            AdHushService.ACTION_LEARN_SCRIPTS -> R.id.learnScripts
+            AdHushService.ACTION_DUCK_FOR -> DUCK_BUTTONS.firstOrNull { it.second == i.getIntExtra(AdHushService.EXTRA_SECONDS, 0) }?.first ?: return
+            else -> return
+        }
+        val b = findViewById<Button>(id)
+        if (ok) Feedback.ok(b) else Feedback.fail(b)
     }
 
     /** Everything the app tells the user also goes to the error log, and to the Log page. */

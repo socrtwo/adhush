@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.28.3] - 2026-09-19
+### Added
+- Android: every button answers the finger. It dips when pressed, turns
+  green with a tick for a second and a half when what it asked for went
+  through, red with a cross when it did not (nothing running, the set did
+  not answer, an override in the way). The service reports each control
+  action's outcome to the buttons — Is an ad, Show's back, Not an ad, the
+  timed ducks, +30 s, every remote key — and the local ones (Save, Test
+  TV, downloads, share, import, forget, save the log) report their own.
+  Is an ad, Show's back, Not an ad and the ducks are bright only when they
+  would do something right now. A Help topic explains the colours.
+
 ## [0.28.2] - 2026-09-19
 ### Added
 - Android, stream learning: a player that blocks capture is named as such

@@ -134,21 +134,25 @@ class AdHushService : Service(), LifecycleOwner {
         }
         if (action == ACTION_STREAM_START) { startStream(intent); return START_STICKY }
         if (engine == null && action != null && action != ACTION_SURVEY) {  // a control action, but nothing is running
-            if (action != ACTION_STOP) update("not running — press Start in the app")
+            if (action != ACTION_STOP) { update("not running — press Start in the app"); report(action, false, intent) }
             stopSelf()
             return START_NOT_STICKY
         }
         when (action) {
-            ACTION_NOT_AD -> { io.execute { engine?.rejectAd(now()) }; return START_STICKY }
-            ACTION_IS_AD -> { io.execute { engine?.confirmAd(now()) }; return START_STICKY }
-            ACTION_SHOW_BACK -> { io.execute { engine?.showIsBack(now()); refresh() }; return START_STICKY }
+            ACTION_NOT_AD -> { io.execute { report(action, engine?.rejectAd(now()) == true, intent) }; return START_STICKY }
+            ACTION_IS_AD -> { io.execute { report(action, engine?.confirmAd(now()) == true, intent) }; return START_STICKY }
+            ACTION_SHOW_BACK -> { io.execute { val ok = engine?.showIsBack(now()) == true; refresh(); report(action, ok, intent) }; return START_STICKY }
             ACTION_DUCK_FOR -> {
                 val seconds = intent.getIntExtra(EXTRA_SECONDS, 60).coerceIn(5, 600)
-                io.execute { if (engine?.duckFor(now(), seconds.toDouble()) == true) refresh() else main.post { update("could not duck (an override is on?)") } }
+                io.execute {
+                    val ok = engine?.duckFor(now(), seconds.toDouble()) == true
+                    if (ok) refresh() else main.post { update("could not duck (an override is on?)") }
+                    report(action, ok, intent)
+                }
                 return START_STICKY
             }
-            ACTION_KEY -> { intent.getStringExtra(EXTRA_KEY)?.let { k -> io.execute { pressKey(k) } }; return START_STICKY }
-            ACTION_DUCK_MORE -> { io.execute { if (engine?.extendDuck(now(), 30.0) == true) refresh() }; return START_STICKY }
+            ACTION_KEY -> { intent.getStringExtra(EXTRA_KEY)?.let { k -> io.execute { report(action, pressKey(k), intent) } }; return START_STICKY }
+            ACTION_DUCK_MORE -> { io.execute { val ok = engine?.extendDuck(now(), 30.0) == true; if (ok) refresh(); report(action, ok, intent) }; return START_STICKY }
             ACTION_RESTORE -> { io.execute { runCatching { controller?.restore() }; refresh() }; return START_STICKY }
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
             ACTION_SURVEY -> {
@@ -161,6 +165,7 @@ class AdHushService : Service(), LifecycleOwner {
                 io.execute {
                     val n = engine?.learnScriptsFromTranscript() ?: 0
                     main.post { update(if (engine == null) "not running" else "repetition learning: $n new script(s), ${scripts?.count() ?: 0} total") }
+                    report(action, engine != null, intent)
                 }
                 return START_STICKY
             }
@@ -564,8 +569,14 @@ class AdHushService : Service(), LifecycleOwner {
     // -- notification ---------------------------------------------------------
 
     /** A remote-control key through the live connection (ADR 0017); the Sharp allows one, so it must be this one while running. */
-    private fun pressKey(name: String) {
-        val key = RemoteKey.of(name) ?: return
+    /** The buttons want to know whether what they asked for went through (0.28.3). */
+    private fun report(action: String, ok: Boolean, intent: Intent) {
+        sendBroadcast(Intent(BROADCAST_ACTION).setPackage(packageName).putExtra("action", action).putExtra("ok", ok)
+            .putExtra(EXTRA_SECONDS, intent.getIntExtra(EXTRA_SECONDS, 0)).putExtra(EXTRA_KEY, intent.getStringExtra(EXTRA_KEY)))
+    }
+
+    private fun pressKey(name: String): Boolean {
+        val key = RemoteKey.of(name) ?: return false
         val c = controller
         try {
             val d = keyDriver
@@ -578,10 +589,11 @@ class AdHushService : Service(), LifecycleOwner {
                 c is LevelController && c.device is HisenseVidaa -> (c.device as HisenseVidaa).press(key)
                 c is LevelController && c.device is PhilipsJointSpace -> (c.device as PhilipsJointSpace).press(key)
                 c is LevelController && key == RemoteKey.MUTE -> c.device.setMute(!c.ducked)
-                else -> { main.post { update("this connection (${settings.control}) has no remote keys beyond volume and mute") }; return }
+                else -> { main.post { update("this connection (${settings.control}) has no remote keys beyond volume and mute") }; return false }
             }
             if (!sent) main.post { update("the set did not accept ${key.label}") }
-        } catch (e: ControlError) { main.post { update("remote ${key.label} failed: ${e.message}") } }
+            return sent
+        } catch (e: ControlError) { main.post { update("remote ${key.label} failed: ${e.message}") }; return false }
     }
 
     private fun describe(s: Status): String {
@@ -701,6 +713,8 @@ class AdHushService : Service(), LifecycleOwner {
         const val ACTION_DUCK_MORE = "io.adhush.android.DUCK_MORE"
         const val JINGLES_FILE = "jingles.tsv"
         const val BROADCAST_TEST = "io.adhush.android.TEST_LINE"
+        /** One per control action: "action", "ok", and the seconds or key it carried (0.28.3). */
+        const val BROADCAST_ACTION = "io.adhush.android.ACTION_DONE"
         const val SCRIPTS_FILE = "scripts.tsv"
         const val REPEAT_LEARN_MS = 10 * 60 * 1000L
         const val LOGO_FILE = "logo.tsv"

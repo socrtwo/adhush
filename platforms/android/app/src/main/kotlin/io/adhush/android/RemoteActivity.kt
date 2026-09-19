@@ -33,10 +33,35 @@ class RemoteActivity : AppCompatActivity() {
     private var own: SharpIpClient? = null
     private var ownTransport: AutoCloseable? = null
 
+    private val keyButtons = HashMap<RemoteKey, MaterialButton>()
+
     private val status = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            findViewById<TextView>(R.id.remoteStatus).text = intent.getStringExtra("text") ?: ""
+            if (intent.action == AdHushService.BROADCAST_ACTION) { actionDone(intent); return }
+            val text = intent.getStringExtra("text") ?: ""
+            findViewById<TextView>(R.id.remoteStatus).text = text
+            val running = intent.getBooleanExtra("running", AdHushService.running != null)
+            val teaching = intent.getBooleanExtra("teaching", false) || text.startsWith("TEACHING")
+            val ducked = intent.getBooleanExtra("ducked", false) || text.startsWith("DUCKED") || teaching
+            findViewById<Button>(R.id.rIsAd).alpha = if (running && !teaching) 1f else 0.55f
+            findViewById<Button>(R.id.rShowBack).alpha = if (running && ducked) 1f else 0.55f
+            findViewById<Button>(R.id.rNotAd).alpha = if (running && ducked) 1f else 0.55f
         }
+    }
+
+    /** The service says whether the action went through: the button that asked turns green or red. */
+    private fun actionDone(i: Intent) {
+        val ok = i.getBooleanExtra("ok", false)
+        val b: Button = when (i.getStringExtra("action")) {
+            AdHushService.ACTION_NOT_AD -> findViewById(R.id.rNotAd)
+            AdHushService.ACTION_IS_AD -> findViewById(R.id.rIsAd)
+            AdHushService.ACTION_SHOW_BACK -> findViewById(R.id.rShowBack)
+            AdHushService.ACTION_DUCK_MORE -> findViewById(R.id.rDuckMore)
+            AdHushService.ACTION_DUCK_FOR -> DUCKS.firstOrNull { it.second == i.getIntExtra(AdHushService.EXTRA_SECONDS, 0) }?.let { findViewById<Button>(it.first) } ?: return
+            AdHushService.ACTION_KEY -> i.getStringExtra(AdHushService.EXTRA_KEY)?.let { RemoteKey.of(it) }?.let { keyButtons[it] } ?: return
+            else -> return
+        }
+        if (ok) Feedback.ok(b) else Feedback.fail(b)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,15 +69,14 @@ class RemoteActivity : AppCompatActivity() {
         setContentView(R.layout.activity_remote)
         settings = Settings(this)
         title = "AdHush remote"
-        findViewById<Button>(R.id.rStart).setOnClickListener { ContextCompat.startForegroundService(this, Intent(this, AdHushService::class.java)) }
-        findViewById<Button>(R.id.rStop).setOnClickListener { serviceAction(AdHushService.ACTION_STOP) }
-        findViewById<Button>(R.id.rIsAd).setOnClickListener { serviceAction(AdHushService.ACTION_IS_AD) }
-        findViewById<Button>(R.id.rShowBack).setOnClickListener { serviceAction(AdHushService.ACTION_SHOW_BACK) }
-        findViewById<Button>(R.id.rNotAd).setOnClickListener { serviceAction(AdHushService.ACTION_NOT_AD) }
-        for ((id, secs) in listOf(R.id.rDuck30 to 30, R.id.rDuck60 to 60, R.id.rDuck90 to 90, R.id.rDuck120 to 120, R.id.rDuck150 to 150,
-                R.id.rDuck180 to 180, R.id.rDuck210 to 210, R.id.rDuck240 to 240, R.id.rDuck270 to 270, R.id.rDuck300 to 300))
-            findViewById<Button>(id).setOnClickListener { serviceAction(AdHushService.ACTION_DUCK_FOR) { it.putExtra(AdHushService.EXTRA_SECONDS, secs) } }
-        findViewById<Button>(R.id.rDuckMore).setOnClickListener { serviceAction(AdHushService.ACTION_DUCK_MORE) }
+        findViewById<Button>(R.id.rStart).onTap { ContextCompat.startForegroundService(this, Intent(this, AdHushService::class.java)) }
+        findViewById<Button>(R.id.rStop).onTap { b -> serviceAction(AdHushService.ACTION_STOP, b) }
+        findViewById<Button>(R.id.rIsAd).onTap { b -> serviceAction(AdHushService.ACTION_IS_AD, b) }
+        findViewById<Button>(R.id.rShowBack).onTap { b -> serviceAction(AdHushService.ACTION_SHOW_BACK, b) }
+        findViewById<Button>(R.id.rNotAd).onTap { b -> serviceAction(AdHushService.ACTION_NOT_AD, b) }
+        for ((id, secs) in DUCKS)
+            findViewById<Button>(id).onTap { b -> serviceAction(AdHushService.ACTION_DUCK_FOR, b) { it.putExtra(AdHushService.EXTRA_SECONDS, secs) } }
+        findViewById<Button>(R.id.rDuckMore).onTap { b -> serviceAction(AdHushService.ACTION_DUCK_MORE, b) }
         buildKeys(findViewById(R.id.keys))
         findViewById<TextView>(R.id.remoteStatus).text = AdHushService.lastText
         if (settings.control == "ir") findViewById<TextView>(R.id.remoteNote).text = "Infrared control knows only volume and mute; the TV keys need the network or the serial cable (TV page)."
@@ -60,7 +84,7 @@ class RemoteActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        ContextCompat.registerReceiver(this, status, IntentFilter(AdHushService.BROADCAST_STATUS), ContextCompat.RECEIVER_NOT_EXPORTED)
+        ContextCompat.registerReceiver(this, status, IntentFilter(AdHushService.BROADCAST_STATUS).apply { addAction(AdHushService.BROADCAST_ACTION) }, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     override fun onPause() {
@@ -86,7 +110,7 @@ class RemoteActivity : AppCompatActivity() {
             if (key == null) { b.visibility = View.INVISIBLE; b.isEnabled = false }
             if (tall) b.minHeight = (72 * resources.displayMetrics.density).toInt()
             if (accent != null) { b.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, accent)); b.setTextColor(android.graphics.Color.WHITE) }
-            if (key != null) b.setOnClickListener { press(key) }
+            if (key != null) { b.onTap { press(key) }; keyButtons[key] = b }
             parent.addView(b)
             return b
         }
@@ -129,12 +153,18 @@ class RemoteActivity : AppCompatActivity() {
         row(RemoteKey.AV_MODE, RemoteKey.VIEW_MODE, RemoteKey.FREEZE, RemoteKey.NETFLIX)
     }
 
+    companion object {
+        val DUCKS = listOf(R.id.rDuck30 to 30, R.id.rDuck60 to 60, R.id.rDuck90 to 90, R.id.rDuck120 to 120, R.id.rDuck150 to 150,
+            R.id.rDuck180 to 180, R.id.rDuck210 to 210, R.id.rDuck240 to 240, R.id.rDuck270 to 270, R.id.rDuck300 to 300)
+    }
+
     private fun say(line: String) { AppLog.i("remote", line); runOnUiThread { findViewById<TextView>(R.id.remoteStatus).text = line } }
 
-    private fun serviceAction(action: String, extras: (Intent) -> Unit = {}) {
-        if (AdHushService.running == null && action != AdHushService.ACTION_STOP) { say("not running — press Start first"); return }
+    private fun serviceAction(action: String, button: Button? = null, extras: (Intent) -> Unit = {}) {
+        if (AdHushService.running == null && action != AdHushService.ACTION_STOP) { say("not running — press Start first"); Feedback.fail(button); return }
         if (action == AdHushService.ACTION_DUCK_MORE) say("+30 s")
         ContextCompat.startForegroundService(this, Intent(this, AdHushService::class.java).setAction(action).also(extras))
+        if (action == AdHushService.ACTION_STOP) Feedback.ok(button)
     }
 
     /** Through the service while it runs, else through a connection of our own. */
@@ -144,10 +174,13 @@ class RemoteActivity : AppCompatActivity() {
             return
         }
         io.execute {
+            val b = keyButtons[key]
             try {
-                val client = ownClient() ?: return@execute
-                if (!client.press(key)) say("the set did not accept ${key.label}")
-            } catch (e: ControlError) { say("${key.label} failed: ${e.message}"); closeOwn() }
+                val client = ownClient() ?: run { runOnUiThread { Feedback.fail(b) }; return@execute }
+                val sent = client.press(key)
+                if (!sent) say("the set did not accept ${key.label}")
+                runOnUiThread { if (sent) Feedback.ok(b) else Feedback.fail(b) }
+            } catch (e: ControlError) { say("${key.label} failed: ${e.message}"); closeOwn(); runOnUiThread { Feedback.fail(b) } }
         }
     }
 
