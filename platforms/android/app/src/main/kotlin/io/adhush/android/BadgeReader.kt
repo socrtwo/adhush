@@ -42,6 +42,10 @@ class BadgeReader(
         private set
     @Volatile var lastText = ""
         private set
+    /** Consecutive frames that were black all over: a player with a protected window mirrors as nothing (0.28.2). */
+    @Volatile var blackFrames = 0
+        private set
+    val blackS: Double get() = blackFrames * INTERVAL_MS / 1000.0
 
     private val tick = object : Runnable {
         override fun run() { grab(); handler.postDelayed(this, INTERVAL_MS) }
@@ -62,6 +66,7 @@ class BadgeReader(
             padded.copyPixelsFromBuffer(plane.buffer)
             val full = if (padded.width != W) Bitmap.createBitmap(padded, 0, 0, W, H) else padded
             frames++
+            blackFrames = if (isBlack(full)) blackFrames + 1 else 0
             // The four corners, stacked: badges live there; the middle of the picture never has one.
             val cw = W * 3 / 10; val ch = H * 15 / 100
             val stack = Bitmap.createBitmap(cw, ch * 4, Bitmap.Config.ARGB_8888)
@@ -79,6 +84,15 @@ class BadgeReader(
         } catch (e: Exception) {
             AppLog.w("badge", "frame skipped: ${e.message}"); busy.set(false)
         } finally { image.close() }
+    }
+
+    /** Sixty-four pixels spread over the frame, none brighter than a dark grey: the picture is blacked out, not just dim. */
+    private fun isBlack(bitmap: Bitmap): Boolean {
+        for (y in 0 until 8) for (x in 0 until 8) {
+            val c = bitmap.getPixel((x * 2 + 1) * bitmap.width / 16, (y * 2 + 1) * bitmap.height / 16)
+            if ((c shr 16 and 0xFF) > 16 || (c shr 8 and 0xFF) > 16 || (c and 0xFF) > 16) return false
+        }
+        return true
     }
 
     override fun close() {

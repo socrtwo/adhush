@@ -363,7 +363,7 @@ ad** counts against the opener that fired and demotes it when it has been
 wrong as often as right. A channel with no sting never promotes anything.
 The learned stings live in `jingles.tsv` and travel with the shared memory.
 
-Since 0.28.1 (ADR 0027) a sting is also recognised transposed by up to two
+Since 0.28.2 (ADR 0027) a sting is also recognised transposed by up to two
 semitones or stretched by up to a tenth in tempo — the same house sting
 re-cut per show — at a slightly higher bar, and a re-cut heard live counts
 for the sting it resembles. Every jingle remembers the local hours it has
@@ -374,7 +374,7 @@ separate default-weight detector that rides on the Loudness method: a
 short noisy burst over the bed, then the level moves. It tips the balance
 for a couple of seconds and never ducks alone.
 
-## When it learned nonsense (0.28.1)
+## When it learned nonsense (0.28.2)
 
 A bad evening — a teach session that ran into the show, a couple of
 mis-taps — can leave the memory matching the show itself. Four guards now
@@ -408,3 +408,13 @@ the TV mode uses; ✓ / ▶ on the notification teach by hand. Players that
 block capture give silence and the status line says so. **Share this
 phone's memory** / **Import memory from a file** on card 3 move breaks,
 scripts and the clock between phones (ADR 0018).
+
+**"App content hidden from screenshare for security purposes"** is
+Android's own message: the player marks its window as protected (a DRM
+player does), so the mirrored picture is black, and since a player must
+opt in to being heard through playback capture, the sound is usually
+silence as well. Since 0.28.2 the Home card and the notification say
+within eight seconds which of the two is happening and what to do: play
+the channel's website in Chrome instead, or play it out loud next to the
+phone and use the normal Start, which hears any player through the
+microphone.

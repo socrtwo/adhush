@@ -96,6 +96,7 @@ class AdHushService : Service(), LifecycleOwner {
     private var projection: MediaProjection? = null
     private var streamStore: FileFingerprintStore? = null
     private var badgeReader: BadgeReader? = null
+    private var blockedWarned = false
     /** The brand driver behind a stepped controller, for the remote's keys (Roku, Samsung, Vizio). */
     private var keyDriver: Any? = null
     private var streamAdsAtStart = 0
@@ -388,9 +389,21 @@ class AdHushService : Service(), LifecycleOwner {
         }
         survey?.let { update("surveying the room: ${clock(it.elapsedS)} / ${clock(SURVEY_S)} · ${lastStatus?.let(::describe) ?: "listening"}") }
         stream?.let { st ->
+            val pictureBlack = (badgeReader?.blackS ?: 0.0) >= BLOCKED_S
             when {
                 System.currentTimeMillis() - st.lastBlockAt > MIC_DEAD_MS -> update("playback capture stopped delivering audio — Stop and start stream learning again")
-                st.mediaTime > 40.0 && st.silentS > 30.0 -> update("hearing nothing from the player (${clock(st.mediaTime)} listened) — it may block capture; use the channel's web player in Chrome")
+                st.mediaTime >= BLOCKED_S && st.silentS >= BLOCKED_S -> {
+                    // Digital silence from the first second: the player opted out of capture (Android 10+ players do unless they say otherwise).
+                    // A black picture as well is the protected-window flag — the "content hidden from screenshare" message.
+                    val what = if (pictureBlack) "this player blocks capture: nothing is heard and the picture is blacked out (protected content)" else "this player blocks capture: nothing is heard"
+                    val fix = "play the channel's website in Chrome instead, or play it out loud next to the phone and use Start (the microphone)"
+                    if (!blockedWarned) { blockedWarned = true; AppLog.w("stream", "$what — $fix") }
+                    update("⚠ $what — $fix")
+                }
+                pictureBlack -> {
+                    if (!blockedWarned) { blockedWarned = true; AppLog.w("stream", "the picture is blacked out (protected content): the audio is heard, the AD badge cannot be read") }
+                    lastStatus?.let { update(describeStream(it) + " · ⚠ picture blacked out: the AD badge cannot be read (protected content)") }
+                }
                 else -> lastStatus?.let { update(describeStream(it)) }
             }
             return
@@ -498,6 +511,7 @@ class AdHushService : Service(), LifecycleOwner {
         val s = StreamSource(mp) { block -> eng.onAudio(block); speech?.feed(block) }
         try { s.start() } catch (e: Exception) { AppLog.e("stream", "capture failed to start", e); update("playback capture failed: ${e.message}"); stopSelf(); return }
         stream = s
+        blockedWarned = false
         if (badge != null) {
             try { badgeReader = BadgeReader(mp, this, { ts, text -> eng.onBadgeText(ts, text) }, { stream?.mediaTime ?: 0.0 }).also { it.start() } }
             catch (e: Exception) { AppLog.w("badge", "screen reader failed to start: ${e.message}") }
@@ -678,6 +692,8 @@ class AdHushService : Service(), LifecycleOwner {
         const val ACTION_KEY = "io.adhush.android.KEY"
         const val EXTRA_KEY = "key"
         const val ADS_FILE = "ads.tsv"
+        /** Seconds of digital silence, or of a black picture, before a player is called blocked (0.28.2). */
+        const val BLOCKED_S = 8.0
         const val CLOCK_FILE = "clock.tsv"
         const val ACTION_STREAM_START = "io.adhush.android.STREAM_START"
         const val EXTRA_RESULT_CODE = "result_code"

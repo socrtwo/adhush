@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.28.2] - 2026-09-19
+### Added
+- Android, stream learning: a player that blocks capture is named as such
+  within eight seconds, on the Home card and the notification, instead
+  of a log line after forty. Digital silence from the first second means
+  the player opted out of being heard; a black picture as well is the
+  protected-window flag behind Android's "App content hidden from
+  screenshare" message. Both cases say what to do instead: the channel's
+  website in Chrome, or the microphone with the normal Start. A black
+  picture with audio still heard is reported too, since the AD badge
+  cannot be read from it. Help explains the message.
+
 ## [0.28.1] - 2026-09-19
 ### Fixed
 - **The first evening's loop** (ADR 0027, amended). A taught break that
