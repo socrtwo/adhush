@@ -9,6 +9,12 @@ axis-aligned approximation of keystone correction that holds for a roughly
 front-on camera; strong perspective needs a better mount, not more math.
 Glare is tolerated rather than corrected: highlight pixels are excluded from
 the brightness profile so a lamp reflection doesn't drag the box.
+
+Whole screen or nothing (ADR 0013): a box that touches the edge of the frame
+is a TV the camera is only partly looking at, and a box far from a TV's
+shape is not a TV. Such frames are dropped rather than cropped, so the video
+detectors fall silent (the logo detector goes inert after ``stale_s``)
+instead of reading half a screen as "logo gone".
 """
 
 from __future__ import annotations
@@ -28,14 +34,32 @@ from adhush.events import AudioEvent, FrameEvent
 from adhush.util.imageops import downscale, to_luma
 from adhush.util.timing import Clock, monotonic_clock
 
-# How often the screen box is re-estimated.
+# How often the screen box is re-estimated, and how soon after a partial one.
 _REDETECT_INTERVAL_S = 5.0
+_PARTIAL_RETRY_S = 0.5
 _DETECT_DOWNSCALE = 8
 # The detected box must cover at least this fraction of the frame to be
 # believed; otherwise the full frame passes through uncropped.
 _MIN_AREA_FRACTION = 0.08
 # Pixels this close to saturation are glare and don't vote for the box.
 _GLARE_LUMA = 250
+# Whole-screen test: margin from the frame edge (downscaled pixels) and the
+# range of width/height a TV seen roughly front-on can have.
+_EDGE_MARGIN = 1
+_MIN_ASPECT = 1.15
+_MAX_ASPECT = 2.6
+
+
+def screen_complete(
+    box: tuple[int, int, int, int], width: int, height: int, margin: int = _EDGE_MARGIN
+) -> bool:
+    """Is this the *whole* TV? False when the box runs off the edge or is not TV-shaped."""
+    x0, y0, x1, y1 = box
+    if x0 < margin or y0 < margin or x1 > width - margin or y1 > height - margin:
+        return False
+    if x1 <= x0 or y1 <= y0:
+        return False
+    return _MIN_ASPECT <= (x1 - x0) / (y1 - y0) <= _MAX_ASPECT
 
 
 def detect_screen_bbox(
@@ -100,6 +124,7 @@ class CameraSource(CaptureSource):
         self._audio_proc: subprocess.Popen[bytes] | None = None
         self._t0: float | None = None
         self._bbox: tuple[int, int, int, int] | None = None
+        self.partial_frames = 0
         self._next_detect_ts = 0.0
 
     @property
@@ -143,13 +168,20 @@ class CameraSource(CaptureSource):
         assert self._t0 is not None
         return self._clock() - self._t0
 
-    def _crop(self, frame: npt.NDArray[np.uint8], ts: float) -> npt.NDArray[np.uint8]:
+    def _crop(self, frame: npt.NDArray[np.uint8], ts: float) -> npt.NDArray[np.uint8] | None:
+        """The frame cropped to the screen; None when only part of a screen is in view."""
         if not self._cfg.autocrop:
             return frame
         if ts >= self._next_detect_ts:
             self._next_detect_ts = ts + _REDETECT_INTERVAL_S
             small = downscale(to_luma(frame), _DETECT_DOWNSCALE)
             box = detect_screen_bbox(small)
+            if box is not None and not screen_complete(box, small.shape[1], small.shape[0]):
+                # Half a TV: look again soon, and hand nothing on meanwhile.
+                self._next_detect_ts = ts + _PARTIAL_RETRY_S
+                self.partial_frames += 1
+                self._bbox = None
+                return None
             if box is not None:
                 s = _DETECT_DOWNSCALE
                 self._bbox = (box[0] * s, box[1] * s, box[2] * s, box[3] * s)
@@ -171,7 +203,9 @@ class CameraSource(CaptureSource):
                 self._cfg.height, self._cfg.width, 3
             )
             ts = self._now()
-            yield FrameEvent(ts=ts, frame=self._crop(frame, ts))
+            cropped = self._crop(frame, ts)
+            if cropped is not None:
+                yield FrameEvent(ts=ts, frame=cropped)
 
     def audio_blocks(self) -> Iterator[AudioEvent]:
         proc = self._audio_proc

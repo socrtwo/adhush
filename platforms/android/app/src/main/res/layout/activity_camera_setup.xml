@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="#101418" android:padding="12dp">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/setupTitle" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Camera setup — find the bug" android:textColor="#FFFFFF" android:textAppearance="?attr/textAppearanceTitleMedium" />
+        <ImageButton android:id="@+id/setupHelp" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="What is the bug?" app:tint="#FFD54F" />
+    </LinearLayout>
+    <TextView android:id="@+id/setupStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="15sp" android:paddingTop="4dp" />
+    <TextView android:id="@+id/setupHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#B0BEC5" android:textSize="12sp" android:paddingTop="2dp" android:paddingBottom="6dp" android:text="@string/setup_hint" />
+
+    <io.adhush.android.LogoOverlayView android:id="@+id/setupPicture" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+
+    <TextView android:id="@+id/setupZoomLabel" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#B0BEC5" android:textSize="12sp" android:paddingTop="6dp" />
+    <com.google.android.material.slider.Slider android:id="@+id/setupZoom" android:layout_width="match_parent" android:layout_height="wrap_content" android:valueFrom="1.0" android:valueTo="4.0" android:stepSize="0.1" android:value="1.0" />
+
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="the yellow box, magnified — it should look like the channel's bug, in colour" android:textColor="#B0BEC5" android:textSize="12sp" android:gravity="center" />
+    <ImageView android:id="@+id/setupCrop" android:layout_width="match_parent" android:layout_height="150dp" android:scaleType="fitCenter" android:background="#000000" android:contentDescription="the logo box, magnified" />
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingTop="8dp">
+        <com.google.android.material.button.MaterialButton android:id="@+id/setupWatch" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="6dp" android:text="Watch 45 s" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/setupSave" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="6dp" android:text="Save &amp; start" android:enabled="false" app:backgroundTint="@color/adhush_program" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/setupCancel" style="@style/Widget.AdHush.Button.Tonal" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Cancel" />
+    </LinearLayout>
+</LinearLayout>

@@ -24,6 +24,38 @@ class Learner:
     def __init__(self, store: FingerprintStore, config: FingerprintConfig) -> None:
         self._store = store
         self._cfg = config
+        self._false_hits: dict[int, int] = {}
+
+    @property
+    def false_match_s(self) -> float:
+        return self._cfg.false_match_s
+
+    @property
+    def min_material_s(self) -> float:
+        return self._cfg.min_material_s
+
+    @property
+    def max_material_s(self) -> float:
+        return self._cfg.max_material_s
+
+    def false_match(self, ad_id: int) -> bool:
+        """A mute on this ad ended almost at once on programme evidence: the
+        record matched the show, not a break. Enough of them forget the record
+        (ADR 0027, amended); True when it did."""
+        n = self._false_hits.get(ad_id, 0) + 1
+        self._false_hits[ad_id] = n
+        if n < self._cfg.false_match_limit:
+            return False
+        self.forget(ad_id)
+        return True
+
+    def forget_all(self) -> int:
+        """Drop every remembered ad; returns how many."""
+        ads = self._store.ads()
+        for record in ads:
+            self._store.delete_ad(record.ad_id)
+        self._false_hits.clear()
+        return len(ads)
 
     def learn_segment(
         self,
@@ -64,7 +96,8 @@ class Learner:
     def forget(self, ad_id: int) -> None:
         """Drop a learned ad the user rejected as a false match."""
         self._store.delete_ad(ad_id)
-        log.info("forgot ad %d on user rejection", ad_id)
+        self._false_hits.pop(ad_id, None)
+        log.info("forgot ad %d", ad_id)
 
     def observe_duration(self, ad_id: int, duration_s: float) -> None:
         """Fold one observed airing into the ad's duration estimate."""

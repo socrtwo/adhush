@@ -17,6 +17,8 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
+import numpy as np
+
 from adhush import __version__
 from adhush.capture import build_capture
 from adhush.capture.devices import alsa_pcm_node, list_sound_cards, list_video_devices
@@ -27,6 +29,7 @@ from adhush.control.base import ControlError
 from adhush.control.ir_lirc import IrLircController
 from adhush.control.probe import probe_backends
 from adhush.detect import build_detectors
+from adhush.detect.cutscene import CutsceneTemplate, load_templates
 from adhush.detect.fingerprint import FingerprintDetector
 from adhush.detect.fusion import Fusion
 from adhush.detect.logo_absence import build_template, save_template
@@ -35,6 +38,7 @@ from adhush.events import AdSegment, AudioEvent, FrameEvent
 from adhush.fingerprint import open_fingerprints
 from adhush.state import AdStateMachine
 from adhush.util.imageops import extract_roi
+from adhush.util.resources import bundled, self_command
 
 _DEFAULT_CONFIG = Path("config/adhush.toml")
 
@@ -46,8 +50,18 @@ def _load(path: Path) -> Config:
         raise SystemExit(f"adhush: config error: {exc}") from exc
 
 
+# Capture backends whose audio is a microphone in the room: a duck changes
+# what they hear, so the detectors are told (ADR 0016).
+ROOM_BACKENDS = frozenset({"camera", "microphone"})
+
+
 def _build_pipeline(
-    config: Config, controller: NullController | None, *, video: bool, audio: bool
+    config: Config,
+    controller: NullController | None,
+    *,
+    video: bool,
+    audio: bool,
+    live: bool = False,
 ) -> Pipeline:
     fp_active = (
         video and config.fingerprint.enabled and "fingerprint" in config.detect.enabled
@@ -67,6 +81,13 @@ def _build_pipeline(
     ctl = controller if controller is not None else build_controller(
         config.control, config.profile
     )
+    recover = getattr(ctl, "recover_on_start", None)
+    if recover is not None:
+        try:
+            if recover():
+                print("restored the volume: the last run ended while ducked")
+        except ControlError as exc:
+            print(f"tv unreachable at start: {exc}")
     return Pipeline(
         detectors,
         fusion,
@@ -74,7 +95,27 @@ def _build_pipeline(
         ctl,
         learner=learner if config.fingerprint.learn else None,
         matcher=matcher,
+        hears_room=config.capture.backend in ROOM_BACKENDS,
+        wall_clock=time.time if live else None,  # the break clock only learns from real time
     )
+
+
+def _cmd_init(args: argparse.Namespace) -> int:
+    """Write a starter config (and the profile library next to it) so a
+    one-file binary is usable from any folder without a checkout."""
+    target: Path = args.config
+    if target.exists() and not args.force:
+        print(f"{target} already exists; add --force to overwrite it")
+        return 1
+    example = "config/adhush-listener.example.toml" if args.listener else "config/adhush.example.toml"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(bundled(example), target)
+    profiles = target.parent / "profiles"
+    if not profiles.is_dir():
+        shutil.copytree(bundled("config/profiles"), profiles)
+    print(f"wrote {target} from {Path(example).name}, profiles in {profiles}/")
+    print("edit the [control] section for your set, then: adhush doctor, adhush probe, adhush run")
+    return 0
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -86,7 +127,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     with source:
         caps = source.caps()
-        pipeline = _build_pipeline(config, None, video=caps.video, audio=caps.audio)
+        pipeline = _build_pipeline(config, None, video=caps.video, audio=caps.audio, live=True)
         print(f"adhush {__version__}: running on {config.capture.backend} "
               f"(video={caps.video} audio={caps.audio}), control={config.control.backend}")
         api = None
@@ -127,7 +168,7 @@ def _spawn_overlay(address: tuple[str, int], token: str) -> subprocess.Popen[byt
     host, port = address
     if host in ("0.0.0.0", "::"):
         host = "127.0.0.1"
-    argv = [sys.executable, "-m", "adhush", "overlay", "--base", f"http://{host}:{port}"]
+    argv = [*self_command(), "overlay", "--base", f"http://{host}:{port}"]
     if token:
         argv += ["--token", token]
     try:
@@ -420,10 +461,70 @@ def _cmd_learn(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_cutscene(args: argparse.Namespace) -> int:
+    """Capture or list the intro/outro templates (ADR 0023)."""
+    config = load_config(args.config)
+    directory = Path(config.detect.cutscene.directory)
+    if args.action == "list":
+        templates = load_templates(directory)
+        if not templates:
+            print(f"no templates in {directory}")
+        for t in templates:
+            print(f"{t.name:24s} {t.kind:4s} hash={t.hash:016x}")
+        return 0
+    frame = None
+    if args.image is not None:
+        try:
+            from PIL import Image
+        except ImportError:
+            print("reading an image needs Pillow (pip install pillow); or use --from with --ts")
+            return 2
+        with Image.open(args.image) as im:
+            rgb = np.asarray(im.convert("RGB"), dtype=np.uint8)
+        frame = rgb[:, :, ::-1].copy()  # the detectors see BGR
+    elif args.from_ is not None:
+        with FileReplaySource(args.from_) as source:
+            for event in source.frames():
+                if event.ts >= args.ts:
+                    frame = np.array(event.frame, copy=True)
+                    break
+        if frame is None:
+            print(f"no frame at or after {args.ts:.2f} s in {args.from_}")
+            return 2
+    else:
+        print("give --image FILE or --from FIXTURE --ts SECONDS")
+        return 2
+    template = CutsceneTemplate.from_frame(args.name, args.kind, frame)
+    path = template.save(directory)
+    print(f"wrote {path} ({args.kind}: {'a break starts' if args.kind == 'in' else 'the programme returns'})")
+    return 0
+
+
+def _cmd_crowd(args: argparse.Namespace) -> int:
+    """Run the shared break feed (ADR 0024)."""
+    from adhush.crowd.server import serve
+
+    server = serve(args.host, args.port)
+    print(f"adhush crowd server on http://{args.host}:{args.port}/ — reports live ten minutes in memory; Ctrl-C stops")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="adhush", description="Mute TV commercials automatically.")
     parser.add_argument("--version", action="version", version=f"adhush {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_init = sub.add_parser("init", help="write a starter config and the profile library")
+    p_init.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)
+    p_init.add_argument("--listener", action="store_true", help="the shelf listener (camera + mic + serial)")
+    p_init.add_argument("--force", action="store_true", help="overwrite an existing config")
+    p_init.set_defaults(func=_cmd_init)
 
     p_run = sub.add_parser("run", help="run live detection and control")
     p_run.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)
@@ -475,6 +576,22 @@ def main(argv: list[str] | None = None) -> int:
     p_learn.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)
     p_learn.add_argument("--labels", type=Path, required=True, help="JSON [{start_ts, duration_s}]")
     p_learn.set_defaults(func=_cmd_learn)
+
+    p_cut = sub.add_parser("cutscene", help="intro/outro template frames the channel shows around breaks (ADR 0023)")
+    p_cut.add_argument("action", choices=["add", "list"])
+    p_cut.add_argument("--config", type=Path, default=_DEFAULT_CONFIG)
+    p_cut.add_argument("--name", default="cutscene", help="template name (file stem)")
+    p_cut.add_argument("--kind", choices=["in", "out"], default="in", help="in: a break starts; out: the programme returns")
+    p_cut.add_argument("--image", type=Path, default=None, help="a still (PNG/JPEG) of the frame")
+    p_cut.add_argument("--from", dest="from_", type=Path, default=None, help=".npz fixture to take the frame from")
+    p_cut.add_argument("--ts", type=float, default=0.0, help="media time of the frame in the fixture")
+    p_cut.set_defaults(func=_cmd_cutscene)
+
+    p_crowd = sub.add_parser("crowd", help="the shared feed of break times (ADR 0024)")
+    p_crowd.add_argument("action", choices=["serve"])
+    p_crowd.add_argument("--host", default="0.0.0.0")
+    p_crowd.add_argument("--port", type=int, default=8676)
+    p_crowd.set_defaults(func=_cmd_crowd)
 
     p_overlay = sub.add_parser(
         "overlay", help="always-on-top mini window for a running core (thin IPC client)"

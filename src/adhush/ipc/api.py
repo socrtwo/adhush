@@ -39,8 +39,10 @@ from pathlib import Path
 from typing import Any
 
 from adhush.config import IpcConfig
+from adhush.control.base import ControlError
 from adhush.engine import Pipeline
 from adhush.ipc.protocol import Command, ProtocolError, encode_event, parse_command
+from adhush.util.resources import bundled
 
 log = logging.getLogger(__name__)
 
@@ -64,10 +66,11 @@ _SHUTDOWN_DELAY_S = 0.05
 
 
 def resolve_web_root(web_root: str) -> Path | None:
-    """Locate the front end: as given, else relative to a source checkout."""
+    """Locate the front end: as given, else the copy shipped with AdHush
+    (inside a one-file binary, or a source checkout)."""
     candidates = [Path(web_root)]
     if not Path(web_root).is_absolute():
-        candidates.append(Path(__file__).resolve().parents[3] / web_root)
+        candidates.append(bundled(web_root))
     for candidate in candidates:
         if (candidate / "index.html").is_file():
             return candidate
@@ -250,8 +253,20 @@ class ApiServer:
             return {"ok": True, "trace": command.enabled}
         if command.type == "confirm_ad":
             return {"ok": self._pipeline.confirm_ad()}
+        if command.type == "show_back":
+            return {"ok": self._pipeline.show_back()}
         if command.type == "reject_ad":
             return {"ok": self._pipeline.reject_ad()}
+        if command.type == "duck_for":
+            if command.extend:
+                return {"ok": self._pipeline.extend_duck(float(command.seconds))}
+            return {"ok": self._pipeline.duck_for(float(command.seconds))}
+        if command.type == "remote":
+            try:
+                self._pipeline.press_key(command.key)
+            except ControlError as exc:
+                return {"ok": False, "error": str(exc)}
+            return {"ok": True, "key": command.key}
         if command.type == "shutdown":
             if self._on_shutdown is None:
                 return {"ok": False, "error": "shutdown not available on this core"}

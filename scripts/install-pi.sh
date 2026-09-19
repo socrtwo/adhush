@@ -38,7 +38,8 @@ ln -sf "${INSTALL_DIR}/venv/bin/adhush" /usr/local/bin/adhush
 
 if [[ ! -f "${REPO_DIR}/config/adhush.toml" ]]; then
     echo "==> no config/adhush.toml yet; copy one of:"
-    echo "      ${REPO_DIR}/config/adhush.example.toml            (TV-controlled setups)"
+    echo "      ${REPO_DIR}/config/adhush-listener.example.toml    (webcam + mic on a shelf, Sharp over Wi-Fi)"
+    echo "      ${REPO_DIR}/config/adhush.example.toml            (HDMI capture, TV-controlled setups)"
     echo "      ${REPO_DIR}/config/adhush-passthrough.example.toml (inline box)"
 fi
 

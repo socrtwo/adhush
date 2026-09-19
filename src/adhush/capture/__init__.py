@@ -38,4 +38,8 @@ def build_capture(config: CaptureConfig) -> CaptureSource:
             height=config.height,
             audio_rate=config.audio_rate,
         )
+    if config.backend == "ts_stream":
+        from adhush.capture.ts_stream import TsStreamSource
+
+        return TsStreamSource(config)
     raise CaptureError(f"unknown capture backend: {config.backend}")

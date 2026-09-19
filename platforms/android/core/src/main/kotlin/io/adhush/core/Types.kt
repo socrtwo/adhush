@@ -20,6 +20,31 @@ interface Detector {
     fun observeAudio(block: AudioBlock)
     /** Camera frames; audio-only detectors ignore them. */
     fun observeFrame(frame: Gray, ts: Double) {}
+    /**
+     * False when the detector cannot see or hear what it needs right now (a
+     * camera with no whole screen in view). An inert detector casts no vote
+     * and stays out of the fusion normaliser: it neither adds evidence nor
+     * dilutes it. Audio detectors are always voting.
+     */
+    val voting: Boolean get() = true
+    /**
+     * True while this detector has *positive* evidence the programme is on
+     * (the bug back, the closing sting, a rating box): the engine may end a
+     * hold early on it. Absence of ad evidence is not presence of the show.
+     */
+    val programPresent: Boolean get() = false
+    /**
+     * The user said "Not an ad" or "Show's back": whatever this detector was
+     * sure of a moment ago was the programme. Detectors that hold a belief
+     * (a missing logo, a matched script) drop it and start over.
+     */
+    fun userSaysProgramme(ts: Double) {}
+    /**
+     * The engine turned the set down (or back up) at [ts]. The phone hears the
+     * room, so a detector that judges levels compensates or falls silent
+     * (ADR 0016); the others ignore it.
+     */
+    fun audioDucked(ts: Double, ducked: Boolean) {}
     fun vote(ts: Double): DetectorVote
     fun vote(ts: Double, confidence: Double, reason: String): DetectorVote =
         DetectorVote(name, ts, confidence.coerceIn(0.0, 1.0), reason)

@@ -32,11 +32,24 @@ FP_TONE_HZ = (523.0, 659.0, 784.0, 988.0, 1175.0)
 FP_AMP = 0.30
 
 # kind: program | boundary | ad (flat, loud) | ad_fp (textured, repeatable)
+#       | ad_43 (an ad in 4:3: black pillars either side, otherwise "ad")
+PILLAR_W = WIDTH // 8  # 12.5 % each side: 16:9 becomes 4:3
+#       | rated (programme with a bright rating box in the upper left)
+#       | flash (a white uniform separator: not black, still a boundary)
+#       | card (the show's title card: a fixed picture, the cutscene template)
+FLASH_LUMA = 235
+RATING_BOX = (2, 3, 16, 8)  # x, y, w, h in pixels: a box about 2:1, 25 % of the ROI
 Timeline = list[tuple[str, float]]
 
 
 def _segment_audio(kind: str, n: int, rng: np.random.Generator) -> npt.NDArray[np.float32]:
     t = np.arange(n, dtype=np.float64) / RATE
+    if kind in ("ad", "ad_43"):
+        kind = "ad"
+    if kind in ("rated", "card"):
+        kind = "program"
+    if kind == "flash":
+        kind = "boundary"
     if kind == "program":
         samples = PROGRAM_AMP * np.sin(2 * np.pi * PROGRAM_TONE_HZ * t)
     elif kind == "ad":
@@ -53,6 +66,13 @@ def _segment_audio(kind: str, n: int, rng: np.random.Generator) -> npt.NDArray[n
     else:
         samples = rng.uniform(-BOUNDARY_NOISE_AMP, BOUNDARY_NOISE_AMP, n)
     return samples.astype(np.float32)
+
+
+def title_card() -> npt.NDArray[np.uint8]:
+    """The show's title card: a fixed textured picture every airing repeats."""
+    rng = np.random.default_rng(99)
+    tile = rng.integers(40, 220, (HEIGHT // 8, WIDTH // 8), dtype=np.uint8)
+    return np.kron(tile, np.ones((8, 8), dtype=np.uint8)).astype(np.uint8)
 
 
 def draw_logo(frames: npt.NDArray[np.uint8]) -> None:
@@ -80,8 +100,22 @@ def _segment_frames(kind: str, n_frames: int) -> npt.NDArray[np.uint8]:
             tile = rng.integers(0, 256, (HEIGHT // 8, WIDTH // 8), dtype=np.uint8)
             frames[i] = np.kron(tile, np.ones((8, 8), dtype=np.uint8))
         return frames
-    luma = {"program": PROGRAM_LUMA, "boundary": BOUNDARY_LUMA, "ad": AD_LUMA}[kind]
+    if kind == "card":
+        return np.repeat(title_card()[None, :, :], n_frames, axis=0)
+    luma = {"program": PROGRAM_LUMA, "boundary": BOUNDARY_LUMA, "ad": AD_LUMA, "ad_43": AD_LUMA, "rated": PROGRAM_LUMA, "flash": FLASH_LUMA}[kind]
     frames = np.full((n_frames, HEIGHT, WIDTH), luma, dtype=np.uint8)
+    if kind in ("ad", "ad_43"):
+        # A real spot is never a flat field: a gradient with the same mean, so
+        # the uniform-frame separator (ADR 0023) does not read it as a card.
+        frames[:, :, :] = np.linspace(AD_LUMA - 30, AD_LUMA + 30, WIDTH).astype(np.uint8)[None, None, :]
+    if kind == "ad_43":
+        frames[:, :, :PILLAR_W] = 0
+        frames[:, :, WIDTH - PILLAR_W :] = 0
+    if kind == "rated":
+        draw_logo(frames)
+        x, y, w, h = RATING_BOX
+        frames[:, y : y + h, x : x + w] = 255
+        frames[:, y + 3 : y + 5, x + 3 : x + w - 3] = 20  # the "TV-14" text, dark
     if kind == "program":
         draw_logo(frames)
     return frames
@@ -110,7 +144,7 @@ def synthesize(
     pod_start: float | None = None
     pod_has_ad = False
     for kind, duration in timeline + [("program", 0.0)]:
-        if kind == "program":
+        if kind in ("program", "rated", "card"):
             if pod_start is not None and pod_has_ad:
                 labels.append(
                     AdSegment(start_ts=pod_start, duration_s=now - pod_start, source="label")
@@ -120,7 +154,8 @@ def synthesize(
         else:
             if pod_start is None:
                 pod_start = now
-            pod_has_ad = pod_has_ad or kind in ("ad", "ad_fp")
+            pod_has_ad = pod_has_ad or kind in ("ad", "ad_fp", "ad_43")
+        # a flash is a boundary; rated and card are programme
 
         n_frames = round(duration * FPS)
         if video and n_frames:

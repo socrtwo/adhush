@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="adhush_primary">#1F5F8B</color>
+    <color name="adhush_on_primary">#FFFFFF</color>
+    <color name="adhush_status_bar">#1F5F8B</color>
+    <color name="adhush_primary_container">#D3E4F5</color>
+    <color name="adhush_on_primary_container">#0B2E47</color>
+    <color name="adhush_secondary">#5C6F7B</color>
+    <color name="adhush_secondary_container">#DFE7EE</color>
+    <color name="adhush_on_secondary_container">#1A2930</color>
+    <color name="adhush_program">#2E7D32</color>
+    <color name="adhush_program_container">#DCEFDD</color>
+    <color name="adhush_ducked">#C62828</color>
+    <color name="adhush_ducked_container">#F9DEDC</color>
+    <color name="adhush_teaching">#EF6C00</color>
+    <color name="adhush_teaching_container">#FFE7CC</color>
+    <color name="adhush_stopped_container">#E7E9EC</color>
+    <color name="adhush_splash">#0B2E47</color>
+    <!-- one colour per method -->
+    <color name="method_silence">#1E88E5</color>
+    <color name="method_loudness">#FB8C00</color>
+    <color name="method_fingerprints">#00897B</color>
+    <color name="method_camera">#F9A825</color>
+    <color name="method_speech">#8E24AA</color>
+    <color name="method_captions">#D81B60</color>
+    <color name="method_claude">#C77C2E</color>
+    <color name="method_local">#3949AB</color>
+    <color name="method_clock">#5D4037</color>
+    <color name="method_stream">#00838F</color>
+    <color name="method_jingle">#AD1457</color>
+    <color name="method_off">#9E9E9E</color>
+</resources>

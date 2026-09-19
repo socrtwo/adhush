@@ -11,8 +11,8 @@ android {
         applicationId = "io.adhush.android"
         minSdk = 26          // AudioSource.UNPROCESSED (24), notification channels (26)
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.10.0"
+        versionCode = 32
+        versionName = "0.28.4"
     }
     buildTypes {
         release { isMinifyEnabled = false }
@@ -22,16 +22,28 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    packaging { resources.excludes += "META-INF/*.kotlin_module" }
+    packaging {
+        resources.excludes += "META-INF/*.kotlin_module"
+        // The three BouncyCastle jars (core, for Android TV's client certificate) each carry the same OSGi manifest.
+        resources.excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        resources.excludes += "META-INF/versions/*/OSGI-INF/MANIFEST.MF"
+    }
 }
 
 dependencies {
     implementation(project(":core"))
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("com.google.mlkit:text-recognition:16.0.1")   // reads the captions off the screen; model bundled, offline
+    implementation("com.anthropic:anthropic-java:2.62.0")          // method 7: ask Claude (opt-in, text only)
+    implementation("com.google.mediapipe:tasks-genai:0.10.27")    // method 8: a small language model on the phone
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.github.mik3y:usb-serial-for-android:3.8.1")   // RS-232C through a USB-OTG cable
     implementation("androidx.camera:camera-core:1.3.4")
     implementation("androidx.camera:camera-camera2:1.3.4")
     implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("com.alphacephei:vosk-android:0.3.47@aar")   // offline speech recognition
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
 }

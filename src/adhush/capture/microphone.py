@@ -38,8 +38,9 @@ def parse_audio_device(device: str, platform: str) -> tuple[str, str]:
     return default, device
 
 
-def audio_ffmpeg_args(config: CaptureConfig, platform: str) -> list[str]:
-    """ffmpeg argv for a mono float32 stream from the configured device."""
+def audio_ffmpeg_args(config: CaptureConfig, platform: str, channels: int = 1) -> list[str]:
+    """ffmpeg argv for a float32 stream from the configured device (mono, or
+    interleaved stereo when the caller measures width before its own downmix)."""
     fmt, device = parse_audio_device(config.audio_device, platform)
     if fmt == "dshow" and not device.startswith("audio="):
         device = f"audio={device}"
@@ -49,7 +50,7 @@ def audio_ffmpeg_args(config: CaptureConfig, platform: str) -> list[str]:
         "ffmpeg", "-v", "error",
         "-f", fmt,
         "-i", device,
-        "-f", "f32le", "-ac", "1", "-ar", str(config.audio_rate), "pipe:1",
+        "-f", "f32le", "-ac", str(channels), "-ar", str(config.audio_rate), "pipe:1",
     ]
 
 
@@ -70,7 +71,7 @@ class MicrophoneSource(CaptureSource):
         if shutil.which("ffmpeg") is None:
             raise CaptureError(f"{self._cfg.backend} capture requires ffmpeg on PATH")
         self._proc = subprocess.Popen(
-            audio_ffmpeg_args(self._cfg, self._platform), stdout=subprocess.PIPE
+            audio_ffmpeg_args(self._cfg, self._platform, self.channels), stdout=subprocess.PIPE
         )
         self._t0 = self._clock()
 
@@ -98,12 +99,27 @@ class MicrophoneSource(CaptureSource):
         rate = self._cfg.audio_rate
         block = max(1, rate * self._cfg.audio_block_ms // 1000)
         while True:
-            chunk = proc.stdout.read(block * 4)
+            chunk = proc.stdout.read(block * 4 * self.channels)
             if not chunk:
                 return
-            samples = np.frombuffer(chunk, dtype=np.float32)
+            samples, width = split_stereo(np.frombuffer(chunk, dtype=np.float32), self.channels)
             yield AudioEvent(
                 ts=self._clock() - self._t0 - len(samples) / rate,
                 samples=samples,
                 sample_rate=rate,
+                width=width,
             )
+
+    @property
+    def channels(self) -> int:
+        """A room microphone is mono: its width would be the room, not the mix."""
+        return 1
+
+
+def split_stereo(raw: np.ndarray, channels: int) -> tuple[np.ndarray, float | None]:
+    """Interleaved float32 → (mono samples, stereo width or None) (ADR 0023)."""
+    if channels != 2:
+        return raw, None
+    from adhush.detect.stereo_width import stereo_width
+
+    return ((raw[0::2] + raw[1::2]) * 0.5).astype(np.float32), stereo_width(raw)

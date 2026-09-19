@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adhush"
-version = "0.10.0"
+version = "0.28.4"
 description = "Detects television commercials and mutes them automatically."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -45,3 +45,10 @@ target-version = "py311"
 [tool.mypy]
 python_version = "3.11"
 strict = true
+
+# Pillow is optional: only `adhush cutscene add --image` imports it, inside a
+# try/except. A machine without it (CI, a Pi that never reads stills) must
+# still type-check — before 0.24.1 that missing import failed the release.
+[[tool.mypy.overrides]]
+module = ["PIL.*"]
+ignore_missing_imports = true

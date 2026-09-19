@@ -93,3 +93,70 @@ class VisionTest {
         run(4, true); assertFalse(ctl.muted, "logo back: ${engine.status()}")
     }
 }
+
+class VisionHandheldTest {
+    private val W = 320; private val H = 240
+    private val screen = Box(40, 30, 280, 210)
+
+    private fun frame(logo: Boolean, seed: Int, blur: Boolean = false, shift: Int = 0): Gray {
+        val r = Random(seed)
+        val px = FloatArray(W * H) { 12f + r.nextInt(6) }
+        val cx = 100 + (seed * 7) % 120; val cy = 80 + (seed * 11) % 90
+        val sx0 = screen.x0 + shift; val sx1 = screen.x1 + shift
+        for (y in screen.y0 until screen.y1) for (x in sx0 until sx1) {
+            val d = ((x - cx) * (x - cx) + (y - cy) * (y - cy)).toDouble()
+            px[y * W + x] = if (blur) 140f else (140 + 60 * sin(d / 900.0 + seed)).toFloat().coerceIn(80f, 200f)
+        }
+        if (logo && !blur) {
+            val lx = sx1 - 34; val ly = screen.y1 - 22
+            for (y in ly until ly + 14) for (x in lx until lx + 24) {
+                val ring = (x - lx - 7) * (x - lx - 7) + (y - ly - 7) * (y - ly - 7)
+                if ((ring in 16..36) || (x >= lx + 17 && y in ly + 3..ly + 11)) px[y * W + x] = 245f
+            }
+        }
+        return Gray(W, H, px)
+    }
+
+    @Test fun `rotation is exact and round-trips`() {
+        val g = Gray(3, 2, floatArrayOf(1f, 2f, 3f, 4f, 5f, 6f))
+        val r = g.rotate(90)
+        assertEquals(2, r.w); assertEquals(3, r.h)
+        assertEquals(listOf(4f, 1f, 5f, 2f, 6f, 3f), r.px.toList())
+        assertEquals(g.px.toList(), g.rotate(90).rotate(270).px.toList())
+        assertEquals(g.px.toList(), g.rotate(180).rotate(180).px.toList())
+    }
+
+    @Test fun `a hand that moves the phone does not read as a missing logo`() {
+        val finder = LogoFinder(); for (i in 0 until 40) finder.feed(frame(true, i))
+        val t = finder.result()!!
+        assertTrue(t.screenEdgeMean > 0.0)
+        val det = LogoAbsenceDetector(HANDHELD_LOGO_CONFIG, t); det.warmup()
+        var ts = 0.0
+        // The screen wanders 20 px sideways between frames; re-found every frame, the logo stays present.
+        for (i in 100 until 120) { det.observeFrame(frame(true, i, shift = (i % 5) * 5 - 10), ts); ts += 0.5 }
+        assertTrue(det.programPresent, "score ${det.lastScore}")
+        assertEquals(0.0, det.vote(ts).confidence, det.vote(ts).reason)
+        // A smeared frame (the phone swung) is inert, not absent.
+        det.observeFrame(frame(true, 200, blur = true), ts); ts += 0.5
+        assertFalse(det.active); assertEquals("blurry", det.vote(ts).reason)
+        det.observeFrame(frame(true, 201), ts); ts += 0.5
+        assertTrue(det.active); assertEquals(0.0, det.vote(ts).confidence)
+    }
+
+    @Test fun `a hand-drawn box gives a template and the round-trip keeps the blur reference`() {
+        val finder = LogoFinder(); for (i in 0 until 40) finder.feed(frame(true, i))
+        assertNotNull(finder.lastScreen)
+        val map = finder.stabilityMap(); assertEquals(320 * 180, map.size); assertTrue(map.max() >= 0.9f)
+        val manual = finder.templateFor(Roi(0.80, 0.80, 0.18, 0.16))!!
+        assertTrue(manual.stability > 0.5, "the bug is inside the box: ${manual.stability}")
+        val det = LogoAbsenceDetector(HANDHELD_LOGO_CONFIG, manual); det.warmup()
+        var ts = 0.0
+        for (i in 300 until 310) { det.observeFrame(frame(true, i), ts); ts += 0.5 }
+        assertTrue(det.programPresent, "score ${det.lastScore}")
+        assertNotNull(det.lastRoiInFrame); assertNotNull(det.lastScreen)
+        for (i in 310 until 320) { det.observeFrame(frame(false, i), ts); ts += 0.5 }
+        assertEquals(1.0, det.vote(ts).confidence, det.vote(ts).reason)
+        val f = File.createTempFile("logo", ".tsv"); f.deleteOnExit(); manual.save(f)
+        assertEquals(manual.screenEdgeMean, LogoTemplate.load(f)!!.screenEdgeMean, 1e-3)
+    }
+}

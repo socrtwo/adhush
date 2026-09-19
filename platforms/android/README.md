@@ -80,7 +80,85 @@ Battery → Unrestricted) or Android may pause the service overnight.
   `quietMarginDb` (4 dB) and the fingerprint verify agreement (0.7) are
   starting guesses; see the design's testing section.
 
+## The screens
+
+Five tabs along the bottom. **Home** is the status card (green while the
+show is on, red while ducked, orange while teaching, grey when stopped), a
+chip per method that lights in its colour while that method runs, the
+Start/Stop pair (Start reads "Running" in green, Stop turns red), the three
+teaching buttons, and **Test mode** — Test TV with its result printed on the
+card. **TV** is how this phone reaches its set, the address and login, and
+the volumes. **Methods** is the ten ways of spotting a commercial, each a
+switch with a ⓘ explanation and a coloured dot while it runs; at least one
+must be on or the app refuses to start. **Help** is every explanation in
+full. **Log** shows the app's own log and has **Share error log**: every
+status line, every caught error and every crash with its stack trace goes
+into a rolling file in the app's private storage, and that button hands it
+to mail, Drive or messages. If the app ever closes on its own, share that
+file.
+
+## The set-up wizard (0.23.0)
+
+**Set-up wizard** on Home (offered once on first run; *Not now* keeps the
+defaults) takes three minutes: **Find my TV** tries every way in — it
+searches the Wi-Fi for a Sharp on the control port (or asks the address
+you typed), tries a serial cable if an adapter is plugged in, and fires the
+infrared blaster twice and asks whether the sound dipped; whatever answers
+is chosen, network first — then where the phone sits, the channel, whether
+it is a news channel and whether captions are shown; fifteen seconds of the
+show and ten of the room with the TV muted; eight seconds through the camera
+to see whether the whole TV is in view. It then lists the settings it
+suggests with a reason for each — which methods, the duck level (a loud
+room means a higher duck level so the phone can still hear the ducked set),
+the camera target and zoom, the local AI size this phone can carry — and
+**Apply and review** writes them and opens the Methods page, where every
+switch can be changed. It keeps numbers only, never audio or pictures.
+
+## Words used in the app
+
+- **Bug** — the small channel logo that sits in a corner of the picture
+  during a show (broadcasters' word for it). It is taken off the screen
+  during commercials; that is what the camera watches for.
+- **Script** — the words of one commercial, written down. Commercials say
+  the same words every airing; the app finds runs of words that repeat and
+  saves them as scripts, from speech or from the on-screen captions.
+- **Ducking** — turning the TV down to a whisper instead of muting, so the
+  phone can still hear when the show is back.
+- **Material / remembered break** — the audio fingerprint (numbers, not a
+  recording) of a break you bracketed with *Is an ad* and *Show's back*.
+
+## The ten methods
+
+| # | Method | What it uses | Can duck alone? |
+|---|---|---|---|
+| 1 | Quiet gaps | microphone: the short silence between show and ad; gaps on the 15-second ad-unit grid hold a duck through a pod (0.24.0) | no — needs a second opinion |
+| 2 | Loudness jumps | microphone: the sound jumping up and staying up; a spot compressed flat (crest factor) counts for half | no — needs a second opinion |
+| 3 | Remembered breaks | microphone: fingerprints of taught breaks | yes |
+| 4 | Channel bug | camera: the logo corner, whole TV in view; the rating box ("TV-14") flashed after a break brings the show back at once (0.24.0) | yes |
+| 5 | Spoken words | microphone + offline speech recogniser: scripts | yes |
+| 6 | On-screen captions | camera: the caption band read as text: scripts | yes |
+| 7 | Ask Claude | the words of 5 or 6 judged by Claude over the API (opt-in, paid) | yes |
+| 8 | Local AI | the words of 5 or 6 judged by a small model on the phone (free) | yes |
+| 9 | Break clock | the minute of the hour and how long breaks run, learned from every confirmed break | no — tips the balance; caps how long a duck may hold |
+| 10 | Break jingle | microphone: the channel's sting into (and out of) every break, learned from three breaks; its re-cuts count as the same family; remembers the hours it plays | yes |
+
+**Not an ad** now does three things: restores the volume, tells every
+method it was wrong (the camera must see the bug again before it may call
+it gone; a matched script is dropped), and opens a one-minute quiet period
+in which nothing may duck. The status line shows the countdown.
+
 ## Which TV, which cable
+
+Since 0.26.0 the phone is not only for a Sharp. The wizard's **Find my
+TV** asks every set on the Wi-Fi who it is and proves each way in: a
+Sharp's control port, a Sony Bravia (type its pre-shared key), an LG
+webOS (allow AdHush on the set once), any DLNA set over UPnP, a Samsung's
+remote channel (allow once), a Roku TV, a Vizio SmartCast (a PIN once), an
+Android TV or Google TV (a six-character code once), a Hisense VIDAA (four
+digits once on newer sets), a Philips (a PIN once on the newer sets).
+Sets that read their volume back are ducked to an exact level; the others
+are stepped with key presses. The TV page's fourth radio shows what was
+found; Sharp's serial cable and infrared for seven brands remain (ADR 0025).
 
 At the top of the settings, pick how *this* phone reaches *its* TV:
 
@@ -97,17 +175,107 @@ At the top of the settings, pick how *this* phone reaches *its* TV:
   moves, the codes are wrong for this set: tell me the remote's model number
   (printed on its back) and I will look up its code table.
 
-## Watching for the logo with the camera
+## Watching for the bug with the camera
 
-Tick **Use the back camera** and, with a show on and the whole TV in the
-camera's view, press **Set up camera (45 s)**. The app finds the screen,
-watches which edges never move — the network bug — and saves that corner as
-the thing to look for. When it is done the notification says where it found
-the logo; if it says none was found, check that a show (not an ad) was on and
-the screen was fully in view, then press again. From then on the bug
-disappearing ducks the set within about two seconds on its own, and the bug
-reappearing restores it at once. Camera set-up is per channel: press it again
-after switching channels. Details: ADR 0011.
+Press **Camera setup**. AdHush pauses and the screen shows what the back
+camera sees, in colour, with the TV outlined in green. **Pinch the picture
+(or move the slider) to zoom the camera in** until the bug is big but the
+whole TV still fits — the outline turns red with a warning when the TV runs
+off the edge. Hold the phone upright and, with a show on, press **Watch
+45 s**. When it finishes, a yellow box marks what it thinks is the bug and
+the strip underneath shows that box magnified, in colour: it should look
+like the channel's logo. If it grabbed the wrong thing — on a news channel
+the ticker frame or a banner is a common mistake — drag a box around the
+real logo with your finger. The status line shows a live match score and
+SEEN / GONE / not seen yet. When it reads SEEN during a show, press **Save &
+start**; the zoom is saved with the template and the service uses the same.
+Set-up is per channel.
+
+Hand-held is expected: the TV is re-found in every frame and the yellow box
+follows the bug (it is slid over a small window and the best match counts);
+a smeared frame counts as "can't see"; a TV that is only partly in the
+picture is "whole TV not in view" — inert, never a duck; the bug must have
+been seen once since Start before its absence counts; and it has to be
+missing for 2.5 s before the set is ducked. The status line says what the
+camera can see at any moment.
+
+## Reading the captions with the camera
+
+Turn closed captions on in the TV's own menu, switch on **On-screen
+captions** under Methods, and Start (the camera permission is needed). The
+lower third of the found screen is cut out of each frame, enlarged, and
+read by the phone's on-device text recogniser once a second; new words go
+into the same three-hour transcript, repetition learning and script
+matching as speech does. Because the words are read rather than heard, the
+room's fans do not garble them. It needs the whole TV in view and captions
+tall enough to read — zoom in on the setup screen and look at what the
+camera sees; at eight feet, 1.5–2× zoom is about right on a 46-inch set.
+
+Nothing can send the captions down a cable: the Sharp's RS-232C and IP
+control ports carry commands and their one-word replies (volume, power,
+input), never picture, sound or caption data, and infrared is one-way into
+the set. The captions exist as data only inside the broadcast the TV or
+cable box decodes; from there they are drawn into the picture and gone.
+Android's own Live Caption and Live Transcribe transcribe *audio* on the
+phone (Live Caption only for media playing on the phone itself), which is
+what method 5 does offline. Reading them off the screen is the only way in
+from outside, and is what this method does. Details: ADR 0013.
+
+## Hearing the commercials (speech)
+
+Press **Download speech model** once (40 MB, stays on the phone), tick
+**Use speech**, and Start. The app now turns what it hears into words and
+keeps the last three hours of them. Every ten minutes, and whenever you
+press **Learn scripts now**, it looks for runs of ten or more words that
+came back identically minutes apart — a commercial airing again — and saves
+them as scripts. The words of anything you bracket with *Is an ad* and
+*Show's back* are saved as a script at once. From then on, hearing a saved
+script ducks the set on its own and the volume returns a few seconds after
+the last matching words. Legal and sales boilerplate ("ask your doctor",
+"call now") ducks the set by itself. Details: ADR 0012.
+
+## Asking an AI (methods 7 and 8)
+
+Both AI methods read the words that **Spoken words** or **On-screen
+captions** produce, so one of those must be on. Every so often they hand
+the last 40 seconds to a language model with one question — is a commercial
+playing right now? — and take the one-line answer (`COMMERCIAL 0.9: ask your
+doctor`) as a vote strong enough to duck on its own. By default they ask
+only as a **tie-breaker**: when the other methods are unsure, or while the
+set is ducked, and otherwise once a minute. "Always" asks every ten
+seconds. A confident COMMERCIAL answer is saved as a script, so the same
+spot is recognised offline the next time.
+
+- **Ask Claude** sends the text to Anthropic's API. You need an API key
+  (console.anthropic.com), pasted under Methods; it lives in the app's
+  encrypted settings. Haiku 4.5 is the cheap default, about 13 cents per
+  hour of TV in "always" mode and a tenth of that as a tie-breaker; Sonnet 5
+  and Opus 5 cost about two and five times as much. Only text leaves the
+  phone, never audio — and the microphone hears the room, so your own words
+  can be in it. **Test Claude with a sample** shows what it answers.
+- **Local AI** runs a Qwen model on the phone through MediaPipe's LLM
+  Inference, in one of three sizes chosen under Methods: Qwen 2.5 0.5B
+  (8-bit, 550 MB, any phone), Qwen 2.5 1.5B (8-bit, 1.6 GB, 6 GB+ of
+  memory) or Qwen 3 4B (mixed int4, 2.7 GB, the newer `.litertlm` bundle,
+  12 GB+). Each size is its own file, so several can be installed and
+  switched. Free, private, works without Wi-Fi; a few seconds per answer
+  and a warmer phone. `docs/print/AdHush-guide-local-AI-OnePlus.pdf` is
+  the walkthrough.
+
+Both are late by nature — the speech engine finishes a sentence a few
+seconds after it is said, the window is 40 seconds, and the answer takes a
+moment — so they are best at *starting* a duck; the bug, the ticker or a
+remembered break brings the sound back. Details: ADR 0015.
+
+## The news ticker instead of the bug
+
+On a news channel the lower third carries a band (the ticker or the chyron
+with the headline) whose top and bottom edges never move while the words
+inside scroll; during a commercial the band is gone. Under **Channel bug**
+choose **the news ticker**, then Camera setup, Watch 45 s: the yellow box
+should sit on the band. Same rules as the bug (whole TV in view, seen once
+before it can be missed, gone for 2.5 s). Shows that drop the ticker for
+interviews would read as a commercial — use the bug on those.
 
 ## Teaching it the commercials
 
@@ -151,3 +319,124 @@ normal show with the phone where it will live; the digest tells you whether
 The installable web app served by a Pi or PC core (`docs/release.md`) remains
 the right choice when a passthrough box is in play or the TV has no network
 control.
+
+## The mute paradox (0.17.0)
+
+The phone's microphone hears the set get quieter the moment the app ducks
+it. Before 0.17.0 the loudness method read that as "programme resumed", the
+set came back up into the commercial and was ducked again. Now the engine
+tells the audio methods about every duck (ADR 0016): loudness waits one
+window, measures how far the room dropped and judges the ducked ad on the
+original scale; silence is inert while ducked. When the ducked set is
+buried under the room — fans louder than a TV at volume 4 — loudness says
+`ducked_buried` and goes inert, and the camera, the fingerprints and the AI
+judges carry the unmute. A duck level of 8–10 keeps the set audible to the
+mic and lets loudness time the unmute itself.
+
+## Manual duck and the remote (0.18.0)
+
+Ten buttons on Home turn the TV down for 30 s to 5 min in 30-s steps and
+bring it back on their own, whatever the methods think; **+30 s** (also on
+the notification and the remote) adds to a running duck, and on a duck the
+methods started it holds that one as a timed duck instead. The status line
+counts down; Show's back ends a timed duck early; nothing is learned.
+During an automatic duck the status line says "about m:ss left" once the
+break clock has seen five breaks on this channel (0.21.0).
+**Open the remote control** (also the remote icon in the toolbar of every
+screen) shows every key of the Sharp handset (through
+the network or the serial cable: `RCKY` codes; infrared knows only volume
+and mute) together with Start, Stop, Is an ad, Show's back, Not an ad and
+the timed ducks. While AdHush runs the keys go through its connection, since
+the Sharp allows one; otherwise the screen opens its own and closes it when
+it leaves the foreground (ADR 0017).
+
+## Break jingles (0.21.0)
+
+Method 10 listens for the channel's own sting. Every break the other
+methods end cuts two six-second candidates from the audio history — around
+the moment the break started and the moment it ended — and compares them
+with the candidates already kept. The same three seconds heard at the start
+of three different breaks becomes a known **opener**, and from then on
+hearing it ducks the set at once, before loudness or the bug can react. A
+known **closer** heard while ducked counts as the show being back. **Not an
+ad** counts against the opener that fired and demotes it when it has been
+wrong as often as right. A channel with no sting never promotes anything.
+The learned stings live in `jingles.tsv` and travel with the shared memory.
+
+Since 0.28.0 (ADR 0027) a sting is also recognised transposed by up to two
+semitones or stretched by up to a tenth in tempo — the same house sting
+re-cut per show — at a slightly higher bar, and a re-cut heard live counts
+for the sting it resembles. Every jingle remembers the local hours it has
+opened breaks in; at one of those hours it is trusted after two breaks
+instead of three and matched a little more loosely. The **segment
+stinger** — the whoosh or hit on the cut, with no tune to learn — is a
+separate default-weight detector that rides on the Loudness method: a
+short noisy burst over the bed, then the level moves. It tips the balance
+for a couple of seconds and never ducks alone.
+
+## What the buttons tell you (0.28.4)
+
+A button changes only when something real happened, never as a flex for
+a tap that went nowhere. Three looks: **blue and greyed**, its label the
+job's progress ("Downloading Qwen 3: 43 %", "Testing the TV…"), for as
+long as the job it started is running, so a second press cannot start it
+twice; **green with a tick** for a second and a half once what it asked
+for went through; **red with a cross** when it did not (nothing running,
+the set did not answer, an override in the way; the Log page says which).
+Is an ad, Show's back, Not an ad, the timed ducks and every remote key
+turn green or red on the service's word, on the Home page and the remote
+alike. Start turns green and reads Running while AdHush runs; Stop turns
+red then. The teach buttons and the ducks are bright only when they would
+do something right now.
+
+Model downloads cannot leave a short file installed as if it were whole:
+the bytes go to a `.part` file with the expected size kept beside it, a
+download that stops short says how far it got and the button reads
+*Resume* with the percentage, and only a part of exactly the expected size
+is moved into place. **Delete partial model downloads** in the ⋮ menu
+throws a stopped download away.
+
+## When it learned nonsense (0.28.1)
+
+A bad evening — a teach session that ran into the show, a couple of
+mis-taps — can leave the memory matching the show itself. Four guards now
+stop that feeding on itself (ADR 0027, amended): a break shorter than
+twenty seconds teaches the jingle learner nothing; two hearings of a sting
+within half an hour count once; a taught bracket under half a minute is a
+slip of the finger and one over six minutes is cut there; and a remembered
+break whose duck ends within ten seconds on the show's own evidence is a
+false match — two of them forget it. When that is not enough, **Forget
+what it learned…** (Methods page, or the ⋮ menu) wipes the remembered
+breaks, the jingles, the break clock or the scripts, each on its own tick.
+
+The Log page's **Save to a file** writes the log through the system file
+picker (Downloads by default) beside Share. The set-up wizard is a button
+on the Home page next to Start, Stop, Test TV and Remote, and never opens
+by itself; the remote is laid out like one, with the volume and channel
+rockers either side of a D-pad and a number pad below.
+
+## Learn from a stream (0.19.0)
+
+On Android 10+, **Methods → Learn from a stream → Start** asks for the
+"record or cast" permission and then the phone hears its own playback: open
+the channel's live stream in Chrome and leave it playing. The engine runs
+without a TV, fingerprints on, speech and the AI judges as configured,
+**Read the ad badge** on by default (the player's corners are read once a
+second with ML Kit; "Ad", "Ad 1 of 3", "AD 0:15" or "Your video will
+resume" is the strongest evidence there is, and its absence while the
+reader still scans counts as the show), and
+every break it ends is learned into the same `ads.tsv` and `scripts.tsv`
+the TV mode uses; ✓ / ▶ on the notification teach by hand. Players that
+block capture give silence and the status line says so. **Share this
+phone's memory** / **Import memory from a file** on card 3 move breaks,
+scripts and the clock between phones (ADR 0018).
+
+**"App content hidden from screenshare for security purposes"** is
+Android's own message: the player marks its window as protected (a DRM
+player does), so the mirrored picture is black, and since a player must
+opt in to being heard through playback capture, the sound is usually
+silence as well. Since 0.28.2 the Home card and the notification say
+within eight seconds which of the two is happening and what to do: play
+the channel's website in Chrome instead, or play it out loud next to the
+phone and use the normal Start, which hears any player through the
+microphone.

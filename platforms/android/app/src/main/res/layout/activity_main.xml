@@ -1,70 +1,337 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="match_parent">
-    <LinearLayout
-        android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="vertical" android:padding="20dp">
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="AdHush" android:textSize="24sp" android:textStyle="bold" />
-        <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="stopped" android:textSize="18sp" android:paddingTop="6dp" android:paddingBottom="14dp" />
+    <com.google.android.material.appbar.AppBarLayout android:id="@+id/appbar"
+        android:layout_width="match_parent" android:layout_height="wrap_content">
+        <com.google.android.material.appbar.MaterialToolbar android:id="@+id/toolbar"
+            android:layout_width="match_parent" android:layout_height="?attr/actionBarSize"
+            app:title="AdHush" app:subtitle="stopped" />
+    </com.google.android.material.appbar.AppBarLayout>
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="How this phone reaches the TV" />
-        <RadioGroup android:id="@+id/control" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-            <RadioButton android:id="@+id/controlIp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Network" />
-            <RadioButton android:id="@+id/controlSerial" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Serial cable" />
-            <RadioButton android:id="@+id/controlIr" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Infrared" />
-        </RadioGroup>
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Infrared codes (Sharp: address 1, volume up 14, down 15 — hex)" />
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-            <EditText android:id="@+id/irAddress" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="address" android:inputType="number" />
-            <EditText android:id="@+id/irVolUp" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="vol up" />
-            <EditText android:id="@+id/irVolDown" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="vol down" />
+    <!-- HOME -->
+    <androidx.core.widget.NestedScrollView android:id="@+id/pageHome" android:clipToPadding="false"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="16dp" android:paddingBottom="104dp">
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Filled" app:cardCornerRadius="20dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:id="@+id/statusCard"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Right now" android:textAppearance="?attr/textAppearanceLabelLarge" />
+<TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="6dp" android:text="stopped" android:textAppearance="?attr/textAppearanceHeadlineSmall" />
+<com.google.android.material.chip.ChipGroup android:id="@+id/chips" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="10dp" app:chipSpacingVertical="2dp">
+  <com.google.android.material.chip.Chip android:id="@+id/chipSilence" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Quiet gaps" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipLoudness" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Loudness" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipFingerprints" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Remembered" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipCamera" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bug" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipSpeech" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Speech" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipCaptions" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Captions" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipClaude" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Claude" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipLocal" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Local AI" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipClock" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Clock" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipStream" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Stream" />
+  <com.google.android.material.chip.Chip android:id="@+id/chipJingle" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Jingles" />
+</com.google.android.material.chip.ChipGroup>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingTop="14dp">
+  <com.google.android.material.button.MaterialButton android:id="@+id/start" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minHeight="60dp" android:textSize="17sp" android:layout_marginEnd="8dp" android:text="▶ Start" />
+  <com.google.android.material.button.MaterialButton android:id="@+id/stop" style="@style/Widget.AdHush.Button.Tonal" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minHeight="60dp" android:textSize="17sp" android:text="■ Stop" />
+</LinearLayout>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingTop="4dp">
+  <com.google.android.material.button.MaterialButton android:id="@+id/testHome" style="@style/Widget.AdHush.Button.Tonal" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="6dp" android:text="Test TV" />
+  <com.google.android.material.button.MaterialButton android:id="@+id/wizard" style="@style/Widget.AdHush.Button.Tonal" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="6dp" android:text="Set-up wizard" />
+  <com.google.android.material.button.MaterialButton android:id="@+id/openRemote" style="@style/Widget.AdHush.Button.Tonal" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Remote" />
+</LinearLayout>
+<TextView android:id="@+id/homeHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:textAppearance="?attr/textAppearanceBodySmall" android:text="New here? The set-up wizard (three minutes) finds the TV, listens to the room and suggests settings; Test TV proves the connection; the remote has every key." /></LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotTeach" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Teach it" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoTeach" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:paddingBottom="8dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Is an ad the moment a break starts; Show\'s back the second the show returns. Under half a minute is taken as a slip and not kept." />
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+  <com.google.android.material.button.MaterialButton android:id="@+id/isAd" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minHeight="60dp" android:layout_marginEnd="8dp" android:text="✓ Is an ad" app:backgroundTint="@color/adhush_teaching" />
+  <com.google.android.material.button.MaterialButton android:id="@+id/showBack" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:minHeight="60dp" android:text="▶ Show\'s back" app:backgroundTint="@color/adhush_program" />
+</LinearLayout>
+<com.google.android.material.button.MaterialButton android:id="@+id/notAd" style="@style/Widget.AdHush.Button.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="✗ Not an ad — undo a mistake" app:strokeColor="@color/adhush_ducked" android:textColor="@color/adhush_ducked" /></LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotManual" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Duck for a while" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoManual" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:paddingBottom="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Turn the TV down for a fixed time, whatever the methods think, then back up on its own. Nothing is learned. +30 s stretches a running duck." />
+<com.google.android.material.chip.ChipGroup android:layout_width="match_parent" android:layout_height="wrap_content" app:chipSpacingHorizontal="6dp" app:chipSpacingVertical="2dp">
+  <com.google.android.material.chip.Chip android:id="@+id/duck30" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="30 s" android:textSize="15sp" app:chipMinHeight="44dp" />
+  <com.google.android.material.chip.Chip android:id="@+id/duck60" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="1 min" android:textSize="15sp" app:chipMinHeight="44dp" />
+  <com.google.android.material.chip.Chip android:id="@+id/duck90" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="1½ min" android:textSize="15sp" app:chipMinHeight="44dp" />
+  <com.google.android.material.chip.Chip android:id="@+id/duck120" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="2 min" android:textSize="15sp" app:chipMinHeight="44dp" />
+  <com.google.android.material.chip.Chip android:id="@+id/duck150" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="2½ min" android:textSize="15sp" app:chipMinHeight="44dp" />
+  <com.google.android.material.chip.Chip android:id="@+id/duck180" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="3 min" android:textSize="15sp" app:chipMinHeight="44dp" />
+  <com.google.android.material.chip.Chip android:id="@+id/duck210" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="3½ min" android:textSize="15sp" app:chipMinHeight="44dp" />
+  <com.google.android.material.chip.Chip android:id="@+id/duck240" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="4 min" android:textSize="15sp" app:chipMinHeight="44dp" />
+  <com.google.android.material.chip.Chip android:id="@+id/duck270" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="4½ min" android:textSize="15sp" app:chipMinHeight="44dp" />
+  <com.google.android.material.chip.Chip android:id="@+id/duck300" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="5 min" android:textSize="15sp" app:chipMinHeight="44dp" />
+  <com.google.android.material.chip.Chip android:id="@+id/duckMore" style="@style/Widget.Material3.Chip.Assist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="+30 s" android:textSize="15sp" app:chipMinHeight="44dp" app:chipStrokeColor="?attr/colorPrimary" app:chipStrokeWidth="2dp" />
+</com.google.android.material.chip.ChipGroup></LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView android:id="@+id/testCard" android:visibility="gone" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotTest" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Test TV" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoTest" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="The same exchange as a real duck: ask the volume, mute and unmute, duck and restore. The sound should dip twice." />
+<TextView android:id="@+id/testResult" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:textSize="11sp" android:fontFamily="monospace" android:textIsSelectable="true" android:text="" /></LinearLayout></com.google.android.material.card.MaterialCardView>
         </LinearLayout>
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="TV address (Network: IP Control must be enabled on the set)" />
-        <EditText android:id="@+id/host" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:hint="192.168.1.50" android:inputType="textUri" android:autofillHints="" />
-        <EditText android:id="@+id/port" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:hint="10002" android:inputType="number" android:autofillHints="" />
-        <EditText android:id="@+id/login" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:hint="login ID (blank if none)" android:inputType="text" android:autofillHints="username" />
-        <EditText android:id="@+id/password" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:hint="password" android:inputType="textPassword" android:autofillHints="password" />
+    </androidx.core.widget.NestedScrollView>
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="10dp"
-            android:text="Duck to volume (0–60; 3–5 is inaudible but still detectable)" />
-        <EditText android:id="@+id/duck" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:hint="4" android:inputType="number" android:autofillHints="" />
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="Normal volume (used only if the TV will not answer VOLM?)" />
-        <EditText android:id="@+id/normal" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:hint="20" android:inputType="number" android:autofillHints="" />
-        <CheckBox android:id="@+id/camera" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Use the back camera to watch for the network logo" />
-        <Button android:id="@+id/cameraSetup" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Set up camera (45 s, during a show)" />
-        <CheckBox android:id="@+id/useMute" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="Use MUTE instead of ducking (phone goes deaf while muted)" />
+    <!-- TV -->
+    <androidx.core.widget.NestedScrollView android:id="@+id/pageTv" android:visibility="gone" android:clipToPadding="false"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="16dp" android:paddingBottom="104dp">
 
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:paddingTop="12dp">
-            <Button android:id="@+id/save" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Save" />
-            <Button android:id="@+id/test" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Test TV" />
-        </LinearLayout>
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-            <Button android:id="@+id/start" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Start" />
-            <Button android:id="@+id/stop" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Stop" />
-        </LinearLayout>
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-            <Button android:id="@+id/notAd" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="✗ Not an ad" />
-            <Button android:id="@+id/isAd" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="✓ Is an ad" />
-        </LinearLayout>
-        <Button android:id="@+id/showBack" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="▶ Show's back (ends teaching, learns the break)" />
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-            <Button android:id="@+id/survey" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Survey room (10 min)" />
-            <Button android:id="@+id/share" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Share survey" />
-        </LinearLayout>
+            <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotTv" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="How this phone reaches the TV" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoTv" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+                    <RadioGroup android:id="@+id/control" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="4dp">
+                        <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/controlIp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Network (Wi‑Fi, the big Sharp)" />
+                        <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/controlSerial" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Serial cable (USB‑OTG to RS‑232C)" />
+                        <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/controlIr" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Infrared (phones with a blaster)" />
+                        <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/controlFound" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Another brand — run the set-up wizard to find it" />
+                    </RadioGroup>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
-        <TextView android:id="@+id/log" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:paddingTop="14dp" android:textSize="12sp" android:fontFamily="monospace" />
-    </LinearLayout>
-</ScrollView>
+            <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Network" android:textAppearance="?attr/textAppearanceTitleMedium" android:paddingBottom="8dp" />
+                    <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="TV address" android:layout_marginBottom="8dp">
+                        <com.google.android.material.textfield.TextInputEditText android:id="@+id/host" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textUri" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Port" android:layout_marginBottom="8dp">
+                        <com.google.android.material.textfield.TextInputEditText android:id="@+id/port" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Login ID (blank if none)" android:layout_marginBottom="8dp">
+                        <com.google.android.material.textfield.TextInputEditText android:id="@+id/login" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="text" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Password" app:passwordToggleEnabled="true">
+                        <com.google.android.material.textfield.TextInputEditText android:id="@+id/password" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textPassword" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Infrared codes (Sharp defaults; the wizard can pick Samsung, LG/Vizio, Sony, Philips, Panasonic or Toshiba instead)" android:textAppearance="?attr/textAppearanceTitleMedium" android:paddingBottom="8dp" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                        <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="Address" android:layout_marginEnd="6dp">
+                            <com.google.android.material.textfield.TextInputEditText android:id="@+id/irAddress" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" />
+                        </com.google.android.material.textfield.TextInputLayout>
+                        <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="Vol up (hex)" android:layout_marginEnd="6dp">
+                            <com.google.android.material.textfield.TextInputEditText android:id="@+id/irVolUp" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                        </com.google.android.material.textfield.TextInputLayout>
+                        <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="Vol down (hex)">
+                            <com.google.android.material.textfield.TextInputEditText android:id="@+id/irVolDown" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                        </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Volume" android:textAppearance="?attr/textAppearanceTitleMedium" android:paddingBottom="8dp" />
+                    <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Duck to (0–60; 3–5 is inaudible but still detectable)" android:layout_marginBottom="8dp">
+                        <com.google.android.material.textfield.TextInputEditText android:id="@+id/duck" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Normal volume (used if the TV cannot report its own)">
+                        <com.google.android.material.textfield.TextInputEditText android:id="@+id/normal" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/useMute" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Use MUTE instead of ducking (phone goes deaf while muted)" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                <com.google.android.material.button.MaterialButton android:id="@+id/save" style="@style/Widget.AdHush.Button.Outlined" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:text="Save" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/test" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Test TV" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- METHODS -->
+    <androidx.core.widget.NestedScrollView android:id="@+id/pageSenses" android:visibility="gone" android:clipToPadding="false"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="16dp" android:paddingBottom="104dp">
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Filled" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotMethods" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Eight ways to spot a commercial" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoMethods" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:id="@+id/methodsNote" android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Switch on any mix. At least one must be on, or the app has nothing to go on and will not start. A coloured dot means that method is running right now." />
+</LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotSilence" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="1. Quiet gaps" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoSilence" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="The microphone hears the short silence broadcasters leave between the show and each commercial. A hint: needs another method to agree." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/silence" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Listen for quiet gaps" />
+</LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotLoudness" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="2. Loudness jumps" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoLoudness" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Commercials are mixed louder than the show. The microphone notices the sound jumping up and staying up. A hint: needs another method to agree." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/loudness" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Listen for loudness jumps" />
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingTop="4dp">
+  <com.google.android.material.button.MaterialButton android:id="@+id/survey" style="@style/Widget.AdHush.Button.Tonal" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:text="Survey room (10 min)" />
+  <com.google.android.material.button.MaterialButton android:id="@+id/share" style="@style/Widget.AdHush.Button.Outlined" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Share survey" />
+</LinearLayout></LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotFingerprints" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="3. Remembered breaks" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoFingerprints" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Every break you bracket with Is an ad and Show\'s back is remembered as an audio fingerprint (numbers, not a recording) and recognised next time it airs. Strong enough to duck on its own." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/fingerprints" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Recognise remembered breaks" />
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingTop="4dp">
+  <com.google.android.material.button.MaterialButton android:id="@+id/shareMemory" style="@style/Widget.AdHush.Button.Tonal" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:text="Share this phone\'s memory" />
+  <com.google.android.material.button.MaterialButton android:id="@+id/importMemory" style="@style/Widget.AdHush.Button.Outlined" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Import memory from a file" />
+</LinearLayout>
+<com.google.android.material.button.MaterialButton android:id="@+id/forgetMemory" style="@style/Widget.AdHush.Button.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Forget what it learned…" app:strokeColor="@color/adhush_ducked" android:textColor="@color/adhush_ducked" />
+</LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotCamera" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="4. Channel bug (camera)" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoCamera" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="The back camera watches the corner where the channel\'s logo — the bug — lives. Bug gone for 2.5 s means a commercial. Only acts while the whole TV is in view. Strong enough to duck on its own." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/camera" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Use the back camera" />
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="6dp" android:textAppearance="?attr/textAppearanceLabelLarge" android:text="What to watch" />
+<RadioGroup android:id="@+id/cameraTarget" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/targetBug" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="The channel bug (the corner logo)" />
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/targetTicker" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="The news ticker (the band across the bottom)" />
+</RadioGroup>
+<com.google.android.material.button.MaterialButton android:id="@+id/cameraSetup" style="@style/Widget.AdHush.Button.Tonal" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Camera setup — find the bug (in colour)" /></LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotSpeech" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="5. Spoken words (speech)" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoSpeech" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="An offline speech recogniser turns what the microphone hears into words. Commercials repeat their words; the app saves them as scripts and recognises them. Strong enough to duck on its own." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/speech" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Use speech recognition" />
+<RadioGroup android:id="@+id/speechModelChoice" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/speechSmall" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Small model (40 MB, quick)" />
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/speechMedium" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Better model (128 MB, hears more over the fans)" />
+</RadioGroup>
+<com.google.android.material.button.MaterialButton android:id="@+id/speechModel" style="@style/Widget.AdHush.Button.Tonal" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Download speech model (40 MB)" />
+<com.google.android.material.button.MaterialButton android:id="@+id/learnScripts" style="@style/Widget.AdHush.Button.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Learn scripts now" /></LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotCaptions" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="6. On-screen captions" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoCaptions" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="With the TV\'s closed captions on, the camera reads the caption text off the screen and matches it to scripts like speech — but nothing is misheard over the fans. Needs the whole TV in view. Strong enough to duck on its own." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/captions" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Read the captions with the camera" />
+</LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotClaude" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="7. Ask Claude (cloud AI)" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoClaude" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Sends the last 40 seconds of words to Claude and asks: is this a commercial? Needs Speech or Captions for the words, an API key, and Wi-Fi. Costs about 13 cents an hour of TV with Haiku; a tenth of that as a tie-breaker. Only text leaves the phone." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/judgeCloud" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Ask Claude" />
+<com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Anthropic API key (sk-ant-…)" app:passwordToggleEnabled="true" android:layout_marginTop="6dp">
+  <com.google.android.material.textfield.TextInputEditText android:id="@+id/claudeKey" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textPassword" />
+</com.google.android.material.textfield.TextInputLayout>
+<com.google.android.material.textfield.TextInputLayout style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Channel name (helps the AI, e.g. MSNOW)" android:layout_marginTop="6dp">
+  <com.google.android.material.textfield.TextInputEditText android:id="@+id/channel" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="text" />
+</com.google.android.material.textfield.TextInputLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="6dp" android:textAppearance="?attr/textAppearanceLabelLarge" android:text="Which Claude" />
+<RadioGroup android:id="@+id/claudeModel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/modelHaiku" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Haiku 4.5 — cheapest (about 13 ¢ an hour)" />
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/modelSonnet" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Sonnet 5 — sharper (about 26 ¢ an hour)" />
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/modelOpus" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Opus 5 — best judgement (about 65 ¢ an hour)" />
+</RadioGroup>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="6dp" android:textAppearance="?attr/textAppearanceLabelLarge" android:text="How often to ask (both AI methods)" />
+<RadioGroup android:id="@+id/judgeMode" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/modeTie" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Tie-breaker: only when the other methods are unsure, or while ducked (cheap)" />
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/modeAlways" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Always: every 10 seconds (quickest to catch an ad)" />
+</RadioGroup>
+<com.google.android.material.button.MaterialButton android:id="@+id/testClaude" style="@style/Widget.AdHush.Button.Tonal" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Test Claude with a sample" /></LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotLocal" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="8. Local AI (on the phone)" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoLocal" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="The same question answered by a language model on the phone (Qwen, downloaded once). Free, private, no Wi-Fi needed; a few seconds per answer and a warmer phone. Needs Speech or Captions for the words." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/judgeLocal" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Use the local AI" />
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="6dp" android:textAppearance="?attr/textAppearanceLabelLarge" android:text="Which model (bigger = sharper, slower, more memory)" />
+<RadioGroup android:id="@+id/localModelChoice" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/localSmall" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Qwen 2.5 0.5B — 550 MB, any phone, about 2 s an answer" />
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/localMedium" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Qwen 2.5 1.5B — 1.6 GB, 6 GB+ phones, about 5 s" />
+  <com.google.android.material.radiobutton.MaterialRadioButton android:id="@+id/localLarge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Qwen 3 4B — 2.7 GB, 12 GB+ phones, about 10 s (newer file format)" />
+</RadioGroup>
+<com.google.android.material.button.MaterialButton android:id="@+id/localModel" style="@style/Widget.AdHush.Button.Tonal" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Download Qwen 2.5 0.5B (547 MB)" />
+<com.google.android.material.button.MaterialButton android:id="@+id/testLocal" style="@style/Widget.AdHush.Button.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Test the local AI with a sample" /></LinearLayout></com.google.android.material.card.MaterialCardView>
+        <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotClock" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="9. Break clock" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoClock" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Learns which minutes of the hour the breaks land on, from every break the other methods or you confirm. Once a minute has been watched for three hours it votes; it tips the balance but never ducks alone." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/clockOn" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Learn the break clock" />
+</LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotJingle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="10. Break jingles" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoJingle" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="The channel plays the same short sting into and out of every break. Every break the app ends teaches the seconds around its start and end; a sting that opens three breaks is promoted and from then on ducks the set the moment it plays, and its closing sting brings the show back. One fingerprint per channel instead of one per ad." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/jinglesOn" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:text="Learn and recognise the break jingles" />
+</LinearLayout></com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+  <TextView android:id="@+id/dotStream" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="18sp" android:textColor="@color/method_off" android:paddingEnd="8dp" />
+  <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Learn from a stream" android:textAppearance="?attr/textAppearanceTitleMedium" />
+  <ImageButton android:id="@+id/infoStream" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_info" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Explain" app:tint="?attr/colorPrimary" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="4dp" android:paddingBottom="8dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:text="Play the channel\'s live stream on this phone (MS NOW, Xfinity Stream, any web player in Chrome) and the phone hears its own playback and learns every break into the same memory it uses at the TV. No TV is touched. Android 10 or newer; you will be asked to allow screen recording: the sound is what is learned from, and with the switch below on, the corners of the picture are read for the player\'s AD badge. Nothing is stored or sent anywhere." />
+<com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/badgeOn" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="4dp" android:paddingBottom="8dp" android:text="Read the player\'s AD badge off the screen (near-certain breaks)" />
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+  <com.google.android.material.button.MaterialButton android:id="@+id/streamStart" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="8dp" android:text="Start learning from a stream" />
+  <com.google.android.material.button.MaterialButton android:id="@+id/streamStop" style="@style/Widget.AdHush.Button.Tonal" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="■ Stop" />
+</LinearLayout>
+</LinearLayout></com.google.android.material.card.MaterialCardView>
+</LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- HELP -->
+    <androidx.core.widget.NestedScrollView android:id="@+id/pageHelp" android:visibility="gone" android:clipToPadding="false"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        <LinearLayout android:id="@+id/helpList" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="16dp" android:paddingBottom="104dp" />
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- LOG -->
+    <androidx.core.widget.NestedScrollView android:id="@+id/pageLog" android:visibility="gone" android:clipToPadding="false"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="16dp" android:paddingBottom="104dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingBottom="8dp">
+                <com.google.android.material.button.MaterialButton android:id="@+id/saveLog" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="6dp" android:text="Save to a file" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/shareLog" style="@style/Widget.AdHush.Button.Tonal" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="6dp" android:text="Share" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/clearLog" style="@style/Widget.AdHush.Button.Outlined" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Clear" />
+            </LinearLayout>
+            <com.google.android.material.card.MaterialCardView style="@style/Widget.Material3.CardView.Outlined" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView android:id="@+id/log" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="12dp" android:textSize="11sp" android:fontFamily="monospace" android:textIsSelectable="true" />
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView android:id="@+id/nav"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="bottom"
+        app:menu="@menu/bottom_nav" />
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

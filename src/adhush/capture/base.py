@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Self
 
-from adhush.events import AudioEvent, FrameEvent
+from adhush.events import AudioEvent, CueEvent, FrameEvent
 
 
 class CaptureError(RuntimeError):
@@ -29,6 +29,7 @@ class CaptureCaps:
     fps: float = 0.0
     sample_rate: int = 0
     realtime: bool = True  # False for file_replay: timestamps are media time
+    cues: bool = False  # the backend yields CueEvents (a transport stream's SCTE-35)
 
 
 class CaptureSource(ABC):
@@ -39,6 +40,10 @@ class CaptureSource(ABC):
     @abstractmethod
     def frames(self) -> Iterator[FrameEvent]:
         """Yield frames in timestamp order; empty iterator if no video."""
+
+    def cues(self) -> Iterator[CueEvent]:
+        """Out-of-band markers, when ``caps().cues``; empty otherwise."""
+        return iter(())
 
     @abstractmethod
     def audio_blocks(self) -> Iterator[AudioEvent]:

@@ -1,0 +1,90 @@
+# The TV listener: a Raspberry Pi with a USB webcam and microphone on a shelf
+# facing the TV, turning a Sharp AQUOS down during commercials through the
+# set's RS-232C serial port (a USB null-modem cable) -- or over Wi-Fi.
+# No HDMI hardware, no relay, no soldering (docs/build-guide-tv-listener.md).
+# Copy to config/adhush.toml and edit the [control] section.
+
+[capture]
+backend = "camera"
+device = "/dev/video0"       # the webcam; `adhush doctor` lists what it found
+width = 1280
+height = 720
+fps = 10                     # a bug on a screen does not need 30 frames a second
+audio_device = "alsa:plughw:1,0"   # the webcam's or USB microphone's card number, from `adhush doctor`
+autocrop = true              # find the TV in the picture; half a TV is dropped, never "logo gone"
+
+[device]
+profile = "sharp-lc46le830u"
+
+[detect]
+# The listener's four ways (docs/build-guide-tv-listener.md, "The methods"):
+enabled = ["silence", "loudness", "logo_absence", "fingerprint", "clock", "jingle", "ad_units", "stereo_width", "schedule", "crowd", "stinger"]   # clock: the learned break clock (ADR 0017); jingle: the channel's break sting (ADR 0020)
+
+[detect.logo_absence]
+absence_frames = 25          # 2.5 s at 10 fps: the bug must be gone this long
+template = "data/logos/logo.npz"   # written by `adhush calibrate`
+present_threshold = 0.4
+search_px = 6                # slide the box a little: a webcam's screen edge is never exact
+require_sighting = true      # the bug must be seen once before it can be missed
+stale_s = 2.0                # no whole screen for this long = the camera has no say
+
+[detect.loudness]
+window_s = 1.5
+delta_lufs = 2.5
+max_elevated_s = 180
+
+[detect.silence]
+dbfs_threshold = -50.0       # the room survey on the phone read a -56 dBFS floor with the fans on
+min_run_ms = 400
+
+[fingerprint]
+enabled = true
+store = "data/fingerprints/ads.sqlite"
+learn = true
+
+[fusion]
+mute_confidence = 0.72
+unmute_confidence = 0.45
+mute_dwell_ms = 900
+unmute_dwell_ms = 400
+max_mute_s = 240
+not_ad_quiet_s = 60          # after "Not an ad", a minute in which nothing may duck
+
+[control]
+backend = "rs232_sharp"      # the cable; or "network_ip" for Wi-Fi (section below)
+verify_with_audio = true
+
+# The serial cable: USB-to-RS-232 null-modem cable (FTDI chip) from a front USB
+# port of the Pi to the TV's 9-pin RS-232C socket. No login, no Wi-Fi needed.
+# The user running AdHush must be in the "dialout" group to open the port.
+[control.rs232_sharp]
+port = "/dev/ttyUSB0"        # `ls /dev/ttyUSB*` shows it once the cable is in
+baud = 9600                  # 8 data bits, no parity, 1 stop bit (the manual, p. 58)
+timeout_s = 1.0
+duck_level = 4               # turn the set down to this during a commercial (3-5 is inaudible —
+                             # to the microphone too: loudness then goes inert and the camera decides
+                             # the unmute; 8-10 lets the mic follow the ducked ad, ADR 0016)
+normal_volume = 19           # used only if the set will not say its own volume
+duck_state_file = "data/preduck-volume.txt"   # so a crash never leaves the set quiet
+
+# The Wi-Fi alternative: set backend = "network_ip" above and fill this in.
+[control.network_ip]
+host = "192.168.1.12"        # the TV's address (MENU > Initial Setup > Internet Setup)
+port = 10002
+login_id = "admin"           # the IP Control login you set on the TV, or blank
+login_password = ""          # never commit a real password; config/adhush.toml is git-ignored
+duck_level = 4
+normal_volume = 19
+duck_state_file = "data/preduck-volume.txt"
+
+[ipc]
+enabled = true
+host = "0.0.0.0"             # the phone page (the three buttons) needs the Pi reachable on the Wi-Fi
+port = 8675
+token = ""
+
+[ui]
+overlay = false              # no screen on the shelf
+
+[log]
+level = "info"
