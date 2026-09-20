@@ -29,4 +29,15 @@
     <color name="method_stream">#00838F</color>
     <color name="method_jingle">#AD1457</color>
     <color name="method_off">#9E9E9E</color>
+    <!-- the remote's body and keys: the same in both themes, a remote is dark -->
+    <color name="remote_body">#202126</color>
+    <color name="remote_key">#3B3C43</color>
+    <color name="remote_key_text">#FFFFFF</color>
+    <color name="remote_power">#C62828</color>
+    <color name="remote_mute">#EF6C00</color>
+    <color name="remote_ok">#1F5F8B</color>
+    <color name="remote_a">#D32F2F</color>
+    <color name="remote_b">#388E3C</color>
+    <color name="remote_c">#FBC02D</color>
+    <color name="remote_d">#1976D2</color>
 </resources>

@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 Format follows Keep a Changelog; versioning follows SemVer.
 
+## [0.28.5] - 2026-09-20
+### Changed
+- Android: the remote is its own tab (Home, Remote, TV, Methods, Log;
+  Help moves to the ? in the toolbar) and is drawn like a TV remote: a
+  dark body with rounded ends, power, input and mute on top, a number
+  pad, the volume and channel rockers either side of a round D-pad with
+  OK in the middle, then menu, transport, the colour keys and the rest,
+  every key a dark pill or circle with one line of white text.
+- Android: no button anywhere wraps its label any more. Every button is
+  one line tall and its text shrinks to fit; the Log page's buttons read
+  Save, Share and Clear, the memory buttons Share memory and Import
+  memory, and the Home page's action row is Test TV and Set-up wizard.
+
 ## [0.28.4] - 2026-09-19
 ### Changed
 - Android buttons change only when something real happened; the press

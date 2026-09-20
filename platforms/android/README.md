@@ -85,17 +85,21 @@ Battery → Unrestricted) or Android may pause the service overnight.
 Five tabs along the bottom. **Home** is the status card (green while the
 show is on, red while ducked, orange while teaching, grey when stopped), a
 chip per method that lights in its colour while that method runs, the
-Start/Stop pair (Start reads "Running" in green, Stop turns red), the three
-teaching buttons, and **Test mode** — Test TV with its result printed on the
-card. **TV** is how this phone reaches its set, the address and login, and
-the volumes. **Methods** is the ten ways of spotting a commercial, each a
-switch with a ⓘ explanation and a coloured dot while it runs; at least one
-must be on or the app refuses to start. **Help** is every explanation in
-full. **Log** shows the app's own log and has **Share error log**: every
-status line, every caught error and every crash with its stack trace goes
-into a rolling file in the app's private storage, and that button hands it
-to mail, Drive or messages. If the app ever closes on its own, share that
-file.
+Start/Stop pair (Start reads "Running" in green, Stop turns red), Test TV
+and the set-up wizard, the teaching buttons and the timed ducks. **Remote**
+(its own tab since 0.28.5) is AdHush's own controls on top and then the
+TV's remote drawn as one: power, input and mute, the number pad, the
+volume and channel rockers either side of a round D-pad, then menu,
+transport, the colour keys and the rest, every key a dark pill or circle
+with one line of text. **TV** is how this phone reaches its set, the
+address and login, and the volumes. **Methods** is the ten ways of
+spotting a commercial, each a switch with a ⓘ explanation and a coloured
+dot while it runs; at least one must be on or the app refuses to start.
+**Log** shows the app's own log with **Save**, **Share** and **Clear**:
+every status line, every caught error and every crash with its stack
+trace goes into a rolling file in the app's private storage. **Help**,
+every explanation in full, is the ? in the toolbar. No button anywhere
+wraps its text: labels shrink to fit on one line.
 
 ## The set-up wizard (0.23.0)
 
@@ -374,7 +378,7 @@ separate default-weight detector that rides on the Loudness method: a
 short noisy burst over the bed, then the level moves. It tips the balance
 for a couple of seconds and never ducks alone.
 
-## What the buttons tell you (0.28.4)
+## What the buttons tell you (0.28.5)
 
 A button changes only when something real happened, never as a flex for
 a tap that went nowhere. Three looks: **blue and greyed**, its label the

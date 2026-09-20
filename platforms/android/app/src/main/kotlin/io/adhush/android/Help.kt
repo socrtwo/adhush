@@ -107,7 +107,7 @@ object Help {
     val TIMED = Topic("Manual duck and the remote",
         "The buttons turn the TV down for exactly that long — 30 seconds to five minutes in 30-second steps — whatever the methods think, then bring it back up on their own. " +
         "Pressed while the TV is already ducked, they keep it down for that long instead; +30 s adds half a minute to whatever is running, on the Home page, the remote and the notification, which counts down. Show's back ends one early. Nothing is learned from a manual duck.\n\n" +
-        "The remote control page has every button of the TV's own remote (through the network or the serial cable — infrared knows only volume and mute) plus Start, Stop, Is an ad, Show's back, Not an ad and the timed ducks with +30 s, " +
+        "The Remote tab has every button of the TV's own remote, drawn as one (through the network or the serial cable — infrared knows only volume and mute) plus Start, Stop, Is an ad, Show's back, Not an ad and the timed ducks with +30 s, " +
         "so one screen does it all. When AdHush is running, the keys go through its connection; the Sharp allows only one.")
 
     val STREAM = Topic("Learn from a stream",

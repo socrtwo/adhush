@@ -17,4 +17,6 @@
     <color name="adhush_teaching_container">#4A3115</color>
     <color name="adhush_stopped_container">#2A2E33</color>
     <color name="method_off">#757575</color>
+    <color name="remote_body">#17181C</color>
+    <color name="remote_key">#3B3C43</color>
 </resources>

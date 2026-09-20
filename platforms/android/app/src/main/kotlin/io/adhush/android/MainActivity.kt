@@ -32,13 +32,17 @@ import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
     private lateinit var settings: Settings
+    private lateinit var remote: RemotePanel
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val i = intent ?: return
             when (i.action) {
-                AdHushService.BROADCAST_STATUS -> showStatus(i.getStringExtra("text") ?: "", i.getBooleanExtra("running", AdHushService.running != null), i.getBooleanExtra("ducked", false), i.getBooleanExtra("teaching", false))
+                AdHushService.BROADCAST_STATUS -> {
+                    showStatus(i.getStringExtra("text") ?: "", i.getBooleanExtra("running", AdHushService.running != null), i.getBooleanExtra("ducked", false), i.getBooleanExtra("teaching", false))
+                    remote.status(i.getStringExtra("text") ?: "", i.getBooleanExtra("running", AdHushService.running != null), i.getBooleanExtra("ducked", false), i.getBooleanExtra("teaching", false))
+                }
                 AdHushService.BROADCAST_TEST -> testLine(i.getStringExtra("line") ?: "")
-                AdHushService.BROADCAST_ACTION -> actionDone(i)
+                AdHushService.BROADCAST_ACTION -> { actionDone(i); remote.actionDone(i) }
                 AdHushService.BROADCAST_SURVEY -> {
                     log("— survey saved; press Share survey to send the numbers (no audio is stored) —")
                     (i.getStringExtra("summary") ?: "").lines().reversed().forEach { log(it) }
@@ -70,14 +74,14 @@ class MainActivity : AppCompatActivity() {
         settings = Settings(this)
         AppLog.init(this)
         load()
-        val pages = mapOf(R.id.nav_home to R.id.pageHome, R.id.nav_tv to R.id.pageTv, R.id.nav_senses to R.id.pageSenses, R.id.nav_help to R.id.pageHelp, R.id.nav_log to R.id.pageLog)
         val nav = findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.nav)
         nav.setOnItemSelectedListener { item ->
-            for ((menuId, pageId) in pages) findViewById<View>(pageId).visibility = if (menuId == item.itemId) View.VISIBLE else View.GONE
+            showPage(NAV_PAGES[item.itemId] ?: R.id.pageHome)
             if (item.itemId != R.id.nav_home) save()            // leaving a page keeps what was typed
             if (item.itemId == R.id.nav_log) refreshLog()
             true
         }
+        remote = RemotePanel(this, settings, { action, button, extras -> serviceAction(action, button, extras) }, { line -> runOnUiThread { log(line); findViewById<TextView>(R.id.remoteStatus).text = line } })
         buildHelp()
         findViewById<Button>(R.id.shareLog).onTap { shareLog() }
         findViewById<Button>(R.id.saveLog).onTap { saveLog() }
@@ -101,7 +105,7 @@ class MainActivity : AppCompatActivity() {
             inflateMenu(R.menu.toolbar)
             setOnMenuItemClickListener { item ->
                 when (item.itemId) {
-                    R.id.action_remote -> { save(); startActivity(Intent(this@MainActivity, RemoteActivity::class.java)); true }
+                    R.id.action_help -> { save(); showPage(R.id.pageHelp); true }
                     R.id.action_wizard -> { save(); startActivity(Intent(this@MainActivity, SetupWizardActivity::class.java)); true }
                     R.id.action_forget -> { forgetMemory(); true }
                     R.id.action_save_log -> { saveLog(); true }
@@ -110,7 +114,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        findViewById<Button>(R.id.openRemote).onTap { save(); startActivity(Intent(this, RemoteActivity::class.java)) }
         findViewById<Button>(R.id.wizard).onTap { save(); startActivity(Intent(this, SetupWizardActivity::class.java)) }
         findViewById<Button>(R.id.survey).onTap { save(); if (checkBeforeStart()) startWithPermissions(AdHushService.ACTION_SURVEY) }
         findViewById<Button>(R.id.share).onTap { shareSurvey() }
@@ -141,6 +144,11 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<android.widget.RadioGroup>(R.id.speechModelChoice).setOnCheckedChangeListener { _, _ -> save(); findViewById<Button>(R.id.speechModel).text = speechModelLabel() }
         showStatus(AdHushService.lastText, AdHushService.running != null, false, false)
+    }
+
+    /** One page at a time; Help is reached from the toolbar, the rest from the tabs. */
+    private fun showPage(pageId: Int) {
+        for (id in ALL_PAGES) findViewById<View>(id).visibility = if (id == pageId) View.VISIBLE else View.GONE
     }
 
     /** The Help page: every explanation, in full, one card each. */
@@ -452,7 +460,9 @@ class MainActivity : AppCompatActivity() {
         Feedback.ok(findViewById<Button>(R.id.share))
     }
 
-    override fun onPause() { unregisterReceiver(receiver); super.onPause() }
+    override fun onPause() { unregisterReceiver(receiver); remote.onPause(); super.onPause() }
+
+    override fun onDestroy() { if (::remote.isInitialized) remote.onDestroy(); super.onDestroy() }
 
     private fun load() {
         findViewById<EditText>(R.id.host).setText(settings.host)
@@ -653,7 +663,7 @@ class MainActivity : AppCompatActivity() {
     private fun openPage(i: Intent?) {
         val page = i?.getStringExtra(EXTRA_PAGE) ?: return
         i.removeExtra(EXTRA_PAGE)
-        findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.nav).selectedItemId = when (page) { "methods" -> R.id.nav_senses; "tv" -> R.id.nav_tv; else -> R.id.nav_home }
+        findViewById<com.google.android.material.bottomnavigation.BottomNavigationView>(R.id.nav).selectedItemId = when (page) { "methods" -> R.id.nav_senses; "tv" -> R.id.nav_tv; "remote" -> R.id.nav_remote; else -> R.id.nav_home }
         i.getStringExtra(EXTRA_NOTE)?.let { log(it); i.removeExtra(EXTRA_NOTE) }
     }
 
@@ -669,6 +679,8 @@ class MainActivity : AppCompatActivity() {
         const val ACTION_USB = "io.adhush.android.USB_PERMISSION"
         const val EXTRA_PAGE = "page"
         const val EXTRA_NOTE = "note"
+        val NAV_PAGES = mapOf(R.id.nav_home to R.id.pageHome, R.id.nav_remote to R.id.pageRemote, R.id.nav_tv to R.id.pageTv, R.id.nav_senses to R.id.pageSenses, R.id.nav_log to R.id.pageLog)
+        val ALL_PAGES = listOf(R.id.pageHome, R.id.pageRemote, R.id.pageTv, R.id.pageSenses, R.id.pageHelp, R.id.pageLog)
         /** The timed ducks: 30-second steps up to a five-minute break. */
         val DUCK_BUTTONS = listOf(R.id.duck30 to 30, R.id.duck60 to 60, R.id.duck90 to 90, R.id.duck120 to 120, R.id.duck150 to 150,
             R.id.duck180 to 180, R.id.duck210 to 210, R.id.duck240 to 240, R.id.duck270 to 270, R.id.duck300 to 300)
