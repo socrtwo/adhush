@@ -1,5 +1,7 @@
 package io.adhush.core
 
+import kotlin.math.max
+
 /**
  * Rolling chroma blocks over the live audio, fed to the audio-primary matcher.
  * The Android counterpart of detect/fingerprint.py, minus video: a confirmed
@@ -98,6 +100,22 @@ data class Status(
     val adsLearned: Int,
     /** Teach mode: the user pressed "Is an ad" and has not yet pressed "Show's back". */
     val teaching: Boolean = false,
+    /** What the camera can see right now ("bug seen", "whole TV not in view", …); null without a camera. */
+    val camera: String? = null,
+    /** What each AI judge last said, by detector name. */
+    val judges: Map<String, String> = emptyMap(),
+    /** Seconds left of the quiet period after "Not an ad", 0 when none. */
+    val quietS: Double = 0.0,
+    /** Seconds left of a timed manual duck, 0 when none. */
+    val timedS: Double = 0.0,
+    /** What the break clock thinks of this minute; null without the clock. */
+    val clock: String? = null,
+    /** While ducked: the clock's guess at how much of the break is left, or null while it is still learning lengths. */
+    val breakLeftS: Double? = null,
+    /** What the jingle detector knows; null without it. */
+    val jingles: String? = null,
+    /** The ad badge last read off the screen during stream learning; null without the reader. */
+    val badge: String? = null,
 )
 
 /**
@@ -114,8 +132,17 @@ class Engine(
     private val fingerprint: AudioFingerprintDetector? = null,
     private val learner: AudioLearner? = null,
     private val store: FingerprintStore? = null,
+    /** After "Not an ad", no automatic duck for this long: the user's word outranks the detectors for a while. */
+    private val notAdQuietS: Double = NOT_AD_QUIET_S,
+    /** Wall-clock seconds, for the break clock; media time is not enough to know the minute of the hour. */
+    private val wallClock: () -> Double = { System.currentTimeMillis() / 1000.0 },
 ) {
-    private enum class Source { FUSION, FINGERPRINT, USER }
+    private enum class Source { FUSION, FINGERPRINT, USER, TIMED }
+    /** A timed manual duck ends at this media time (ADR 0017). */
+    private var timedUntil: Double? = null
+    private var adStartWall = 0.0
+    private var quietUntil = -1.0
+    private var lastTs = 0.0
 
     @Volatile var override: Override = Override.AUTO
         private set
@@ -134,25 +161,62 @@ class Engine(
     /** A camera frame (luma). Detectors that watch the screen update; the vote happens on the next audio tick. */
     @Synchronized fun onFrame(frame: Gray, ts: Double) { for (d in detectors) d.observeFrame(frame, ts) }
 
+    private val transcript: TranscriptDetector? get() = detectors.firstOrNull { it is TranscriptDetector && it.name == "transcript" } as TranscriptDetector?
+
+    private val captions: TranscriptDetector? get() = detectors.firstOrNull { it is TranscriptDetector && it.name == "captions" } as TranscriptDetector?
+
+    private val judges: List<JudgeDetector> get() = detectors.filterIsInstance<JudgeDetector>()
+
+    /** Recognised words from the phone's speech engine; the transcript detector and the judges see them. */
+    @Synchronized fun onWords(words: List<Word>) { for (w in words) { transcript?.observeWord(w); for (j in judges) j.observeWord(w) } }
+
+    /** Words read off the screen's caption band; the captions detector and the judges see them. */
+    @Synchronized fun onCaptions(words: List<Word>) { for (w in words) { captions?.observeWord(w); for (j in judges) j.observeWord(w) } }
+
+    /** Repetition learning over the recent transcript and captions; how many new scripts were found. */
+    @Synchronized fun learnScriptsFromTranscript(): Int = (transcript?.learnFromHistory() ?: 0) + (captions?.learnFromHistory() ?: 0)
+
     private val logo: LogoAbsenceDetector? get() = detectors.firstOrNull { it is LogoAbsenceDetector } as LogoAbsenceDetector?
+
+    private val clock: ClockDetector? get() = detectors.firstOrNull { it is ClockDetector } as ClockDetector?
+
+    private val jingle: JingleDetector? get() = detectors.firstOrNull { it is JingleDetector } as JingleDetector?
+
+    private val badge: BadgeDetector? get() = detectors.firstOrNull { it is BadgeDetector } as BadgeDetector?
+
+    /** Words read off the corners of the phone's own screen during stream learning (ADR 0020). */
+    @Synchronized fun onBadgeText(ts: Double, text: String) { badge?.observeText(ts, text) }
 
     @Synchronized fun onAudio(block: AudioBlock) {
         for (d in detectors) d.observeAudio(block)
         fingerprint?.observeAudio(block)
         val ts = block.ts
-        // An inert logo detector (no screen in view) casts no vote and leaves the normaliser alone.
-        val voting = detectors.filter { (it as? LogoAbsenceDetector)?.active != false }
+        lastTs = ts
+        clock?.tick(wallClock())
+        jingle?.tick(wallClock())
+        // An inert detector (the camera with no whole screen in view) casts no vote and leaves the normaliser alone.
+        val voting = detectors.filter { it.voting }
         val votes = voting.map { it.vote(ts) } + (fingerprint?.vote(ts)?.let { listOf(it) } ?: emptyList())
-        val decision = fusion.combine(votes, ts)
+        val quiet = ts < quietUntil
+        // The quiet period after "Not an ad": the evidence is still shown, but nothing acts on it.
+        val decision = if (quiet) { fusion.reset(); MuteDecision(ts, false, 0.0, listOf("user:not_ad_quiet")) } else fusion.combine(votes, ts)
         lastDecision = decision
+        // The AI judges ask their question off this thread when the others are unsure; a learned script reloads the matchers.
+        for (j in judges) {
+            j.hint(ts, decision.confidence, controllerMuted)
+            if (j.scriptsDirty) { j.scriptsDirty = false; transcript?.refreshScripts(); captions?.refreshScripts() }
+        }
+        timedUntil?.let { if (ts >= it) { endTimed(ts); return } }
         if (override != Override.AUTO) return  // the user has taken the wheel
 
-        val match = fingerprint?.activeMatch(ts)
+        val match = if (quiet) null else fingerprint?.activeMatch(ts)
         val fpHold = match != null  // activeMatch() already dropped expired ones
         val promote = fpHold && (machine.state == AdState.PROGRAM || machine.state == AdState.SUSPECT_AD)
         // A user hold behaves like a fingerprint hold with no programme evidence: only the ceiling ends it.
         // A fingerprint hold ends early when the logo is visibly back — presence is proof of programme.
-        val programEvidence = !userHold && (logo?.programPresent == true)
+        // A fingerprint hold ends early when the logo is visibly back, or the channel's closing sting was heard.
+        // Any detector with positive programme evidence: the bug back, the closing sting, the badge gone, a rating box (ADR 0023).
+        val programEvidence = !userHold && detectors.any { it.programPresent }
         val action = machine.update(decision, promote = promote, fpHold = fpHold || userHold, programEvidence = programEvidence) ?: return
         val reasons = if (promote) listOf("fingerprint:promote ad=${match!!.adId} dur=${match.durationS.toInt()}") + decision.reasons else decision.reasons
         apply(action, ts, decision.confidence, reasons, if (promote) Source.FINGERPRINT else Source.FUSION, match)
@@ -161,20 +225,30 @@ class Engine(
     private fun apply(action: Action, ts: Double, confidence: Double, reasons: List<String>, source: Source, match: Match?) {
         when (action) {
             Action.MUTE -> {
-                controller.mute(); controllerMuted = true
-                adStartTs = ts; adSource = source; activeAdId = match?.adId
+                drive(true, ts)
+                adStartTs = ts; adSource = source; activeAdId = match?.adId; adStartWall = wallClock()
+                machine.ceilingS = clock?.ceilingS(machine.hardMaxS) ?: machine.hardMaxS
             }
             Action.UNMUTE -> {
-                controller.unmute(); controllerMuted = false
+                drive(false, ts)
                 val start = adStartTs; val src = adSource; val adId = activeAdId
                 adStartTs = null; adSource = null; activeAdId = null; userHold = false
+                // The break clock and the jingle detector learn every real break; a timed manual duck teaches nothing.
+                if (start != null && src != null && src != Source.TIMED) { clock?.learn(adStartWall, wallClock()); jingle?.learnBreak(start, ts, adStartWall) }
                 if (start != null && learner != null && fingerprint != null) {
                     val duration = ts - start
                     when (src) {
-                        Source.FINGERPRINT -> adId?.let { if (matchKind(it) == AdKind.AD) learner.observeDuration(it, duration) }
+                        Source.FINGERPRINT -> adId?.let {
+                            // Ended within seconds on the show's own evidence: the record matched the show, not a break.
+                            if (duration < learner.falseMatchS) learner.falseMatch(it)
+                            else if (matchKind(it) == AdKind.AD) learner.observeDuration(it, duration)
+                        }
                         Source.FUSION -> learner.learnSegment(start, duration, fingerprint.audioBetween(start, start + 60.0))
-                        Source.USER -> learner.learnMaterial(start, ts, fingerprint.audioBetween(start, ts))?.let { fingerprint.holdOffAfterLearning(ts) }
-                        null -> {}
+                        Source.USER -> {
+                            learner.learnMaterial(start, ts, fingerprint.audioBetween(start, ts))?.let { fingerprint.holdOffAfterLearning(ts) }
+                            transcript?.learnWindow(start, ts)   // the words of the break are a script too
+                        }
+                        Source.TIMED, null -> {}
                     }
                 }
                 fingerprint?.abortMatch()
@@ -185,6 +259,17 @@ class Engine(
     }
 
     private fun matchKind(adId: Int): AdKind = store?.get(adId)?.kind ?: AdKind.AD
+
+    /**
+     * Duck or restore the set, then tell the detectors what the mic will hear
+     * next (ADR 0016). A command that throws leaves them untouched: the set
+     * has not changed.
+     */
+    private fun drive(mute: Boolean, ts: Double) {
+        if (mute) controller.mute() else controller.unmute()
+        controllerMuted = mute
+        for (d in detectors) d.audioDucked(ts, mute)
+    }
 
     /**
      * "✓ Is an ad" — teach mode: duck now and stay ducked, whatever the detectors
@@ -202,13 +287,48 @@ class Engine(
     }
 
     /**
+     * A timed manual duck (ADR 0017): turn the set down now and back up after
+     * [seconds], whatever the detectors say in between; nothing is learned.
+     * Pressed while already ducked, it keeps the duck for that long instead.
+     */
+    @Synchronized fun duckFor(now: Double, seconds: Double): Boolean {
+        if (override != Override.AUTO) return false
+        if (machine.state == AdState.AD) { timedUntil = now + seconds; adSource = Source.TIMED; userHold = true; emit(); return true }
+        val action = machine.userMute(now) ?: return false
+        timedUntil = now + seconds
+        userHold = true
+        apply(action, now, 1.0, listOf("user:timed ${seconds.toInt()}"), Source.TIMED, null)
+        return true
+    }
+
+    /** "+30 s": lengthen a running duck (timed or automatic) by [seconds]; not ducked, it starts a timed duck of that length. */
+    @Synchronized fun extendDuck(now: Double, seconds: Double): Boolean {
+        if (machine.state != AdState.AD) return duckFor(now, seconds)
+        val until = timedUntil
+        timedUntil = (if (until != null && until > now) until else now) + seconds
+        adSource = Source.TIMED; userHold = true
+        emit()
+        return true
+    }
+
+    private fun endTimed(now: Double): Boolean {
+        timedUntil = null
+        val action = machine.cancelAd(now) ?: return false
+        apply(action, now, 0.0, listOf("user:timed_end"), Source.TIMED, null)
+        fusion.reset()
+        return true
+    }
+
+    /**
      * "▶ Show's back": in teach mode, restore and learn the bracketed break. On an
      * automatic duck that overran, just restore — nothing is learned or forgotten.
      */
     @Synchronized fun showIsBack(now: Double): Boolean {
+        if (timedUntil != null) return endTimed(now)
         if (userHold) {
             val action = machine.cancelAd(now) ?: return false
             apply(action, now, 0.0, listOf("user:show_back"), Source.USER, null)
+            for (d in detectors) d.userSaysProgramme(now)
             return true
         }
         return standDown(now)
@@ -219,11 +339,14 @@ class Engine(
         val adId = activeAdId; val src = adSource
         val action = machine.cancelAd(now)
         if (action == null) return false
-        controller.unmute(); controllerMuted = false
+        timedUntil = null
+        drive(false, now)
         adStartTs = null; adSource = null; activeAdId = null; userHold = false
         if (src == Source.FINGERPRINT && adId != null) learner?.forget(adId)
         fingerprint?.abortMatch()
         fusion.reset()
+        for (d in detectors) d.userSaysProgramme(now)
+        quietUntil = now + notAdQuietS
         transitions.add(Transition(now, action, 0.0, listOf("user:reject")))
         emit()
         return true
@@ -232,7 +355,9 @@ class Engine(
     /** The user touched the remote: leave AD without learning or forgetting anything. */
     @Synchronized fun standDown(now: Double): Boolean {
         val action = machine.cancelAd(now) ?: return false
+        timedUntil = null
         controllerMuted = false   // the controller already stood down on its own
+        for (d in detectors) d.audioDucked(now, false)
         adStartTs = null; adSource = null; activeAdId = null; userHold = false
         fingerprint?.abortMatch()
         fusion.reset()
@@ -244,12 +369,12 @@ class Engine(
     @Synchronized fun setOverride(mode: Override, now: Double) {
         override = mode
         when (mode) {
-            Override.MUTE -> if (!controllerMuted) { controller.mute(); controllerMuted = true }
-            Override.UNMUTE -> if (controllerMuted) { controller.unmute(); controllerMuted = false }
+            Override.MUTE -> if (!controllerMuted) drive(true, now)
+            Override.UNMUTE -> if (controllerMuted) drive(false, now)
             Override.AUTO -> {
                 // Resync the transport with the machine's view.
                 val want = machine.muted
-                if (want != controllerMuted) { if (want) controller.mute() else controller.unmute(); controllerMuted = want }
+                if (want != controllerMuted) drive(want, now)
             }
         }
         emit()
@@ -264,11 +389,21 @@ class Engine(
         detectors = detectors.map { it.name } + (fingerprint?.let { listOf(it.name) } ?: emptyList()),
         reasons = lastDecision?.reasons ?: emptyList(),
         adsLearned = store?.count() ?: 0,
+        camera = logo?.describe(),
+        judges = judges.associate { it.name to it.describe() },
+        quietS = max(0.0, quietUntil - lastTs),
+        timedS = timedUntil?.let { max(0.0, it - lastTs) } ?: 0.0,
+        clock = clock?.describe(),
+        breakLeftS = if (controllerMuted && timedUntil == null) adStartTs?.let { clock?.remainingS(lastTs - it) } else null,
+        jingles = jingle?.describe(),
+        badge = badge?.describe(),
     )
 
     fun close() { runCatching { controller.close() } }
 
     private fun emit() { val s = status(); for (l in listeners) runCatching { l(s) } }
+
+    companion object { const val NOT_AD_QUIET_S = 60.0 }
 }
 
 /** The standard audio-only assembly; the app and the tests both build it this way. */
@@ -280,14 +415,42 @@ object Assembly {
         fpCfg: FingerprintConfig = FingerprintConfig(),
         weights: Map<String, Double> = emptyMap(),
         logo: LogoAbsenceDetector? = null,
+        transcript: TranscriptDetector? = null,
+        captions: TranscriptDetector? = null,
+        /** The AI judges (cloud and/or on the phone), each a detector in its own right. */
+        judges: List<JudgeDetector> = emptyList(),
+        /** The audio methods can be switched off one by one; at least one method must remain. */
+        silence: Boolean = true,
+        loudness: Boolean = true,
+        fingerprints: Boolean = true,
+        notAdQuietS: Double = Engine.NOT_AD_QUIET_S,
+        /** The break clock (ADR 0017); a default-weight vote that tips the balance, never ducks alone. */
+        clock: ClockDetector? = null,
+        /** The channel's break jingles (ADR 0020); an opener heard live ducks alone, like a missing logo. */
+        jingle: JingleDetector? = null,
+        /** The ad badge read off the phone's own screen during stream learning (ADR 0020). */
+        badge: BadgeDetector? = null,
+        wallClock: () -> Double = { System.currentTimeMillis() / 1000.0 },
     ): Engine {
-        val detectors = listOf<Detector>(MicSilenceDetector(), LoudnessDetector()) + (logo?.let { listOf<Detector>(it) } ?: emptyList())
+        // Ad units (ADR 0023) ride on the quiet gaps: the same separators, on a 15-second grid; the rating box rides on the camera.
+        val units = if (silence) AdUnitsDetector() else null
+        val rating = if (logo != null) RatingBugDetector({ logo.lastScreen }) else null
+        // The segment stinger (ADR 0027) rides on the loudness method: a burst over the bed, then the level moves.
+        val stinger = if (loudness) StingerDetector() else null
+        val detectors = listOfNotNull<Detector>(if (silence) MicSilenceDetector() else null, if (loudness) LoudnessDetector() else null, units, stinger, logo, rating, transcript, captions, clock, jingle, badge) + judges
+        require(detectors.isNotEmpty() || fingerprints) { "at least one method must be on" }
         val matcher = AudioMatcher(store, fpCfg)
-        val fp = AudioFingerprintDetector(fpCfg, matcher)
+        val fp = if (fingerprints) AudioFingerprintDetector(fpCfg, matcher) else null
         // The logo carries three default weights: absence alone mutes, and presence vetoes an audio-only duck.
-        val w = if (logo != null && "logo_absence" !in weights) weights + ("logo_absence" to LOGO_WEIGHT) else weights
-        val fusion = Fusion(fusionCfg, w, detectors.map { it.name } + fp.name)
-        return Engine(detectors, fusion, AdStateMachine(fusionCfg), controller, fp, AudioLearner(store, matcher, fpCfg), store)
+        var w = if (logo != null && "logo_absence" !in weights) weights + ("logo_absence" to LOGO_WEIGHT) else weights
+        if (transcript != null && "transcript" !in w) w = w + ("transcript" to LOGO_WEIGHT)   // a known script mutes alone, like a missing logo
+        if (captions != null && "captions" !in w) w = w + ("captions" to LOGO_WEIGHT)         // and so does a known script read off the screen
+        for (j in judges) if (j.name !in w) w = w + (j.name to LOGO_WEIGHT)                   // and an AI that says "commercial"
+        if (logo != null && logo.name !in w) w = w + (logo.name to LOGO_WEIGHT)               // the ticker detector under its own name
+        if (jingle != null && jingle.name !in w) w = w + (jingle.name to LOGO_WEIGHT)         // the channel's own sting opens a break
+        if (badge != null && badge.name !in w) w = w + (badge.name to LOGO_WEIGHT)             // the player says "AD" in so many words
+        val fusion = Fusion(fusionCfg, w, detectors.map { it.name } + listOfNotNull(fp?.name))
+        return Engine(detectors, fusion, AdStateMachine(fusionCfg), controller, fp, if (fp != null) AudioLearner(store, matcher, fpCfg) else null, store, notAdQuietS, wallClock)
     }
 
     const val LOGO_WEIGHT = 3 * Fusion.DEFAULT_WEIGHT

@@ -17,7 +17,7 @@ from collections.abc import Iterator
 import numpy as np
 
 from adhush.capture.base import CaptureCaps, CaptureError, CaptureSource
-from adhush.capture.microphone import audio_ffmpeg_args
+from adhush.capture.microphone import audio_ffmpeg_args, split_stereo
 from adhush.config import CaptureConfig
 from adhush.events import AudioEvent, FrameEvent
 from adhush.util.timing import Clock, monotonic_clock
@@ -30,6 +30,8 @@ class HdmiUvcSource(CaptureSource):
         self._video_proc: subprocess.Popen[bytes] | None = None
         self._audio_proc: subprocess.Popen[bytes] | None = None
         self._t0: float | None = None
+        # The HDMI audio is the broadcast mix: measure its stereo width (ADR 0023).
+        self._channels = 2 if config.stereo else 1
 
     def open(self) -> None:
         if shutil.which("ffmpeg") is None:
@@ -47,7 +49,7 @@ class HdmiUvcSource(CaptureSource):
             stdout=subprocess.PIPE,
         )
         self._audio_proc = subprocess.Popen(
-            audio_ffmpeg_args(cfg, "linux"),  # V4L2 capture is Linux-only
+            audio_ffmpeg_args(cfg, "linux", self._channels),  # V4L2 capture is Linux-only
             stdout=subprocess.PIPE,
         )
         self._t0 = self._clock()
@@ -96,10 +98,10 @@ class HdmiUvcSource(CaptureSource):
         rate = self._cfg.audio_rate
         block = max(1, rate * self._cfg.audio_block_ms // 1000)
         while True:
-            chunk = proc.stdout.read(block * 4)
+            chunk = proc.stdout.read(block * 4 * self._channels)
             if not chunk:
                 return
-            samples = np.frombuffer(chunk, dtype=np.float32)
+            samples, width = split_stereo(np.frombuffer(chunk, dtype=np.float32), self._channels)
             yield AudioEvent(
-                ts=self._now() - len(samples) / rate, samples=samples, sample_rate=rate
+                ts=self._now() - len(samples) / rate, samples=samples, sample_rate=rate, width=width
             )

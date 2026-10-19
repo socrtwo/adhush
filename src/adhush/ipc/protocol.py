@@ -4,7 +4,7 @@ Versioned JSON messages. Server-to-client *events* carry ``{"v", "type",
 "data"}``; client-to-server *commands* carry ``{"v", "type", ...fields}``.
 Event types: ``status``, ``transition``, ``decision`` (only while trace is
 enabled). Command types: ``get_status``, ``override`` (mode: auto|mute|
-unmute), ``confirm_ad``, ``reject_ad``, ``set_trace`` (enabled: bool), and
+unmute), ``confirm_ad``, ``show_back``, ``reject_ad``, ``set_trace`` (enabled: bool), and
 ``shutdown`` (stop the core; the transport unmutes first — see engine).
 Adding a command type keeps VERSION at 1: old clients never send it, and
 old servers reject it with a clean protocol error.
@@ -19,12 +19,16 @@ import json
 from dataclasses import asdict, dataclass, is_dataclass
 from typing import Any
 
+from adhush.control.remote_keys import KEY_NAMES
+
 VERSION = 1
 
 EVENT_TYPES = ("status", "transition", "decision")
 COMMAND_TYPES = (
-    "get_status", "override", "confirm_ad", "reject_ad", "set_trace", "shutdown"
+    "get_status", "override", "confirm_ad", "show_back", "reject_ad", "set_trace", "shutdown",
+    "duck_for", "remote",
 )
+MAX_TIMED_S = 600
 OVERRIDE_MODES = ("auto", "mute", "unmute")
 
 
@@ -37,6 +41,9 @@ class Command:
     type: str
     mode: str = ""  # override
     enabled: bool = False  # set_trace
+    seconds: int = 0  # duck_for
+    extend: bool = False  # duck_for: add to a running mute instead of replacing it
+    key: str = ""  # remote
 
 
 def encode_event(event_type: str, data: Any) -> str:
@@ -74,6 +81,22 @@ def parse_command(raw: str | bytes) -> Command:
     mode = str(message.get("mode", ""))
     if command_type == "override" and mode not in OVERRIDE_MODES:
         raise ProtocolError(f"override mode must be one of {OVERRIDE_MODES}")
+    seconds = 0
+    if command_type == "duck_for":
+        try:
+            seconds = int(message.get("seconds", 0))
+        except (TypeError, ValueError) as exc:
+            raise ProtocolError("duck_for seconds must be a number") from exc
+        if not 1 <= seconds <= MAX_TIMED_S:
+            raise ProtocolError(f"duck_for seconds must be 1..{MAX_TIMED_S}")
+    key = str(message.get("key", ""))
+    if command_type == "remote" and key not in KEY_NAMES:
+        raise ProtocolError(f"remote key must be one of {KEY_NAMES}")
     return Command(
-        type=str(command_type), mode=mode, enabled=bool(message.get("enabled", False))
+        type=str(command_type),
+        mode=mode,
+        enabled=bool(message.get("enabled", False)),
+        seconds=seconds,
+        extend=bool(message.get("extend", False)),
+        key=key,
     )

@@ -1,8 +1,11 @@
 name: ci
 
+# Every branch, not only main: work happens on long-lived feature branches
+# here, and before 0.24.0 these checks first ran at release time — where a
+# missing optional dependency failed the publish after every binary had built.
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
 
 jobs:

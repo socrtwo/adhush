@@ -29,11 +29,17 @@ class MicSilenceDetector(private val cfg: MicSilenceConfig = MicSilenceConfig())
     private var endedRunMs = 0.0
     var floorDbfs = -120.0
         private set
+    private var ducked = false
 
     override fun warmup() {
         history.clear(); historyDur = 0.0; runMs = 0.0; lastDbfs = 0.0; runEndedTs = null; endedRunMs = 0.0
-        floorDbfs = -120.0
+        floorDbfs = -120.0; ducked = false
     }
+
+    /** A ducked set cannot show a real gap: every quiet moment is our own doing. Inert until the volume is back (ADR 0016). */
+    override val voting: Boolean get() = !ducked
+
+    override fun audioDucked(ts: Double, ducked: Boolean) { this.ducked = ducked; runMs = 0.0; runEndedTs = null }
 
     private fun percentile(values: DoubleArray, p: Double): Double {
         val sorted = values.copyOf(); sorted.sort()
@@ -60,6 +66,7 @@ class MicSilenceDetector(private val cfg: MicSilenceConfig = MicSilenceConfig())
     }
 
     override fun vote(ts: Double): DetectorVote {
+        if (ducked) return vote(ts, 0.0, "ducked dbfs=${"%.1f".format(lastDbfs)}")
         if (runMs >= cfg.minRunMs) {
             return vote(ts, 1.0, "silence_run ms=${runMs.toInt()} dbfs=${"%.1f".format(lastDbfs)} floor=${"%.1f".format(floorDbfs)}")
         }

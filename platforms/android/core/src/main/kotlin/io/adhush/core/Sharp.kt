@@ -59,7 +59,12 @@ object Aquos {
         input: InputStream, output: OutputStream, loginId: String, password: String,
         trace: ((String) -> Unit)? = null, terminator: ByteArray = CR,
     ): ByteArray {
-        trace?.invoke("login prompt: " + escape(readSome(input)))
+        // A set that closes the line before it has even asked who is calling is
+        // not refusing the credentials: the Sharp allows one control connection
+        // at a time, and someone else — usually AdHush's own running service —
+        // holds it. Say so instead of blaming the password.
+        val prompt = try { readSome(input) } catch (e: EOFException) { throw ControlError(BUSY_MESSAGE, e) }
+        trace?.invoke("login prompt: " + escape(prompt))
         output.write(loginId.toByteArray(US_ASCII) + terminator); output.flush()
         val pwPrompt = readSome(input)
         trace?.invoke("password prompt: " + escape(pwPrompt))
@@ -70,6 +75,8 @@ object Aquos {
         refusalIn(ack)?.let { throw LoginRefused(loginId, it) }
         return ack
     }
+
+    const val BUSY_MESSAGE = "the set hung up before asking for a login: it allows one control connection at a time — AdHush's own service, another phone, or another app is probably connected. Stop AdHush and try again."
 
     fun refusalIn(bytes: ByteArray): String? {
         val text = String(bytes, US_ASCII).trim()
@@ -202,7 +209,11 @@ class SocketTransport(
     private companion object { const val SILENT_LIMIT = 3 }
 }
 
-class SharpIpClient(private val transport: AquosTransport) {
+class SharpIpClient(private val transport: AquosTransport) : VolumeDevice {
+    override val maxVolume: Int get() = 60
+    override fun getVolume(): Int? = queryVolume()
+    override fun setMute(on: Boolean): Boolean = if (on) muteOn() else muteOff()
+
     fun send(command: String, parameter: String): String =
         String(transport.exchange(Aquos.frame(command, parameter)), US_ASCII).trim()
 
@@ -213,9 +224,11 @@ class SharpIpClient(private val transport: AquosTransport) {
         return "OK" in reply
     }
 
+    /** RCKY: a remote-control key by its two-digit code (see [RemoteKey]). */
+    fun remoteKey(code: Int): Boolean { require(code in 0..99); return expectOk("RCKY", code.toString()) }
     fun muteOn(): Boolean = expectOk("MUTE", "1")
     fun muteOff(): Boolean = expectOk("MUTE", "2")
-    fun setVolume(level: Int): Boolean { require(level in 0..60); return expectOk("VOLM", level.toString()) }
+    override fun setVolume(level: Int): Boolean { require(level in 0..60); return expectOk("VOLM", level.toString()) }
     /** Present volume, or null when the set answers ERR / nothing. */
     fun queryVolume(): Int? = send("VOLM", "?").filter { it.isDigit() }.toIntOrNull()?.takeIf { it in 0..60 }
     /** Mute state via MUTE?: 1 = on, 2 = off, else null. */
@@ -231,66 +244,11 @@ class MemoryDuckPersistence : DuckPersistence {
     override fun clear() { v = null }
 }
 
-/**
- * Ducks instead of muting so the microphone keeps hearing the set, and restores
- * on every path back. mute()/unmute() are the MuteController face the engine
- * sees. The remote always wins: pollUserOverride() notices a volume that is
- * not the duck level and stands down.
- */
+/** The Sharp is a [LevelController] with its own client underneath; the remote keys (RCKY) need the client itself. */
 class SharpController(
-    private val client: SharpIpClient,
-    private val persistence: DuckPersistence,
-    val duckLevel: Int = 4,
-    var normalVolume: Int = 20,
-    private val useMuteInstead: Boolean = false,
-) : DuckController {
-    override var ducked = false
-        private set
-
-    /** Call once at start-up: a saved pre-duck volume means we died ducked. */
-    override fun recoverOnStart(): Boolean {
-        val saved = persistence.load() ?: return false
-        normalVolume = saved
-        restore()
-        return true
-    }
-
-    override fun duck() {
-        if (!useMuteInstead) {
-            client.queryVolume()?.let { if (it != duckLevel) normalVolume = it }
-            persistence.save(normalVolume)
-            client.setVolume(duckLevel)
-        } else {
-            persistence.save(normalVolume)
-            client.muteOn()
-        }
-        ducked = true
-    }
-
-    override fun restore() {
-        val target = persistence.load() ?: normalVolume
-        if (!useMuteInstead) client.setVolume(target) else client.muteOff()
-        normalVolume = target
-        persistence.clear()
-        ducked = false
-    }
-
-    /** While ducked: did the user touch the remote? Then adopt their level and stand down. */
-    override fun pollUserOverride(): Boolean {
-        if (!ducked || useMuteInstead) return false
-        val now = client.queryVolume() ?: return false
-        if (now == duckLevel) return false
-        normalVolume = now
-        persistence.clear()
-        ducked = false
-        return true
-    }
-
-    /** While at rest: follow the user's volume so a later restore lands on it. */
-    override fun trackNormal() { if (!ducked) client.queryVolume()?.let { normalVolume = it } }
-
-    override fun mute() = duck()
-    override fun unmute() = restore()
-    override fun state(): Boolean? = ducked
-    override fun close() { if (ducked) runCatching { restore() } }
-}
+    val client: SharpIpClient,
+    persistence: DuckPersistence,
+    duckLevel: Int = 4,
+    normalVolume: Int = 20,
+    useMuteInstead: Boolean = false,
+) : LevelController(client, persistence, duckLevel, normalVolume, useMuteInstead)

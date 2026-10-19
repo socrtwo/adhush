@@ -52,12 +52,25 @@ class SilenceDetector(Detector):
         self._last_dbfs = 0.0
         self._run_ended_ts: float | None = None
         self._ended_run_ms = 0.0
+        self._ducked = False
 
     def warmup(self) -> None:
         self._run_ms = 0.0
         self._last_dbfs = 0.0
         self._run_ended_ts = None
         self._ended_run_ms = 0.0
+        self._ducked = False
+
+    @property
+    def voting(self) -> bool:
+        # A ducked set heard through a room mic cannot show a real gap: every
+        # quiet moment is our own doing. Inert until the volume is back (ADR 0016).
+        return not self._ducked
+
+    def audio_ducked(self, ts: float, ducked: bool) -> None:
+        self._ducked = ducked
+        self._run_ms = 0.0
+        self._run_ended_ts = None
 
     def observe_audio(self, event: AudioEvent) -> None:
         self._last_dbfs = block_dbfs(event.samples)
@@ -73,6 +86,8 @@ class SilenceDetector(Detector):
             self._run_ms = 0.0
 
     def vote(self, ts: float) -> DetectorVote:
+        if self._ducked:
+            return self._vote(ts, 0.0, f"ducked dbfs={self._last_dbfs:.1f}")
         if self._run_ms >= self._cfg.min_run_ms:
             return self._vote(
                 ts,

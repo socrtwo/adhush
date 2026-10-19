@@ -3,7 +3,7 @@
 Run the Python core here; two UIs come with it.
 
 ```
-pip install adhush-0.6.0-py3-none-any.whl     # or: pip install -e .
+pip install adhush-<ver>-py3-none-any.whl  # the wheel from the release     # or: pip install -e .
 adhush run --config config/adhush.toml         # opens the mini window
 adhush service install                         # keep it running: Task Scheduler logon task
 ```

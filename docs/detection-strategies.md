@@ -24,7 +24,40 @@ Ads cut far faster than program content. A rolling shot-length estimate is a
 good soft signal, especially where logo detection fails.
 
 ## Aspect change
-Letterbox to full-frame transitions mark many pod boundaries.
+Letterbox to full-frame transitions mark many pod boundaries, and a spot
+that arrives in another shape (4:3 pillarboxed, a film clip letterboxed)
+holds it for its whole length. Dark, flat rows and columns at the edges are
+bars; what is left is the active picture, and its aspect ratio against a
+rolling mode of the programme's is the vote — sustained while the shape is
+changed, silent otherwise, never alone (ADR 0021). HDMI and screen paths.
+
+## The rating box
+The parental-rating box after a break is the programme back, never an ad.
+A bright, filled, box-shaped blob appearing in the upper left where none
+was — positive programme evidence for twenty seconds (ADR 0023).
+
+## Ad units
+Separators (black, silence) that fall on the 15/30/45/60/90/120-second
+grid are a break's own rhythm; the detector holds a mute through the sag
+between spots (ADR 0023).
+
+## Cutscenes
+Captured frames the channel shows around every break, correlated every
+frame; the jingle's visual twin (ADR 0023).
+
+## Stereo width and the watermark
+A mono/stereo switch of the mix, and the loss of the ATSC/DVB video
+watermark when a local spot replaces the picture (ADR 0023).
+
+## Feeds
+An XMLTV schedule, SCTE-35 cues from a transport stream, and other
+devices' breaks on the same channel (ADR 0024).
+
+## Crest factor
+Commercials are compressed harder than programme audio: their peak-to-RMS
+ratio sits several dB lower even when they are no louder. Tracked inside
+the loudness detector against the same slow baseline; a drop is worth up
+to half a vote (ADR 0021).
 
 ## Caption gap
 Discontinuity in the CC stream is a reliable corroborator where captions exist.

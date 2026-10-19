@@ -43,10 +43,26 @@ class AudioEvent:
     ts: float
     samples: npt.NDArray[np.float32]
     sample_rate: int
+    # Stereo width of the block before the downmix, side/mid RMS in [0, ~1]:
+    # 0 is mono, ~0.3 a normal stereo mix. None when the source is mono or
+    # the backend does not measure it (ADR 0023).
+    width: float | None = None
 
     @property
     def duration(self) -> float:
         return len(self.samples) / self.sample_rate
+
+
+@dataclass(frozen=True, slots=True)
+class CueEvent:
+    """An out-of-band marker from the capture path (ADR 0024): an SCTE-35
+    splice on a transport stream. ``kind`` is "ad_start" or "ad_end";
+    ``duration_s`` is the announced break length when the cue carries one."""
+
+    ts: float
+    kind: str
+    duration_s: float | None = None
+    detail: str = ""
 
 
 @dataclass(frozen=True, slots=True)

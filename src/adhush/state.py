@@ -35,6 +35,9 @@ class Action(Enum):
 
 class AdStateMachine:
     def __init__(self, config: FusionConfig) -> None:
+        # The longest a break may keep the set muted; the engine lowers it to
+        # what the channel's breaks usually run (ADR 0020).
+        self.ceiling_s: float = config.max_mute_s
         self._cfg = config
         self.state = AdState.PROGRAM
         self._mute_dwell = DwellTimer(config.mute_dwell_ms / 1000.0)
@@ -100,7 +103,7 @@ class AdStateMachine:
 
         if self.state is AdState.AD:
             assert self._ad_entered_ts is not None
-            if now - self._ad_entered_ts >= self._cfg.max_mute_s:
+            if now - self._ad_entered_ts >= self.ceiling_s:
                 return self._leave_ad(now)
             if fp_hold:
                 self._unmute_dwell.reset()
@@ -117,6 +120,23 @@ class AdStateMachine:
         if now >= self._recovery_until:
             self.state = AdState.PROGRAM
         return None
+
+    @property
+    def hard_max_s(self) -> float:
+        return self._cfg.max_mute_s
+
+    def user_mute(self, now: float) -> Action | None:
+        """The user pressed a button that must mute now: from any state but AD,
+        including the RECOVERY pause after a mute that just ended (ADR 0017)."""
+        if self.state is AdState.AD:
+            return None
+        self.state = AdState.AD
+        self._ad_entered_ts = now
+        self._recovery_until = None
+        self._mute_dwell.reset()
+        self._unmute_dwell.reset()
+        self._fp_unmute_dwell.reset()
+        return Action.MUTE
 
     def cancel_ad(self, now: float) -> Action | None:
         """User/API rejection: leave AD (or clear suspicion) immediately."""
@@ -135,6 +155,10 @@ class AdStateMachine:
         self._unmute_dwell.reset()
         self._fp_unmute_dwell.reset()
         return Action.UNMUTE
+
+    @property
+    def not_ad_quiet_s(self) -> float:
+        return self._cfg.not_ad_quiet_s
 
     @property
     def muted(self) -> bool:

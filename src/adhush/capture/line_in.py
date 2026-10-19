@@ -13,4 +13,9 @@ from adhush.capture.microphone import MicrophoneSource
 
 
 class LineInSource(MicrophoneSource):
-    """Wired audio tap; identical stream contract to MicrophoneSource."""
+    """Wired audio tap; identical stream contract to MicrophoneSource, plus
+    the stereo width of the tap when ``capture.stereo`` is on (ADR 0023)."""
+
+    @property
+    def channels(self) -> int:
+        return 2 if self._cfg.stereo else 1

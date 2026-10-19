@@ -19,6 +19,15 @@ class Gray(val w: Int, val h: Int, val px: FloatArray) {
         return Gray(nw, nh, out)
     }
 
+    /** Rotate clockwise by 0/90/180/270 degrees, the way a camera's rotationDegrees asks. */
+    fun rotate(degrees: Int): Gray = when (((degrees % 360) + 360) % 360) {
+        0 -> this
+        90 -> Gray(h, w, FloatArray(w * h).also { o -> for (y in 0 until h) for (x in 0 until w) o[x * h + (h - 1 - y)] = px[y * w + x] })
+        180 -> Gray(w, h, FloatArray(w * h).also { o -> for (i in px.indices) o[px.size - 1 - i] = px[i] })
+        270 -> Gray(h, w, FloatArray(w * h).also { o -> for (y in 0 until h) for (x in 0 until w) o[(w - 1 - x) * h + y] = px[y * w + x] })
+        else -> throw IllegalArgumentException("rotation must be a multiple of 90: $degrees")
+    }
+
     /** Nearest-neighbour resample, centre-sampled like logo_absence._resize_nearest. */
     fun resample(nw: Int, nh: Int): Gray {
         val out = FloatArray(nw * nh)
@@ -69,7 +78,9 @@ object Vision {
     }
 
     /** Bright-rectangle detector on a downscaled luma frame; threshold halfway between surround and screen. */
-    fun detectScreenBox(luma: Gray): Box? {
+    fun detectScreenBox(luma: Gray): Box? = detectScreenBoxWithThreshold(luma)?.first
+
+    fun detectScreenBoxWithThreshold(luma: Gray): Pair<Box, Double>? {
         val values = FloatArray(luma.px.size) { if (luma.px[it] >= GLARE_LUMA) 0f else luma.px[it] }
         val low = percentile(values, 20.0); val high = percentile(values, 95.0)
         if (high - low < 20.0) return null
@@ -81,16 +92,56 @@ object Vision {
         if (rows.isEmpty() || cols.isEmpty()) return null
         val box = Box(cols.first(), rows.first(), cols.last() + 1, rows.last() + 1)
         if (box.w * box.h < MIN_AREA_FRACTION * luma.px.size) return null
-        return box
+        return Pair(box, threshold)
     }
 
-    /** The lit screen in a full-resolution frame, or null; downscales like CameraSource does. */
+    /**
+     * The lit screen in a full-resolution frame, or null. Found coarsely on a
+     * downscaled copy like CameraSource does, then each edge is refined at full
+     * resolution: the coarse box is only good to DETECT_DOWNSCALE pixels, which
+     * is a large fraction of a small logo when the phone is in a hand.
+     */
     fun findScreen(frame: Gray): Box? {
         val small = downscale(frame, DETECT_DOWNSCALE)
-        val b = detectScreenBox(small) ?: return null
+        val (b, threshold) = detectScreenBoxWithThreshold(small) ?: return null
         val s = b.scaled(DETECT_DOWNSCALE)
-        return Box(s.x0, s.y0, min(frame.w, s.x1), min(frame.h, s.y1))
+        val coarse = Box(s.x0, s.y0, min(frame.w, s.x1), min(frame.h, s.y1))
+        return refineScreenBox(frame, coarse, threshold)
     }
+
+    private fun refineScreenBox(frame: Gray, coarse: Box, threshold: Double): Box {
+        val r = DETECT_DOWNSCALE
+        fun colLit(x: Int): Boolean {
+            var n = 0; for (y in coarse.y0 until coarse.y1) if (frame[x, y] > threshold && frame[x, y] < GLARE_LUMA) n++
+            return n > 0.35 * coarse.h
+        }
+        fun rowLit(y: Int): Boolean {
+            var n = 0; for (x in coarse.x0 until coarse.x1) if (frame[x, y] > threshold && frame[x, y] < GLARE_LUMA) n++
+            return n > 0.35 * coarse.w
+        }
+        var x0 = coarse.x0; for (x in max(0, coarse.x0 - r)..min(frame.w - 1, coarse.x0 + r)) if (colLit(x)) { x0 = x; break }
+        var x1 = coarse.x1; for (x in min(frame.w - 1, coarse.x1 + r) downTo max(0, coarse.x1 - r - 1)) if (colLit(x)) { x1 = x + 1; break }
+        var y0 = coarse.y0; for (y in max(0, coarse.y0 - r)..min(frame.h - 1, coarse.y0 + r)) if (rowLit(y)) { y0 = y; break }
+        var y1 = coarse.y1; for (y in min(frame.h - 1, coarse.y1 + r) downTo max(0, coarse.y1 - r - 1)) if (rowLit(y)) { y1 = y + 1; break }
+        return if (x1 > x0 && y1 > y0) Box(x0, y0, x1, y1) else coarse
+    }
+
+    /**
+     * Is this the *whole* TV? A screen box that touches the edge of the frame
+     * is a TV the camera is only partly looking at, and one far from a 16:9
+     * shape (seen from an angle, or a lit wall) is not a TV at all. The logo
+     * detector goes inert on either, so a phone pointed at half the set never
+     * reads as "logo gone".
+     */
+    fun screenComplete(box: Box, frameW: Int, frameH: Int, margin: Int = EDGE_MARGIN): Boolean {
+        if (box.x0 < margin || box.y0 < margin || box.x1 > frameW - margin || box.y1 > frameH - margin) return false
+        if (box.w <= 0 || box.h <= 0) return false
+        val aspect = box.w.toDouble() / box.h
+        return aspect in MIN_ASPECT..MAX_ASPECT
+    }
+    const val EDGE_MARGIN = 2
+    const val MIN_ASPECT = 1.15
+    const val MAX_ASPECT = 2.6
 
     /** np.gradient magnitude: central differences inside, one-sided at the border. */
     fun edgeMap(g: Gray): FloatArray {
@@ -117,30 +168,35 @@ object Vision {
 }
 
 /** The edge template of the network bug, in a region of the normalised screen. */
-class LogoTemplate(val roi: Roi, val w: Int, val h: Int, val edges: FloatArray, val stability: Double) {
+class LogoTemplate(
+    val roi: Roi, val w: Int, val h: Int, val edges: FloatArray, val stability: Double,
+    /** Mean edge magnitude over the whole normalised screen at calibration: the blur guard's reference. 0 = unknown. */
+    val screenEdgeMean: Double = 0.0,
+) {
     fun save(file: File) {
         file.parentFile?.mkdirs()
         file.bufferedWriter().use { o ->
-            o.write(String.format(Locale.US, "# adhush logo template v1\nroi\t%.5f\t%.5f\t%.5f\t%.5f\nsize\t%d\t%d\nstability\t%.3f\n", roi.x, roi.y, roi.w, roi.h, w, h, stability))
+            o.write(String.format(Locale.US, "# adhush logo template v1\nroi\t%.5f\t%.5f\t%.5f\t%.5f\nsize\t%d\t%d\nstability\t%.3f\nscreen_edge_mean\t%.3f\n", roi.x, roi.y, roi.w, roi.h, w, h, stability, screenEdgeMean))
             o.write("edges\t" + edges.joinToString("\t") { String.format(Locale.US, "%.3f", it) } + "\n")
         }
     }
     companion object {
         fun load(file: File): LogoTemplate? {
             if (!file.isFile) return null
-            var roi: Roi? = null; var w = 0; var h = 0; var stability = 0.0; var edges: FloatArray? = null
+            var roi: Roi? = null; var w = 0; var h = 0; var stability = 0.0; var edges: FloatArray? = null; var screenEdge = 0.0
             file.forEachLine { line ->
                 val p = line.split('\t')
                 when (p[0]) {
                     "roi" -> roi = Roi(p[1].toDouble(), p[2].toDouble(), p[3].toDouble(), p[4].toDouble())
                     "size" -> { w = p[1].toInt(); h = p[2].toInt() }
                     "stability" -> stability = p[1].toDouble()
+                    "screen_edge_mean" -> screenEdge = p[1].toDouble()
                     "edges" -> edges = FloatArray(p.size - 1) { p[it + 1].toFloat() }
                 }
             }
             val r = roi ?: return null; val e = edges ?: return null
             if (e.size != w * h) return null
-            return LogoTemplate(r, w, h, e, stability)
+            return LogoTemplate(r, w, h, e, stability, screenEdge)
         }
     }
 }
@@ -161,19 +217,81 @@ class LogoFinder(
 ) {
     private val sumEdge = FloatArray(width * height)
     private val strong = IntArray(width * height)
+    private var screenEdgeSum = 0.0
     var frames = 0
         private set
     var screenMisses = 0
         private set
+    /** Frames where a screen was found but it touched the edge of the picture: not learned from. */
+    var partialFrames = 0
+        private set
+    /** Where the screen was in the last frame fed, in frame pixels; null if it was not found. */
+    var lastScreen: Box? = null
+        private set
+    /** True when the last frame's screen ran off the edge of the picture. */
+    var lastPartial = false
+        private set
 
-    /** Feed a full camera frame; returns false when no lit screen was found in it. */
+    /** Feed a full camera frame; returns false when no whole lit screen was found in it. */
     fun feed(frame: Gray): Boolean {
-        val box = Vision.findScreen(frame) ?: run { screenMisses++; return false }
+        val box = Vision.findScreen(frame) ?: run { screenMisses++; lastScreen = null; lastPartial = false; return false }
+        lastScreen = box
+        lastPartial = !Vision.screenComplete(box, frame.w, frame.h)
+        if (lastPartial) { partialFrames++; return false }
         val screen = frame.crop(box).resample(width, height)
         val e = Vision.edgeMap(screen)
-        for (i in e.indices) { sumEdge[i] += e[i]; if (e[i] >= strongEdge) strong[i]++ }
+        var total = 0.0
+        for (i in e.indices) { sumEdge[i] += e[i]; total += e[i]; if (e[i] >= strongEdge) strong[i]++ }
+        screenEdgeSum += total / e.size
         frames++
         return true
+    }
+
+    /** Per pixel of the normalised screen: the fraction of frames with a strong edge there (0..1). For the setup preview. */
+    fun stabilityMap(): FloatArray = FloatArray(width * height) { if (frames == 0) 0f else strong[it].toFloat() / frames }
+
+    /**
+     * A template for a box the user (or [result]) chose, in normalised screen
+     * coordinates: the mean edge map inside it, its stability, and the screen's
+     * overall edge level for the blur guard. Null before ten frames.
+     */
+    fun templateFor(roi: Roi): LogoTemplate? {
+        if (frames < 10) return null
+        val box = roi.on(width, height)
+        if (box.w < 4 || box.h < 4) return null
+        val edges = FloatArray(box.w * box.h)
+        var stab = 0.0; var n = 0
+        for (y in 0 until box.h) for (x in 0 until box.w) {
+            val i = (box.y0 + y) * width + box.x0 + x
+            edges[y * box.w + x] = sumEdge[i] / frames
+            val st = strong[i].toDouble() / frames
+            if (st >= minStability) { stab += st; n++ }
+        }
+        return LogoTemplate(roi, box.w, box.h, edges, if (n == 0) 0.0 else stab / n, screenEdgeSum / frames)
+    }
+
+    /**
+     * The news ticker instead of the bug (ADR 0015): on a news channel the
+     * lower third carries a chyron or ticker band whose top and bottom
+     * edges are horizontal lines that never move, while the text inside
+     * scrolls. Rows in the bottom part of the screen where a strong edge
+     * persists across most of the width are those lines; the band is the
+     * span between the outermost such rows. During a commercial the band is
+     * gone, and the mean edge map of the band correlates with nothing.
+     */
+    fun bandResult(bottomFraction: Double = 0.40, minRowStability: Double = 0.5, minRowFraction: Double = 0.5, pad: Int = 3): LogoTemplate? {
+        if (frames < 10) return null
+        val y0 = (height * (1 - bottomFraction)).toInt()
+        val lineRows = ArrayList<Int>()
+        for (y in y0 until height) {
+            var n = 0
+            for (x in 0 until width) if (strong[y * width + x].toDouble() / frames >= minRowStability) n++
+            if (n >= minRowFraction * width) lineRows.add(y)
+        }
+        if (lineRows.size < 2) return null
+        val top = max(0, lineRows.first() - pad); val bottom = min(height, lineRows.last() + pad + 1)
+        if (bottom - top < 6) return null
+        return templateFor(Roi(0.0, top.toDouble() / height, 1.0, (bottom - top).toDouble() / height))
     }
 
     /** The template, or null when nothing persistent enough was seen. */
@@ -195,25 +313,37 @@ class LogoFinder(
         for (y in corner.y0 until corner.y1) for (x in corner.x0 until corner.x1) if (stable[y * width + x]) { x0 = min(x0, x); y0 = min(y0, y); x1 = max(x1, x + 1); y1 = max(y1, y + 1) }
         val pad = 3
         val box = Box(max(0, x0 - pad), max(0, y0 - pad), min(width, x1 + pad), min(height, y1 + pad))
-        val edges = FloatArray(box.w * box.h)
-        var stab = 0.0; var n = 0
-        for (y in 0 until box.h) for (x in 0 until box.w) {
-            val i = (box.y0 + y) * width + box.x0 + x
-            edges[y * box.w + x] = sumEdge[i] / frames
-            if (stable[i]) { stab += strong[i].toDouble() / frames; n++ }
-        }
-        val roi = Roi(box.x0.toDouble() / width, box.y0.toDouble() / height, box.w.toDouble() / width, box.h.toDouble() / height)
-        return LogoTemplate(roi, box.w, box.h, edges, if (n == 0) 0.0 else stab / n)
+        return templateFor(Roi(box.x0.toDouble() / width, box.y0.toDouble() / height, box.w.toDouble() / width, box.h.toDouble() / height))
     }
 }
 
 data class LogoAbsenceConfig(
-    /** Seconds without the logo for the vote to reach 1.0 (the Pi's 45 frames at 30 fps). */
+    /** Seconds without the logo for the vote to reach 1.0 (the Pi's 45 frames at 30 fps; longer for a hand-held phone). */
     val absenceS: Double = 1.5,
     val presentThreshold: Double = 0.4,
     val scoreAlpha: Double = 0.3,
+    /** How often to re-find the screen. 0 = every frame, which a hand-held phone needs. */
     val redetectS: Double = 5.0,
+    /**
+     * Blur guard: when the whole screen's edge level drops below this fraction of
+     * what calibration saw — a moving hand smearing the picture — the frame is
+     * inert rather than "absent". 0 disables it.
+     */
+    val blurRatio: Double = 0.4,
+    /**
+     * How far (in pixels of the 320 × 180 normalised screen) the logo may sit
+     * from where calibration put it. The box is slid over this window and the
+     * best correlation counts, so a screen edge found a few pixels off — a
+     * hand, a slight angle, a different zoom — does not read as "logo gone".
+     * 0 = the fixed box only.
+     */
+    val searchPx: Int = 0,
+    /** Only after the logo has been *seen* can it be missed: absence votes wait for one clear sighting. */
+    val requireSighting: Boolean = false,
 )
+
+/** Hand-held defaults: re-find the screen every frame, slide the box, wait for a sighting, be slower to call the logo gone, guard against blur. */
+val HANDHELD_LOGO_CONFIG = LogoAbsenceConfig(absenceS = 2.5, redetectS = 0.0, blurRatio = 0.4, searchPx = 6, requireSighting = true)
 
 /**
  * Port of detect/logo_absence.py for camera frames. Per frame: find the
@@ -223,44 +353,111 @@ data class LogoAbsenceConfig(
  * over [LogoAbsenceConfig.absenceS]. With no screen in view it is inert:
  * `active` is false and it casts no vote at all.
  */
-class LogoAbsenceDetector(private val cfg: LogoAbsenceConfig = LogoAbsenceConfig(), private val template: LogoTemplate) : Detector {
-    override val name = "logo_absence"
+class LogoAbsenceDetector(
+    private val cfg: LogoAbsenceConfig = LogoAbsenceConfig(),
+    private val template: LogoTemplate,
+    /** "logo_absence" for the corner bug; "ticker_absence" for a news channel's lower-third band (ADR 0015). */
+    override val name: String = "logo_absence",
+    /** What the status line calls the thing being watched. */
+    private val noun: String = "bug",
+) : Detector {
     private var screen: Box? = null
     private var nextDetectTs = -1.0
     private var score = 1.0
     private var absentSince: Double? = null
-    private var lastFrameTs: Double? = null
+    /** Camera sees a whole, sharp screen right now. */
     var active = false
+        private set
+    /** The logo has been seen present at least once since the last reset (or the user's last correction). */
+    var sighted = false
         private set
     var lastScore: Double = 1.0
         private set
+    /** Why the last frame was inert, if it was: "no_screen", "partial_screen", "blurry" or "logo_not_yet_seen". For the status line. */
+    var inertReason: String = "no_screen"
+        private set
+    /** The screen and the logo box in the last frame's pixel coordinates, for drawing. */
+    var lastScreen: Box? = null
+        private set
+    var lastRoiInFrame: Box? = null
+        private set
+    /** Where the best match sat relative to calibration, in normalised-screen pixels. */
+    var lastOffset: Pair<Int, Int> = Pair(0, 0)
+        private set
 
-    override fun warmup() { screen = null; nextDetectTs = -1.0; score = 1.0; absentSince = null; active = false; lastFrameTs = null }
+    /** With a sighting required the score starts at "unknown" (0), not "present" (1): the bug must earn its first sighting. */
+    override fun warmup() { screen = null; nextDetectTs = -1.0; score = if (cfg.requireSighting) 0.0 else 1.0; absentSince = null; active = false; sighted = !cfg.requireSighting; lastScreen = null; lastRoiInFrame = null; lastOffset = Pair(0, 0) }
     override fun observeAudio(block: AudioBlock) {}
 
-    /** Positive programme proof: the logo is visibly there right now. */
-    val programPresent: Boolean get() = active && absentSince == null && score >= cfg.presentThreshold
+    /** No whole screen, a smeared frame, or a logo never yet seen: no vote, no say in the normaliser. */
+    override val voting: Boolean get() = active && sighted
 
-    override fun observeFrame(frame: Gray, ts: Double) {
-        if (ts >= nextDetectTs || screen == null) {
-            screen = Vision.findScreen(frame) ?: screen.takeIf { ts < nextDetectTs }
-            nextDetectTs = ts + cfg.redetectS
-        }
-        val box = screen ?: run { active = false; return }
-        active = true; lastFrameTs = ts
-        val norm = frame.crop(box).resample(320, 180)
-        val roi = norm.crop(template.roi.on(norm.w, norm.h)).resample(template.w, template.h)
-        val raw = Vision.correlation(Vision.edgeMap(roi), template.edges)
-        score += cfg.scoreAlpha * (raw - score)
-        lastScore = score
-        if (score < cfg.presentThreshold) { if (absentSince == null) absentSince = ts } else absentSince = null
+    /** Positive programme proof: the logo is visibly there right now. */
+    override val programPresent: Boolean get() = active && absentSince == null && score >= cfg.presentThreshold
+
+    /** "Not an ad": the logo was not gone. Forget the absence and demand a fresh sighting before saying so again. */
+    override fun userSaysProgramme(ts: Double) {
+        absentSince = null
+        if (cfg.requireSighting) { sighted = false; score = 0.0 } else score = cfg.presentThreshold
     }
 
+    override fun observeFrame(frame: Gray, ts: Double) {
+        if (cfg.redetectS <= 0.0 || ts >= nextDetectTs || screen == null) {
+            screen = Vision.findScreen(frame) ?: screen.takeIf { cfg.redetectS > 0.0 && ts < nextDetectTs }
+            nextDetectTs = ts + cfg.redetectS
+        }
+        val box = screen ?: run { active = false; inertReason = "no_screen"; lastScreen = null; lastRoiInFrame = null; return }
+        lastScreen = box
+        if (!Vision.screenComplete(box, frame.w, frame.h)) { active = false; inertReason = "partial_screen"; lastRoiInFrame = null; return }
+        val norm = frame.crop(box).resample(320, 180)
+        val roiBox = template.roi.on(norm.w, norm.h)
+        if (cfg.blurRatio > 0.0 && template.screenEdgeMean > 0.0) {
+            val e = Vision.edgeMap(norm); var total = 0.0; for (v in e) total += v
+            if (total / e.size < cfg.blurRatio * template.screenEdgeMean) { active = false; inertReason = "blurry"; lastRoiInFrame = toFrame(box, norm, roiBox); return }
+        }
+        active = true
+        // Slide the box over the search window and keep the best correlation: the logo is followed, not assumed.
+        var raw = -1.0; var best = roiBox; var bestOff = Pair(0, 0)
+        val r = cfg.searchPx; val step = if (r >= 4) 2 else 1
+        var dy = -r
+        while (dy <= r) {
+            var dx = -r
+            while (dx <= r) {
+                val b = Box(roiBox.x0 + dx, roiBox.y0 + dy, roiBox.x1 + dx, roiBox.y1 + dy)
+                if (b.x0 >= 0 && b.y0 >= 0 && b.x1 <= norm.w && b.y1 <= norm.h) {
+                    val c = Vision.correlation(Vision.edgeMap(norm.crop(b).resample(template.w, template.h)), template.edges)
+                    if (c > raw) { raw = c; best = b; bestOff = Pair(dx, dy) }
+                }
+                dx += step
+            }
+            dy += step
+        }
+        lastOffset = bestOff
+        lastRoiInFrame = toFrame(box, norm, best)
+        score += cfg.scoreAlpha * (raw - score)
+        lastScore = score
+        if (score >= cfg.presentThreshold) { absentSince = null; if (raw >= cfg.presentThreshold) sighted = true }
+        else if (sighted) { if (absentSince == null) absentSince = ts }
+        if (!sighted) inertReason = "logo_not_yet_seen"
+    }
+
+    private fun toFrame(box: Box, norm: Gray, roiBox: Box) = Box(box.x0 + roiBox.x0 * box.w / norm.w, box.y0 + roiBox.y0 * box.h / norm.h, box.x0 + roiBox.x1 * box.w / norm.w, box.y0 + roiBox.y1 * box.h / norm.h)
+
     override fun vote(ts: Double): DetectorVote {
-        if (!active) return vote(ts, 0.0, "no_screen")
+        if (!active) return vote(ts, 0.0, inertReason)
+        if (!sighted) return vote(ts, 0.0, "logo_not_yet_seen")
         val since = absentSince ?: return vote(ts, 0.0, "logo_present score=${"%.2f".format(Locale.US, score)}")
         val confidence = min(1.0, (ts - since) / cfg.absenceS)
         return vote(ts, confidence, "logo_absent s=${"%.1f".format(Locale.US, ts - since)} score=${"%.2f".format(Locale.US, score)}")
     }
 
+    /** One short line for the status bar: what the camera can and cannot see right now. */
+    fun describe(): String = when {
+        !active && inertReason == "no_screen" -> "no TV in view"
+        !active && inertReason == "partial_screen" -> "whole TV not in view"
+        !active && inertReason == "blurry" -> "picture blurred"
+        !sighted -> "looking for the $noun"
+        absentSince != null -> "$noun gone"
+        else -> "$noun seen"
+    }
 }

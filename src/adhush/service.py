@@ -21,6 +21,8 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+from adhush.util.resources import frozen
+
 SERVICE_NAME = "adhush"
 LAUNCHD_LABEL = "io.adhush.core"
 SCHTASKS_NAME = "AdHush"
@@ -33,12 +35,20 @@ class ServiceError(RuntimeError):
 
 
 def core_command(config: Path, *, overlay: bool, python: str | None = None) -> list[str]:
-    """The argv the service runs. Windows gets pythonw so no console window appears."""
+    """The argv the service runs. Windows gets pythonw (or the windowless
+    adhushw.exe of a one-file build) so no console window appears."""
+    tail = ["run", "--config", str(config), "--overlay" if overlay else "--no-overlay"]
+    if python is None and frozen():
+        exe = sys.executable
+        if sys.platform == "win32":
+            windowless = Path(exe).with_name("adhushw.exe")
+            if windowless.is_file():
+                exe = str(windowless)
+        return [exe, *tail]
     exe = python or sys.executable
     if sys.platform == "win32" and exe.lower().endswith("python.exe"):
         exe = exe[: -len("python.exe")] + "pythonw.exe"
-    return [exe, "-m", "adhush", "run", "--config", str(config),
-            "--overlay" if overlay else "--no-overlay"]
+    return [exe, "-m", "adhush", *tail]
 
 
 def _quote(arg: str) -> str:

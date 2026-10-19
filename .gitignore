@@ -20,3 +20,5 @@ captures/
 config/adhush.toml
 config/profiles/*.local.toml
 .DS_Store
+data/clock.tsv
+data/jingles.tsv

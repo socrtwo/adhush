@@ -36,10 +36,25 @@ timeout_s = 1.0             # no flow control (p. 58)
 # Command framing is identical to serial: four ASCII command characters, four
 # parameter characters left-aligned and space-padded, terminated by CR.
 # Put host, port, and any login_id / login_password in your own config/adhush.toml
-# -- never here. The TV drops an idle connection after 3 minutes, which is
-# harmless because each command opens its own.
+# -- never here. One connection is kept open and reopened when the set drops it
+# (it allows a single control connection; a second one is hung up before the
+# login prompt). Set duck_level in your own config to turn the set *down* to a
+# whisper instead of muting it (VOLM 0-60, p. 59): a microphone then keeps
+# hearing the set through the break, which is how the listener knows when the
+# show is back.
 [network_ip]
 transport = "tcp"
+
+[network_ip.commands.volume_set]
+send = "VOLM{level:<4}\r"     # VOLM19  <CR>
+expect = "OK"
+
+[network_ip.commands.volume_query]
+send = "VOLM?   \r"           # the LC-46LE830U answers with the number
+
+[network_ip.commands.remote_key]
+send = "RCKY{code:<4}\r"     # a remote-control key by code (p. 59); the web page's remote
+expect = "OK"
 
 [network_ip.commands.mute_on]
 send = "MUTE1   \r"

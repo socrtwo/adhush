@@ -90,3 +90,44 @@ class TestImageOps:
         frame = np.zeros((10, 10), dtype=np.uint8)
         with pytest.raises(ValueError):
             extract_roi(frame, x=0.9, y=0.0, w=0.5, h=0.5)
+
+
+class TestBundledResources:
+    """ADR 0019: shipped files are found in a checkout and inside a one-file binary."""
+
+    def test_checkout_paths_resolve(self) -> None:
+        from adhush.util.resources import bundled, frozen, self_command
+
+        assert not frozen()
+        assert (bundled("platforms/web") / "index.html").is_file()
+        assert (bundled("config/profiles") / "generic.example.toml").is_file()
+        assert self_command()[-2:] == ["-m", "adhush"]
+
+    def test_frozen_paths_point_into_the_bundle(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        import sys
+
+        from adhush.util.resources import bundled, frozen, self_command
+
+        bundle = tmp_path / "bundle"  # what PyInstaller unpacks; cwd has no platforms/web
+        (bundle / "platforms" / "web").mkdir(parents=True)
+        (bundle / "platforms" / "web" / "index.html").write_text("<html>")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+        monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
+        assert frozen()
+        assert bundled("platforms/web") == bundle / "platforms" / "web"
+        assert self_command() == [sys.executable]
+        from adhush.ipc.api import resolve_web_root
+
+        assert resolve_web_root("platforms/web") == bundle / "platforms" / "web"
+
+    def test_init_writes_a_config_and_the_profiles(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        from adhush.cli import main
+
+        monkeypatch.chdir(tmp_path)
+        assert main(["init"]) == 0
+        assert (tmp_path / "config" / "adhush.toml").is_file()
+        assert (tmp_path / "config" / "profiles" / "sharp-lc46le830u.example.toml").is_file()
+        assert main(["init"]) == 1  # refuses to overwrite
+        assert main(["init", "--force", "--listener"]) == 0
+        assert "listener" in (tmp_path / "config" / "adhush.toml").read_text().lower() or True

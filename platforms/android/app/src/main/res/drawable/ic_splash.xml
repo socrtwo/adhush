@@ -1,0 +1,12 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- TV -->
+    <path android:fillColor="#FFFFFF" android:pathData="M30,34 h48 a4,4 0 0 1 4,4 v28 a4,4 0 0 1 -4,4 h-48 a4,4 0 0 1 -4,-4 v-28 a4,4 0 0 1 4,-4 z"/>
+    <path android:fillColor="#0B2E47" android:pathData="M33,38 h42 v24 h-42 z"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M48,72 h12 v4 h-12 z"/>
+    <!-- the bug in the corner -->
+    <path android:fillColor="#FFD54F" android:pathData="M66,53 h6 v6 h-6 z"/>
+    <!-- muted speaker -->
+    <path android:fillColor="#FFD54F" android:pathData="M40,46 h5 l6,-5 v18 l-6,-5 h-5 z"/>
+    <path android:strokeColor="#FF7043" android:strokeWidth="2.5" android:pathData="M54,45 l8,10 M62,45 l-8,10"/>
+</vector>

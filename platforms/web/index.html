@@ -63,6 +63,7 @@
     <span class="label" id="pill-label">…</span>
     <button title="Not an ad" onclick="command({type:'reject_ad'})">✗</button>
     <button title="Is an ad" onclick="command({type:'confirm_ad'})">✓</button>
+    <button title="Show's back" onclick="command({type:'show_back'})">▶</button>
     <button title="Stop AdHush" class="danger" onclick="stopCore()">■</button>
   </div>
 
@@ -77,12 +78,40 @@
     </div>
     <div class="row">
       <button onclick="command({type:'confirm_ad'})">✓ Is an ad</button>
+      <button onclick="command({type:'show_back'})">▶ Show's back</button>
       <button onclick="command({type:'reject_ad'})">✗ Not an ad</button>
+    </div>
+    <div class="row">
+      <span class="dim" style="align-self:center">Duck for:</span>
+      <button onclick="command({type:'duck_for', seconds:30})">30 s</button>
+      <button onclick="command({type:'duck_for', seconds:60})">60 s</button>
+      <button onclick="command({type:'duck_for', seconds:90})">90 s</button>
+      <button onclick="command({type:'duck_for', seconds:120})">120 s</button>
+    </div>
+    <div class="row">
+      <button onclick="command({type:'duck_for', seconds:150})">150 s</button>
+      <button onclick="command({type:'duck_for', seconds:180})">180 s</button>
+      <button onclick="command({type:'duck_for', seconds:210})">210 s</button>
+      <button onclick="command({type:'duck_for', seconds:240})">240 s</button>
+      <button onclick="command({type:'duck_for', seconds:270})">270 s</button>
+      <button onclick="command({type:'duck_for', seconds:300})">300 s</button>
+      <button onclick="command({type:'duck_for', seconds:30, extend:true})" title="Add 30 seconds to the running duck">+30 s</button>
     </div>
     <div class="row">
       <button onclick="openMini()" title="Small always-on-top window">▣ Mini window</button>
       <button class="danger" onclick="stopCore()" title="Shut the core down">■ Stop AdHush</button>
     </div>
+  </div>
+  <div class="card full" id="remote">
+    <div class="dim">Remote (Sharp AQUOS keys through the control port; other sets answer "cannot press")</div>
+    <div class="row"><button onclick="key('power')">⏻ Power</button><button onclick="key('input')">Input</button><button onclick="key('display')">Display</button><button onclick="key('cc')">CC</button><button onclick="key('sleep')">Sleep</button></div>
+    <div class="row"><button onclick="key('1')">1</button><button onclick="key('2')">2</button><button onclick="key('3')">3</button><button onclick="key('vol_up')">VOL +</button><button onclick="key('ch_up')">CH ▲</button></div>
+    <div class="row"><button onclick="key('4')">4</button><button onclick="key('5')">5</button><button onclick="key('6')">6</button><button onclick="key('vol_down')">VOL −</button><button onclick="key('ch_down')">CH ▼</button></div>
+    <div class="row"><button onclick="key('7')">7</button><button onclick="key('8')">8</button><button onclick="key('9')">9</button><button onclick="key('mute')">Mute</button><button onclick="key('flashback')">Flashback</button></div>
+    <div class="row"><button onclick="key('dot')">•</button><button onclick="key('0')">0</button><button onclick="key('ent')">ENT</button><button onclick="key('fav')">Fav</button><button onclick="key('audio')">Audio</button></div>
+    <div class="row"><button onclick="key('menu')">Menu</button><button onclick="key('up')">▲</button><button onclick="key('return')">Return</button><button onclick="key('exit')">Exit</button><button onclick="key('smart')">Smart</button></div>
+    <div class="row"><button onclick="key('left')">◀</button><button onclick="key('enter')">OK</button><button onclick="key('right')">▶</button><button onclick="key('av_mode')">AV mode</button><button onclick="key('view_mode')">View</button></div>
+    <div class="row"><button onclick="key('rew')">◀◀</button><button onclick="key('down')">▼</button><button onclick="key('ff')">▶▶</button><button onclick="key('play')">Play</button><button onclick="key('pause')">Pause</button></div>
   </div>
   <div class="card full">
     <div class="dim">Core API (host:port of `adhush run`, [ipc] enabled)</div>
@@ -119,6 +148,8 @@ function styleFor(status) {
   if (!status) return ['OFFLINE', 'var(--dim)', ''];
   if (status.override === 'mute') return ['MUTED', 'var(--bad)', 'muted'];
   if (status.override === 'unmute') return ['PROGRAM', 'var(--ok)', 'program'];
+  if (status.timed_s > 0) return ['DUCKED ' + Math.round(status.timed_s) + ' s', 'var(--bad)', 'muted'];
+  if (status.teaching) return ['TEACHING', 'var(--warn)', 'suspect'];
   if (status.muted) return ['MUTED', 'var(--bad)', 'muted'];
   if (status.state === 'suspect_ad') return ['SUSPECT', 'var(--warn)', 'suspect'];
   if (status.state === 'ad') return ['MUTED', 'var(--bad)', 'muted'];
@@ -129,7 +160,14 @@ function render(status) {
   const el = document.getElementById('state');
   el.textContent = label; el.className = cls;
   document.getElementById('detail').textContent = status
-    ? 'override: ' + status.override + ' · detectors: ' + status.detectors.join(', ') : '';
+    ? 'override: ' + status.override + ' · detectors: ' + status.detectors.join(', ')
+      + (status.camera ? ' · camera: ' + status.camera : '')
+      + (status.quiet_s > 0 ? ' · you said not an ad: ' + Math.round(status.quiet_s) + ' s of quiet' : '')
+      + (status.timed_s > 0 ? ' · manual duck: ' + Math.round(status.timed_s) + ' s left' : '')
+      + (status.break_left_s != null ? ' · about ' + Math.round(status.break_left_s) + ' s of the break left' : '')
+      + (status.jingles ? ' · jingles: ' + status.jingles : '')
+      + (status.clock ? ' · clock: ' + status.clock : '')
+    : '';
   for (const mode of ['auto', 'mute', 'unmute'])
     document.getElementById('b-' + mode).className = status && status.override === mode ? 'active' : '';
   // every pill: the page's own, and the one living in the PiP window
@@ -148,6 +186,7 @@ async function command(body) {
   } catch (err) { logLine('command failed: ' + err); }
 }
 function setOverride(mode) { command({type: 'override', mode}); }
+function key(name) { command({type: 'remote', key: name}); }
 async function stopCore() {
   if (!confirm('Stop AdHush? Sound will be restored and detection stops until you start it again.')) return;
   await command({type: 'shutdown'});

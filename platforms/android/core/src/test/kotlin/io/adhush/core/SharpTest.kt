@@ -18,6 +18,8 @@ private class FakeTv(
     private val silentOnMute: Boolean = false,
     private val promptDelayMs: Long = 0,
     private val wantCrlf: Boolean = false,
+    /** The real set with another client connected: accepts, then closes without a word. */
+    private val busy: Boolean = false,
 ) : AutoCloseable {
     val server = ServerSocket(0)
     val port get() = server.localPort
@@ -37,6 +39,7 @@ private class FakeTv(
         } catch (_: Exception) {}
     }
     private fun serve(sock: java.net.Socket) {
+                if (busy) { sock.shutdownOutput(); Thread.sleep(50); return }
                 val input = sock.getInputStream(); val out = sock.getOutputStream()
                 val buf = ByteArray(256)
                 if (login != null) {
@@ -167,6 +170,14 @@ class SharpTest {
             client.muteOff(); assertFalse(tv.muted)
             assertEquals(2, transport.connections, "the answer is remembered")
         }
+
+    @Test fun `a set that hangs up before the login prompt is busy, not a wrong password`() = FakeTv(login = Pair("me", "pw"), busy = true).use { tv ->
+        val transport = SocketTransport("127.0.0.1", tv.port, 3000, Pair("me", "pw"))
+        val e = assertFailsWith<ControlError> { SharpIpClient(transport).muteOn() }
+        assertTrue("one control connection" in (e.message ?: ""), e.message)
+        assertTrue("rejected" !in (e.message ?: ""), "not blamed on the credentials: ${e.message}")
+        assertEquals(1, transport.connections, "no CRLF retry for a set that never asked")
+    }
 
     @Test fun `unreachable set is a ControlError`() {
         assertFailsWith<ControlError> { SharpIpClient(SocketTransport("127.0.0.1", 1, 300)).muteOn() }
