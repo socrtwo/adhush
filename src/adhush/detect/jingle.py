@@ -56,7 +56,7 @@ def tempo_stretch(blocks: list[int], factor: float) -> list[int]:
 
 
 def local_hour(wall: float) -> int:
-    return datetime.fromtimestamp(wall).hour  # noqa: DTZ006 — the viewer's own clock, by design
+    return datetime.fromtimestamp(wall).hour  # naive on purpose: the viewer's own clock
 
 
 @dataclass

@@ -494,8 +494,8 @@ class TestJingle:
         from adhush.config import JingleConfig
         from adhush.detect.jingle import JingleDetector, local_hour
 
-        nine = datetime(2026, 9, 18, 9, 5).timestamp()  # noqa: DTZ001 — local, like the viewer's clock
-        two = datetime(2026, 9, 18, 14, 5).timestamp()  # noqa: DTZ001
+        nine = datetime(2026, 9, 18, 9, 5).timestamp()  # naive: local, like the viewer's clock
+        two = datetime(2026, 9, 18, 14, 5).timestamp()
         assert local_hour(nine) == 9 and local_hour(two) == 14
         cfg = JingleConfig(file=str(tmp_path / "jingles.tsv"))
         det = JingleDetector(cfg)

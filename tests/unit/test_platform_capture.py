@@ -114,7 +114,8 @@ class TestCapsAndRegistry:
         )
         assert isinstance(build_capture(CaptureConfig(backend="line_in")), LineInSource)
 
-    def test_open_without_ffmpeg_raises(self) -> None:
-        # This environment has no ffmpeg on PATH.
+    def test_open_without_ffmpeg_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Hide ffmpeg rather than assume the machine running the tests lacks it.
+        monkeypatch.setattr("adhush.capture.microphone.shutil.which", lambda _name: None)
         with pytest.raises(CaptureError, match="ffmpeg"):
             MicrophoneSource(CaptureConfig(), platform="linux").open()
